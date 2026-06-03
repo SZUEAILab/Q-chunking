@@ -1,0 +1,63 @@
+[project]
+name = "qc"
+version = "0.1.0"
+description = "Reinforcement Learning with Action Chunking (NeurIPS 2025)"
+requires-python = ">=3.12"
+dependencies = [
+    # ---- ML core ----
+    "jax>=0.10.0",
+    "jaxlib>=0.10.0",
+    "jax-cuda12-pjrt>=0.10.0",
+    "jax-cuda12-plugin>=0.10.0",
+    "flax>=0.10.0",
+    "optax>=0.2.0",
+    "distrax>=0.1.8",
+    "tensorflow-probability>=0.25.0",
+    "tfp-nightly>=0.26.0.dev0",
+
+    # ---- RL environments ----
+    "gymnasium>=1.1.0",
+    "gym>=0.24.0",
+    "mujoco>=3.3.0",
+    "dm-control>=1.0.0",
+    "ogbench>=1.1.0",
+
+    # ---- Datasets ----
+    "robomimic>=0.3.0",
+    "d4rl>=1.1",
+    "h5py>=3.0",
+
+    # ---- PyTorch (CPU — for robomimic data loading only) ----
+    # Install with: --index-url https://download.pytorch.org/whl/cpu
+    "torch>=2.12.0",
+    "torchvision>=0.27.0",
+
+    # ---- Logging ----
+    "wandb>=0.19.0",
+    "absl-py>=2.0",
+    "ml-collections>=1.1.0",
+    "tqdm>=4.0",
+
+    # ---- Utils ----
+    "numpy>=2.0",
+    "scipy>=1.15.0",
+    "imageio>=2.0",
+    "imageio-ffmpeg>=0.6.0",
+    "rich>=14.0",
+    "pyyaml>=6.0",
+    "pillow>=11.0",
+]
+
+[tool.uv]
+# PyTorch CPU wheels for robomimic compatibility
+extra-index-url = ["https://download.pytorch.org/whl/cpu"]
+
+[tool.uv.sources]
+# torch from CPU-only index to avoid CUDA 13 conflict with JAX's CUDA 12
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
