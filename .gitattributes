@@ -1,0 +1,4 @@
+# 服务器脚本保持 LF 换行符，不转换 CRLF
+*.sh text eol=lf
+# PowerShell 脚本用 CRLF
+*.ps1 text eol=crlf
