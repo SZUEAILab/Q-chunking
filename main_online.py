@@ -12,6 +12,7 @@ from utils.datasets import Dataset, ReplayBuffer
 
 from evaluation import evaluate
 from agents import agents
+from posthoc_direction_speed import compose, decompose, decompose_chunked
 import numpy as np
 
 if 'CUDA_VISIBLE_DEVICES' in os.environ:
@@ -52,6 +53,20 @@ flags.DEFINE_bool('sparse', False, "make the task sparse reward")
 
 flags.DEFINE_bool('save_all_online_states', False, "save all trajectories to npy")
 
+# Direction+speed decomposition (first 3 dims = spatial, rest = yaw/grip scalars).
+flags.DEFINE_enum(
+    'ds_mode',
+    'none',
+    ['none', 'posthoc', 'stereographic', 'spherical'],
+    'Direction-speed implementation: none, posthoc D+1, or Jacobian-corrected bijector.',
+)
+flags.DEFINE_bool('direction_speed', False, 'Deprecated alias for --ds_mode=posthoc.')
+flags.DEFINE_bool(
+    'allow_posthoc_direction_speed_rlpd',
+    False,
+    'Allow non-invertible D+1 post-hoc direction_speed with ACRLPD for ablations.',
+)
+
 class LoggingHelper:
     def __init__(self, csv_loggers, wandb_logger):
         self.csv_loggers = csv_loggers
@@ -76,6 +91,43 @@ def main(_):
         json.dump(flag_dict, f)
 
     config = FLAGS.agent
+    ds_mode = FLAGS.ds_mode
+    if FLAGS.direction_speed:
+        if ds_mode != 'none':
+            raise ValueError("Use either --ds_mode or deprecated --direction_speed, not both.")
+        ds_mode = 'posthoc'
+
+    legacy_agent_ds = bool(config.get("use_ds_bijector", False) or config.get("use_direction_speed", False))
+    if config.get("use_direction_speed", False):
+        config["use_ds_bijector"] = True
+    if ds_mode in ('stereographic', 'spherical'):
+        if legacy_agent_ds and config.get("ds_bijector_type", ds_mode) != ds_mode:
+            raise ValueError("Conflicting DS settings between --ds_mode and agent config.")
+        config["use_ds_bijector"] = True
+        config["ds_bijector_type"] = ds_mode
+    elif legacy_agent_ds:
+        ds_mode = config.get("ds_bijector_type", "spherical")
+
+    use_posthoc_ds = ds_mode == 'posthoc'
+    use_agent_ds_bijector = ds_mode in ('stereographic', 'spherical')
+    if use_agent_ds_bijector and config["agent_name"] != "acrlpd":
+        raise ValueError("--ds_mode=stereographic/spherical is only implemented for ACRLPD.")
+    if use_posthoc_ds and use_agent_ds_bijector:
+        raise ValueError(
+            "Use either post-hoc D+1 DS or a raw-action DS bijector, not both."
+        )
+    if (
+        use_posthoc_ds
+        and config["agent_name"] == "acrlpd"
+        and not FLAGS.allow_posthoc_direction_speed_rlpd
+    ):
+        raise ValueError(
+            "Post-hoc DS uses a non-invertible D+1 action representation, "
+            "so ACRLPD/SAC log_prob cannot be Jacobian-corrected. For RLPD DS experiments, "
+            "use --ds_mode=spherical or --ds_mode=stereographic. "
+            "For an approximate ablation, also pass "
+            "--allow_posthoc_direction_speed_rlpd=True."
+        )
     
     # data loading
     if FLAGS.ogbench_dataset_dir is not None:
@@ -136,8 +188,36 @@ def main(_):
         return ds
     
     train_dataset = process_train_dataset(train_dataset)
+
+    # Direction+speed: preprocess dataset actions (D -> D+1).
+    raw_action_dim = train_dataset['actions'].shape[-1]
+    if use_posthoc_ds:
+        train_dataset = train_dataset.copy(
+            add_or_replace=dict(actions=decompose(train_dataset['actions'])))
+        agent_action_dim = raw_action_dim + 1
+    else:
+        agent_action_dim = raw_action_dim
+
+    def compose_posthoc_ds(sampled):
+        sampled = np.asarray(sampled).reshape(-1, agent_action_dim)
+        return compose(sampled)
+
+    def make_eval_agent(base_agent):
+        if not use_posthoc_ds:
+            return base_agent
+
+        class _PosthocDSEval:
+            def __init__(self, wrapped):
+                self._wrapped = wrapped
+
+            def sample_actions(self, observations, rng=None):
+                sampled = self._wrapped.sample_actions(observations, rng=rng)
+                return compose_posthoc_ds(sampled)
+
+        return _PosthocDSEval(base_agent)
+
     example_batch = train_dataset.sample(())
-    
+
     agent_class = agents[config['agent_name']]
     agent = agent_class.create(
         FLAGS.seed,
@@ -158,12 +238,17 @@ def main(_):
     )
 
     # transition from offline to online
-    replay_buffer = ReplayBuffer.create(example_batch, size=FLAGS.buffer_size)
+    # Replay buffer stores raw actions (D), not decomposed (D+1).
+    if use_posthoc_ds:
+        _raw_ex = dict(example_batch)
+        _raw_ex['actions'] = compose(example_batch['actions'][np.newaxis])[0]
+        replay_buffer = ReplayBuffer.create(_raw_ex, size=FLAGS.buffer_size)
+    else:
+        replay_buffer = ReplayBuffer.create(example_batch, size=FLAGS.buffer_size)
         
     ob, _ = env.reset()
     
     action_queue = []
-    action_dim = example_batch["actions"].shape[-1]
 
     from collections import defaultdict
     data = defaultdict(list)
@@ -178,13 +263,17 @@ def main(_):
         # during online rl, the action chunk is executed fully
         if len(action_queue) == 0:
             if i <= FLAGS.start_training:
-                action = jax.random.uniform(key, shape=(action_dim,), minval=-1, maxval=1)
+                action = jax.random.uniform(key, shape=(raw_action_dim,), minval=-1, maxval=1)
+                action_chunk = np.array(action).reshape(-1, raw_action_dim)
             else:
-                action = agent.sample_actions(observations=ob, rng=key)
+                sampled = agent.sample_actions(observations=ob, rng=key)
+                if use_posthoc_ds:
+                    action_chunk = compose_posthoc_ds(sampled)
+                else:
+                    action_chunk = np.array(sampled).reshape(-1, raw_action_dim)
 
-            action_chunk = np.array(action).reshape(-1, action_dim)
-            for action in action_chunk:
-                action_queue.append(action)
+            for a in action_chunk:
+                action_queue.append(a)
         action = action_queue.pop(0)
         
         next_ob, int_reward, terminated, truncated, info = env.step(action)
@@ -238,16 +327,23 @@ def main(_):
             ob = next_ob
 
         if i >= FLAGS.start_training:
-            dataset_batch = train_dataset.sample_sequence(config['batch_size'] // 2 * FLAGS.utd_ratio, 
+            dataset_batch = train_dataset.sample_sequence(config['batch_size'] // 2 * FLAGS.utd_ratio,
                         sequence_length=FLAGS.horizon_length, discount=discount)
-            replay_batch = replay_buffer.sample_sequence(FLAGS.utd_ratio * config['batch_size'] // 2, 
+            replay_batch = replay_buffer.sample_sequence(FLAGS.utd_ratio * config['batch_size'] // 2,
                 sequence_length=FLAGS.horizon_length, discount=discount)
-            
+
+            if use_posthoc_ds:
+                replay_batch = dict(replay_batch)
+                for k in ('actions', 'next_actions'):
+                    if k in replay_batch:
+                        replay_batch[k] = decompose_chunked(
+                            replay_batch[k], FLAGS.horizon_length
+                        ).reshape(replay_batch[k].shape[0], FLAGS.horizon_length, -1)
+                replay_batch = jax.tree_util.tree_map(lambda x: x, replay_batch)
+
             batch = {k: np.concatenate([
-                dataset_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + dataset_batch[k].shape[1:]), 
+                dataset_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + dataset_batch[k].shape[1:]),
                 replay_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + replay_batch[k].shape[1:])], axis=1) for k in dataset_batch}
-            # batch = jax.tree.map(lambda x: x.reshape((
-            #     FLAGS.utd_ratio, config["batch_size"]) + x.shape[1:]), batch)
 
             agent, update_info["online_agent"] = agent.batch_update(batch)
             
@@ -257,10 +353,12 @@ def main(_):
             update_info = {}
 
         if (FLAGS.eval_interval != 0 and i % FLAGS.eval_interval == 0):
+            _eval_agent = make_eval_agent(agent)
+
             eval_info, _, _ = evaluate(
-                agent=agent,
+                agent=_eval_agent,
                 env=eval_env,
-                action_dim=action_dim,
+                action_dim=raw_action_dim,
                 num_eval_episodes=FLAGS.eval_episodes,
                 num_video_episodes=FLAGS.video_episodes,
                 video_frame_skip=FLAGS.video_frame_skip,
@@ -282,6 +380,9 @@ def main(_):
                 cur_env=env,
             )
             train_dataset = process_train_dataset(train_dataset)
+            if use_posthoc_ds:
+                train_dataset = train_dataset.copy(
+                    add_or_replace=dict(actions=decompose(train_dataset['actions'])))
 
 
     for key, csv_logger in logger.csv_loggers.items():

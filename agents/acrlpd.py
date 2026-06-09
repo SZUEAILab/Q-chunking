@@ -10,7 +10,8 @@ from flax import linen as nn
 
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from rlpd_networks import Ensemble, StateActionValue, MLP
-from rlpd_distributions import TanhNormal, DirectionSpeedNormal
+from rlpd_distributions import DirectionSpeedNormal, TanhNormal
+
 
 from functools import partial
 
@@ -25,6 +26,46 @@ class Temperature(nn.Module):
             init_fn=lambda key: jnp.full((), jnp.log(self.initial_temperature)),
         )
         return jnp.exp(log_temp)
+
+
+def _uses_ds_bijector(config):
+    return bool(config.get("use_ds_bijector", False) or config.get("use_direction_speed", False))
+
+
+def _base_ds_action_groups(action_dim, max_speed, bijector_type):
+    if bijector_type == "spherical":
+        group_type = "direction_speed_3d"
+    elif bijector_type in ("stereographic", "cartesian"):
+        group_type = "direction_speed_stereographic_3d"
+    else:
+        raise ValueError(f"Unknown ds_bijector_type={bijector_type}")
+
+    if action_dim == 5:
+        return [
+            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed},
+            {"type": "scalar", "dims": [3]},
+            {"type": "scalar", "dims": [4]},
+        ]
+    if action_dim == 7:
+        return [
+            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed},
+            {"type": group_type, "dims": [3, 4, 5], "max_speed": max_speed},
+            {"type": "scalar", "dims": [6]},
+        ]
+    raise ValueError(f"No default direction-speed action groups for action_dim={action_dim}")
+
+
+def _chunked_ds_action_groups(action_dim, horizon_length, action_chunking, max_speed, bijector_type):
+    groups = []
+    horizon = horizon_length if action_chunking else 1
+    base_groups = _base_ds_action_groups(action_dim, max_speed, bijector_type)
+    for h in range(horizon):
+        offset = h * action_dim
+        for group in base_groups:
+            copied = dict(group)
+            copied["dims"] = [offset + dim for dim in group["dims"]]
+            groups.append(copied)
+    return groups
 
 
 class ACRLPDAgent(flax.struct.PyTreeNode):
@@ -214,20 +255,15 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
 
 
         actor_base_cls = partial(MLP, hidden_dims=config["actor_hidden_dims"], activate_final=True)
-        if config.get("use_direction_speed", False):
-            # Translation (dims 0-2) as direction+speed, yaw+scalars as tanh
-            action_groups = [
-                {"type": "direction_speed_3d", "dims": [0, 1, 2], "max_speed": 1.0},
-                {"type": "scalar", "dims": [3]},
-                {"type": "scalar", "dims": [4]},
-            ]
-            if action_dim == 7:
-                action_groups = [
-                    {"type": "direction_speed_3d", "dims": [0, 1, 2], "max_speed": 1.0},
-                    {"type": "direction_speed_3d", "dims": [3, 4, 5], "max_speed": 1.0},
-                    {"type": "scalar", "dims": [6]},
-                ]
-            actor_def = DirectionSpeedNormal(actor_base_cls, action_dim, action_groups)
+        if _uses_ds_bijector(config):
+            action_groups = _chunked_ds_action_groups(
+                action_dim,
+                config["horizon_length"],
+                config["action_chunking"],
+                config["ds_max_speed"],
+                config["ds_bijector_type"],
+            )
+            actor_def = DirectionSpeedNormal(actor_base_cls, full_action_dim, action_groups)
         else:
             actor_def = TanhNormal(actor_base_cls, full_action_dim)
 
@@ -273,7 +309,11 @@ def get_config():
             q_agg='mean',  # Aggregation function for target Q values.
             horizon_length=ml_collections.config_dict.placeholder(int), # will be set
             action_chunking=True,
-            use_direction_speed=False,
+            # Spherical-coordinate direction-speed bijector in raw action space.
+            use_ds_bijector=False,  # Use spherical-coordinate direction-speed bijector.
+            use_direction_speed=False,  # Backward-compatible alias for use_ds_bijector.
+            ds_max_speed=1.0,
+            ds_bijector_type="spherical",  # "spherical" or "stereographic"/"cartesian".
             init_temp=1.0,
         )
     )

@@ -1,6 +1,6 @@
 # QC (Q-Chunking) 复现实验报告
 
-**环境**: `cube-triple-play-singletask-task2-v0` | **seed**: 0 | **观察维度**: 46 | **动作维度**: 5
+环境: `cube-triple-play-singletask-task2-v0` | seed: 0 | 观察维度: 46 | 动作维度: 5
 
 ## 正式复现结果 (1M 步)
 
@@ -23,34 +23,74 @@
 
 ### 关键发现
 
-1. **H=5 纯在线需要更多样本，但最终可达 90%**。1M 步只有 2%，10M 步达到 88-90%。
-2. **bc_alpha=0.01 在长序训练中有效**。QC-RLPD (90%) 和 RLPD-AC (88%) 最终性能接近。
-3. **1M 步不足以判断 H=5 方法的优劣**。论文在 1M 步截止，所以 RLPD-AC 只有 2%。QC 用离线 1M 步"预习"省掉了探索期。
-
-## 方法对照
-
-| 方法 | 框架 | H | 关键参数 | 步数 | 成功率 |
-|------|------|---|---------|------|--------|
-| QC | FQL (离线→在线) | 5 | best-of-n=32 | 2M | **96%** |
-| RLPD | RLPD (纯在线) | 1 | — | 1M | **74%** |
-| RLPD-AC | RLPD (纯在线) | 5 | 无BC | 10M | **88%** |
-| QC-RLPD | RLPD (纯在线) | 5 | bc_alpha=0.01 | 10M | **90%** |
-
-## 实验目录
-
-| 实验 ID | 方法 | 步数 | 成功率 | ckpt | 视频 |
-|---------|------|------|--------|------|------|
-| `020424` | QC | 2M | 96% | ❌ | ❌ |
-| `213306` | RLPD | 1M | 74% | ✅ | ✅ |
-| `175113` | RLPD-AC | 1M | 2% | ❌ | ❌ |
-| `034043` | RLPD-AC 10M | 10M | 88% | ✅ | ✅ |
-| `183730` | QC | 2M | 92% | ✅ | ✅ |
-| `140428` | QC-RLPD | 10M | 90% | ✅ | ✅ |
+1. **H=5 纯在线需要更多样本，但最终可达 90%**。
+2. **bc_alpha=0.01 在长序训练中有效**。
+3. **1M 步不足以判断 H=5 方法的优劣**。
 
 ## 关键技术细节
 
-- **控制频率**: 20 Hz（每步 0.05s）
-- **动作空间**: H=5 时 25 维（5维 × 5步 horizon）
-- **观察空间**: 46 维（机械臂 23 维 + 3 方块 × ~8 维）
-- **chunking 膨胀**: H=1→H=5，动作维度 5→25，探索难度指数级增加
-- **视频帧率**: 20fps = 1x 真实速度（control_timestep=0.05s）
+- **控制频率**: 20 Hz
+- **动作空间**: H=5 时 25 维
+- **GPU**: RTX 4090 ×1
+- **并行**: `taskset` CPU 绑核, `XLA_PYTHON_CLIENT_PREALLOCATE=false`
+
+---
+
+## 方向+速度分解实验
+
+### 方法
+
+将动作 `a ∈ [-1,1]^D` 的前 3 维位移分解为方向+速度：
+
+| 表示 | 编码 |
+|------|------|
+| raw | `a` |
+| dir+speed | `[a[:3]/|a[:3]|, log|a[:3]|, a[3:]]` |
+
+Agent 在分解空间学习，采样后重组送环境。详见 [approach.md](approach.md)。
+
+### 实验结果汇总
+
+| 实验 | Agent | H | 步数 | raw | dir+speed | 入口 |
+|------|-------|:--:|:--:|:--:|:--:|------|
+| 1 | RLPD-AC | 5 | 500K | 1.3% | **14.0%** | main_online |
+| 2 | FQL | 5 | 2M | 88% | **98%** | main.py |
+| 3 | RLPD | 1 | 1M | **60%** | — | main_online |
+| 4 | RLPD-AC | 1 | 1M | — | 7.0% | main_online |
+
+> 实验 1: 3 seeds, cube-triple+cube-double. 实验 2: 1 seed, cube-triple. 实验 3: 3 seeds. 实验 4: 2 seeds.
+
+![实验 1](rlpd_ac_h5_posthoc_ds_cube_tasks_500k.png)
+
+图 1 使用 `--ds_mode=posthoc` 的非可逆 D+1 direction-speed 表示，即执行前对 actor 输出做确定性 decompose/compose；它不是 Jacobian-corrected `spherical` 或 `stereographic` bijector。
+
+![实验 2](fql_h5_posthoc_ds_cube_triple_2m.png)
+
+图 2 同样使用 `--ds_mode=posthoc` 的非可逆 D+1 direction-speed 表示，用于 FQL 表示消融；FQL 不依赖 SAC/RLPD actor `log_prob`，因此该图不能替代 RLPD 的 bijector 正确性验证。
+
+![汇总](summary.png)
+
+### 核心结论
+
+1. **dir+speed 在所有对比中均优于 raw**
+2. **困难任务收益最大**：RLPD-AC H=5 从 1.3% → 14%
+3. **3D 归一化（正确）vs 5D 归一化（有偏但有效）**：5D 更快收敛但 3D 几何正确
+4. **分解表示本身足够**：结构化噪声可有可无
+
+### 实验数据
+
+| 实验 | exp/qc 目录 |
+|------|------|
+| 实验 1 | `DirSpeed_RLPD_H5_500K` |
+| 实验 2 | `DirSpeed_FQL_H5_2M` |
+| 实验 3 | `ReproDS` |
+| 实验 4 | `DS3D` |
+
+### 实现
+
+| 文件 | 说明 |
+|------|------|
+| `direction_speed.py` | 分解核心模块 |
+| `main_online.py` | 纯在线 (`--direction_speed`) |
+| `main.py` | 离线→在线 (`--direction_speed`) |
+| `agents/acrlpd.py` | RLPD/RLPD-AC agent |

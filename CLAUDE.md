@@ -47,14 +47,14 @@ python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
 ```bash
 python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
     --sparse=False --horizon_length=1 \
-    --agent.use_direction_speed=true --agent.action_chunking=false
+    --ds_mode=stereographic --agent.action_chunking=false
 ```
 
-### RLPD-AC / DS-RLPD-AC（H=5, n-step returns）
+### RLPD-AC / DS-RLPD-AC（H=5, action chunking）
 ```bash
 python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
     --sparse=False --horizon_length=5 \
-    --agent.use_direction_speed=true --agent.action_chunking=false
+    --ds_mode=stereographic --agent.action_chunking=true
 ```
 
 ### 其他常用 flag
@@ -62,7 +62,7 @@ python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
 - `--online_steps=1000000`
 - `--save_interval=500000`
 - `--eval_episodes=50 --video_episodes=0`（训练时关闭视频渲染，省显存）
-- `--agent.use_direction_speed=true`（启用 DS head）
-- `--agent.action_chunking=false`（DS 必须关 chunk）
+- `--ds_mode=stereographic` 或 `--ds_mode=spherical`（Jacobian-corrected DS）
+- `--ds_mode=posthoc`（D+1 post-hoc 近似消融）
 
 详见 `docs/experiment.md`。
