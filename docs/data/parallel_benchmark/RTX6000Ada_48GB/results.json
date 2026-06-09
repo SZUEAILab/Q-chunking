@@ -86,6 +86,7 @@
   "entry": "main_online.py",
   "horizon_length": 1,
   "action_chunking": false,
-  "start_training": 3000,
-  "eval_interval": 0
+  "start_training": 5000,
+  "eval_interval": 0,
+  "note": "start_training=5000 (warmup, no training updates). it/s includes warmup steps, ideal setting is start_training=0."
 }

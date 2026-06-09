@@ -231,5 +231,6 @@
   "horizon_length": 1,
   "action_chunking": false,
   "start_training": 1000,
-  "eval_interval": 0
+  "eval_interval": 0,
+  "note": "start_training=1000 (warmup, no training updates). it/s includes warmup steps, ideal setting is start_training=0."
 }
