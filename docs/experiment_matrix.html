@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QC Experiment Matrix</title>
+<style>
+:root { color-scheme: dark; }
+body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
+  padding: 32px; max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 22px; margin-bottom: 24px; }
+h2 { font-size: 16px; margin: 28px 0 12px; color: #93c5fd; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+th { background: #1e3a5f; padding: 8px 10px; text-align: left; font-weight: 600; }
+td { padding: 6px 10px; border-bottom: 1px solid #1e293b; }
+tr:hover td { background: #1e293b; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-rlpd { background: #1e3a5f; color: #60a5fa; }
+.tag-fql { background: #1e3a5f; color: #34d399; }
+.tag-posthoc { background: #422006; color: #fbbf24; }
+.tag-stereo { background: #052e16; color: #4ade80; }
+.tag-sphere { background: #2e1065; color: #c084fc; }
+.tag-baseline { background: #1f2937; color: #9ca3af; }
+.tag-h1 { background: #1e3a5f; color: #93c5fd; }
+.tag-h5 { background: #3b1e5f; color: #c084fc; }
+.warn { color: #fbbf24; font-size: 11px; }
+.note { color: #64748b; font-size: 11px; margin: 4px 0; }
+.success { font-weight: 700; }
+.success-good { color: #4ade80; }
+.success-ok { color: #fbbf24; }
+.success-low { color: #f87171; }
+</style>
+</head>
+<body>
+
+<h1>QC — Experiment Matrix</h1>
+<!-- ========== Q-Chunking 论文实验 ========== -->
+<h2>Q-Chunking 论文实验总览</h2>
+<p style="color:#64748b">论文: Reinforcement Learning with Action Chunking (Li, Zhou &amp; Levine, UC Berkeley, 2025) | arXiv: 2507.07969 | 4-5 seeds/实验</p>
+
+<h3>OGBench — 论文对比方法</h3>
+<table>
+<tr><th>方法</th><th>Agent</th><th>H</th><th>训练方式</th><th>N-step return</th><th>采样策略</th></tr>
+<tr><td><strong>QC</strong> (Q-Chunking)</td><td>FQL</td><td>5</td><td>离线→在线</td><td>无偏 5-step TD</td><td>Flow + best-of-n=32</td></tr>
+<tr><td><strong>QC-FQL</strong></td><td>FQL</td><td>5</td><td>离线→在线</td><td>无偏 5-step TD</td><td>Flow + 2-Wasserstein</td></tr>
+<tr><td><strong>QC-RLPD</strong></td><td>RLPD/SAC</td><td>5</td><td>离线→在线</td><td>无偏 5-step TD</td><td>Gaussian + Tanh</td></tr>
+<tr><td><strong>QC-IFQL</strong></td><td>IFQL</td><td>5</td><td>离线→在线</td><td>无偏 5-step TD</td><td>Implicit Q</td></tr>
+<tr><td><strong>BFN-n</strong></td><td>BC + Flow</td><td>5</td><td>离线→在线</td><td>有偏 n-step</td><td>Flow + n-step</td></tr>
+<tr><td><strong>FQL-n</strong></td><td>FQL</td><td>5</td><td>离线→在线</td><td>有偏 n-step</td><td>Flow + n-step</td></tr>
+<tr><td><strong>IFQL-n</strong></td><td>IFQL</td><td>5</td><td>离线→在线</td><td>有偏 n-step</td><td>Implicit Q + n-step</td></tr>
+<tr><td><strong>RLPD-AC</strong></td><td>RLPD/SAC</td><td>5</td><td>纯在线</td><td>1-step TD</td><td>Gaussian + Tanh</td></tr>
+</table>
+
+<h3>OGBench 结果 (25 任务 × 4 seeds，含 95% CI)</h3>
+<table>
+<tr><th>环境</th><th>任务数</th><th>obs_dim</th><th>act_dim</th><th>BFN-n</th><th>FQL-n</th><th>QC-RLPD</th><th>QC-FQL</th><th>QC</th></tr>
+<tr>
+  <td>cube-double</td><td>5</td><td>46</td><td>5</td><td>30%</td><td>59%</td><td class="success success-ok">76%</td><td class="success success-ok">76%</td><td class="success success-ok">67%</td>
+</tr>
+<tr>
+  <td><strong>cube-triple</strong></td><td>5</td><td>46</td><td>5</td><td>0%</td><td>0%</td><td>4%</td><td class="success success-ok">18%</td><td>3%</td>
+</tr>
+<tr>
+  <td>其他 3 域</td><td>15</td><td>46</td><td>5</td><td colspan="5">scene-sparse / puzzle-3x3-sparse / cube-quadruple</td>
+</tr>
+<tr><td colspan="2"><strong>25 任务总平均</strong></td><td></td><td></td><td>50%</td><td>36%</td><td>47%</td><td class="success success-ok">58%</td><td class="success success-ok">51%</td></tr>
+</table>
+<p class="note">cube-triple 是最难域——QC-FQL 87% (task1) 但其他 task 为 0-1%。BFN-n/FQL-n 在 cube-triple 完全失败 (0%)。论文中 cube-triple-task2 的 CI 为 81.5-93.5% (OGBench leaderboard)。</p>
+
+<h3>OGBench — cube-triple-task2 复现结果 (我们的代码库)</h3>
+<table>
+<tr><th>方法</th><th>对应论文</th><th>步数</th><th>seed</th><th>我们复现</th><th>论文/Leaderboard</th></tr>
+<tr><td>QC</td><td>QC</td><td>1M+1M</td><td>0</td><td class="success success-good">96%</td><td>89% (CI: 81.5-93.5%)</td></tr>
+<tr><td>RLPD</td><td>—</td><td>1M 纯在线</td><td>0</td><td class="success success-ok">74%</td><td>60% (CI: 22.5-87%)</td></tr>
+<tr><td>RLPD-AC</td><td>RLPD-AC</td><td>1M 纯在线</td><td>0</td><td class="success success-low">2%</td><td>2% (CI: 0-3%)</td></tr>
+<tr><td>RLPD-AC 10M</td><td>—</td><td>10M 纯在线</td><td>0</td><td class="success success-good">88%</td><td>—</td></tr>
+<tr><td>QC-RLPD 10M</td><td>QC-RLPD</td><td>10M 纯在线</td><td>0</td><td class="success success-good">90%</td><td>—</td></tr>
+</table>
+
+<h3>RoboMimic — 论文结果 (3 任务 × 5 seeds)</h3>
+<table>
+<tr><th>任务</th><th>数据集</th><th>obs_dim</th><th>act_dim</th><th>BFN-n</th><th>FQL-n</th><th>QC-FQL</th><th>QC</th></tr>
+<tr><td>lift</td><td>MH (6人 ×300条)</td><td>低维</td><td>7</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>can</td><td>MH (6人 ×300条)</td><td>低维</td><td>7</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>square</td><td>MH (6人 ×300条)</td><td>低维</td><td>7</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+</table>
+<p class="note">RoboMimic 论文有 lift/can/square/transport/tool_hang × MH/PH = 10 环境 (论文可能做了 3 个 MH 任务)。act_dim=7。论文中 QC 和 QC-FQL 在 lift/can/square 上匹配或超越所有基线。我们代码库支持但因算力未复现。</p>
+
+<h3>论文实验设计总结</h3>
+<table>
+<tr><th>维度</th><th>OGBench</th><th>RoboMimic</th></tr>
+<tr><td><strong>环境数</strong></td><td>5 域 × 5 任务 = 25</td><td>3 任务 × 1 数据集</td></tr>
+<tr><td><strong>对比方法数</strong></td><td>8 (QC, QC-FQL, QC-RLPD, QC-IFQL, BFN-n, FQL-n, IFQL-n, RLPD-AC)</td><td>6 (QC, QC-FQL, BFN-n, FQL-n, BFN, FQL)</td></tr>
+<tr><td><strong>Seeds</strong></td><td>4 seeds (95% CI)</td><td>5 seeds</td></tr>
+<tr><td><strong>总实验数 (估)</strong></td><td>25 × 8 × 4 ≈ 800</td><td>3 × 6 × 5 ≈ 90</td></tr>
+<tr><td><strong>训练步数</strong></td><td colspan="2">离线 1M → 在线 1M (QC 系); 纯在线 1M (RLPD-AC)</td></tr>
+<tr><td><strong>H (chunk length)</strong></td><td colspan="2">5 (所有 action chunking 方法); 1 (RLPD baseline)</td></tr>
+<tr><td><strong>action_dim</strong></td><td>5 (OGBench)</td><td>7 (RoboMimic)</td></tr>
+<tr><td><strong>GPU 资源</strong></td><td colspan="2">未公开 — 我们复现用 RTX 6000 Ada ×2</td></tr>
+</table>
+
+<!-- ========== 本仓库复现 ========== -->
+<h2>本仓库复现实验</h2>
+<p style="color:#64748b">环境: cube-triple-play-singletask-task2-v0 | seed=0 | obs_dim=46 | act_dim=5</p>
+<table>
+<tr><th>方法</th><th>入口</th><th>Agent</th><th>H</th><th>Chunk</th><th>训练方式</th><th>关键参数</th><th>步数</th><th>最终</th><th>数据目录</th></tr>
+<tr>
+  <td><strong>QC</strong></td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td><td>5</td><td>✓</td>
+  <td>离线→在线</td><td>best-of-n=32</td><td>1M + 1M</td>
+  <td class="success success-good">96%</td><td>89%</td>
+  <td><code>QC_H5_1M</code></td>
+</tr>
+<tr>
+  <td><strong>RLPD</strong></td><td>main_online.py</td><td><span class="tag tag-rlpd">ACRLPD</span></td><td>1</td><td>✗</td>
+  <td>纯在线</td><td>—</td><td>1M</td>
+  <td class="success success-ok">74%</td><td>60%</td>
+  <td><code>RLPD_H1_1M</code></td>
+</tr>
+<tr>
+  <td><strong>RLPD-AC</strong></td><td>main_online.py</td><td><span class="tag tag-rlpd">ACRLPD</span></td><td>5</td><td>✓</td>
+  <td>纯在线</td><td>bc_alpha=0</td><td>1M</td>
+  <td class="success success-low">2%</td><td>2%</td>
+  <td><code>RLPDAC_H5_1M</code></td>
+</tr>
+</table>
+<p class="note">环境: cube-triple-play-singletask-task2-v0 | seed=0 | obs_dim=46 | act_dim=5 | 控制频率 20Hz</p>
+
+<h3>长序训练 (10M 步)</h3>
+<table>
+<tr><th>方法</th><th>入口</th><th>Agent</th><th>H</th><th>Chunk</th><th>训练方式</th><th>关键参数</th><th>步数</th><th>最终</th><th>最佳</th><th>突破点</th><th>数据目录</th></tr>
+<tr>
+  <td><strong>RLPD-AC</strong></td><td>main_online.py</td><td><span class="tag tag-rlpd">ACRLPD</span></td><td>5</td><td>✓</td>
+  <td>纯在线</td><td>bc_alpha=0</td><td>10M</td>
+  <td class="success success-good">88%</td><td class="success success-good">98% @7.6M</td><td>~1.5M</td>
+  <td><code>RLPDAC_H5_10M</code></td>
+</tr>
+<tr>
+  <td><strong>QC-RLPD</strong></td><td>main_online.py</td><td><span class="tag tag-rlpd">ACRLPD</span></td><td>5</td><td>✓</td>
+  <td>纯在线</td><td>bc_alpha=0.01</td><td>10M</td>
+  <td class="success success-good">90%</td><td class="success success-good">100% @9.3M</td><td>~2.5M</td>
+  <td><code>QCRLPD_H5_10M</code></td>
+</tr>
+</table>
+<p class="note">H=5 纯在线长序训练（10M）可达 Pareto-optimal。bc_alpha=0.01 有效加速收敛。1M 不足以判断 H=5 优劣。</p>
+
+<h3>关键技术细节</h3>
+<table>
+<tr><th>参数</th><th>值</th></tr>
+<tr><td>控制频率</td><td>20 Hz</td></tr>
+<tr><td>动作空间 (H=5)</td><td>25 维 (5×5)</td></tr>
+<tr><td>动作空间 (H=1)</td><td>5 维</td></tr>
+<tr><td>GPU (原)</td><td>RTX 4090 ×1</td></tr>
+<tr><td>GPU (当前)</td><td>RTX 6000 Ada ×2 (48GB)</td></tr>
+<tr><td>并行策略</td><td><code>taskset</code> CPU 绑核, <code>XLA_PYTHON_CLIENT_PREALLOCATE=false</code></td></tr>
+<tr><td>内存</td><td>XLA_PYTHON_CLIENT_MEM_FRACTION=0.05 (动态分配)</td></tr>
+</table>
+
+<!-- ========== DS Experiments ========== -->
+<h2>DS-RLPD: 三种实现 × H=1/H=5 × 4 seeds (ACRLPD, 1M 纯在线)</h2>
+<table>
+<tr><th>批次</th><th>入口</th><th>Agent</th><th>H</th><th>Chunk</th><th>DS Mode</th><th>Seeds</th><th>s0</th><th>s1</th><th>s2</th><th>s3</th><th>均值</th><th>实现</th></tr>
+
+<tr>
+  <td rowspan="4">ds_h5_1m</td>
+  <td rowspan="4">main_online</td>
+  <td rowspan="4"><span class="tag tag-rlpd">ACRLPD</span></td>
+  <td rowspan="4"><span class="tag tag-h5">H=5</span></td>
+  <td rowspan="4">✓</td>
+  <td><span class="tag tag-posthoc">posthoc</span></td><td>0-3</td>
+  <td class="success success-ok">24%</td><td>66%</td><td>6%</td><td>30%</td><td class="success success-ok">31.5%</td>
+  <td>D+1 数据层</td>
+</tr>
+<tr>
+  <td><span class="tag tag-stereo">stereographic</span></td><td>0-3</td>
+  <td>40%</td><td>4%</td><td>2%</td><td>28%</td><td class="success success-low">18.5%</td>
+  <td>Bijector (球极投影)</td>
+</tr>
+<tr>
+  <td><span class="tag tag-sphere">spherical</span></td><td>0-3</td>
+  <td>10%</td><td>6%</td><td>10%</td><td>2%</td><td class="success success-low">7.0%</td>
+  <td>Bijector (球坐标)</td>
+</tr>
+<tr>
+  <td><span class="tag tag-baseline">none</span></td><td>0-3</td>
+  <td>6%</td><td>2%</td><td>2%</td><td>2%</td><td class="success success-low">3.0%</td>
+  <td>TanhNormal</td>
+</tr>
+
+<tr>
+  <td rowspan="4">ds_h1_1m</td>
+  <td rowspan="4">main_online</td>
+  <td rowspan="4"><span class="tag tag-rlpd">ACRLPD</span></td>
+  <td rowspan="4"><span class="tag tag-h1">H=1</span></td>
+  <td rowspan="4">✗</td>
+  <td><span class="tag tag-posthoc">posthoc</span></td><td>0-3</td>
+  <td class="success success-good">100%</td><td>88%</td><td>70%</td><td>98%</td><td class="success success-good">89.0%</td>
+  <td>D+1 数据层</td>
+</tr>
+<tr>
+  <td><span class="tag tag-stereo">stereographic</span></td><td>0-3</td>
+  <td>86%</td><td>92%</td><td>98%</td><td>88%</td><td class="success success-good">91.0%</td>
+  <td>Bijector (球极投影)</td>
+</tr>
+<tr>
+  <td><span class="tag tag-sphere">spherical</span></td><td>0-3</td>
+  <td>56%</td><td>46%</td><td>66%</td><td>86%</td><td class="success success-ok">63.5%</td>
+  <td>Bijector (球坐标)</td>
+</tr>
+<tr>
+  <td><span class="tag tag-baseline">none</span></td><td>0-3</td>
+  <td>74%</td><td>64%</td><td>24%</td><td>72%</td><td class="success success-ok">58.5%</td>
+  <td>TanhNormal</td>
+</tr>
+</table>
+
+<!-- ========== FQL H=5 running ========== -->
+<h2>DS-FQL: Post-hoc × H=5 (ACFQL, 1M 离线 → 1M 在线) <span class="tag tag-fql" style="margin-left:8px">运行中</span></h2>
+<table>
+<tr><th>批次</th><th>入口</th><th>Agent</th><th>H</th><th>Chunk</th><th>DS Mode</th><th>Seeds</th><th>状态</th></tr>
+<tr>
+  <td>fql_h5_2m</td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td>
+  <td><span class="tag tag-h5">H=5</span></td><td>✓ (default)</td>
+  <td><span class="tag tag-baseline">none</span></td><td>0-2</td><td>🔄 离线 ~66%</td>
+</tr>
+<tr>
+  <td>fql_h5_2m</td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td>
+  <td><span class="tag tag-h5">H=5</span></td><td>✓ (default)</td>
+  <td><span class="tag tag-posthoc">posthoc</span></td><td>0-2</td><td>🔄 离线 ~66%</td>
+</tr>
+</table>
+<p class="note">FQL 不支持 stereographic/spherical — 这两种需要替换 TanhNormal 分布，FQL 使用 ActorVectorField (flow-based)。</p>
+
+<!-- ========== FQL H=1 (interrupted) ========== -->
+<h2>DS-FQL: Post-hoc × H=1 (ACFQL, 1M 离线 → 1M 在线) <span class="tag tag-h1" style="margin-left:8px">中断</span></h2>
+<table>
+<tr><th>批次</th><th>入口</th><th>Agent</th><th>H</th><th>DS Mode</th><th>Seeds</th><th>结果</th></tr>
+<tr>
+  <td>fql_ds_2m (已删除)</td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td>
+  <td><span class="tag tag-h1">H=1</span></td>
+  <td><span class="tag tag-baseline">none</span></td><td>0-2</td>
+  <td>0% / 0% / 0% = <span class="success success-low">0%</span></td>
+</tr>
+<tr>
+  <td>fql_ds_2m (已删除)</td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td>
+  <td><span class="tag tag-h1">H=1</span></td>
+  <td><span class="tag tag-posthoc">posthoc</span></td><td>0-2</td>
+  <td>6% / 8% / 8% = <span class="success success-low">7.3%</span></td>
+</tr>
+</table>
+<p class="note">FQL H=1 整体表现弱（cube-triple 困难任务），被中断未继续。H=5 批次（上方）替代。</p>
+
+<!-- ========== Old Post-hoc (5D normalization) ========== -->
+<h2>旧 Post-hoc 实验 <span class="warn">⚠ 使用错误 5D 归一化（所有维度一起做方向）</span></h2>
+<table>
+<tr><th>目录</th><th>入口</th><th>Agent</th><th>环境</th><th>H</th><th>步数</th><th>raw</th><th>dir+speed</th></tr>
+<tr>
+  <td>DirSpeed_FQL_H5_2M</td><td>main.py</td><td><span class="tag tag-fql">ACFQL</span></td>
+  <td>cube-triple</td><td>5</td><td>1M+1M</td>
+  <td>88%</td><td class="success success-good">98%</td>
+</tr>
+<tr>
+  <td rowspan="2">DirSpeed_RLPD_H5_500K</td>
+  <td rowspan="2">main_online</td>
+  <td rowspan="2"><span class="tag tag-rlpd">ACRLPD</span></td>
+  <td>cube-triple</td><td>5</td><td>500K 纯在线</td>
+  <td>3.2%</td><td class="success success-ok">19.0%</td>
+</tr>
+<tr>
+  <td>cube-double</td><td>5</td><td>500K 纯在线</td>
+  <td>—</td><td class="success success-good">93.6%</td>
+</tr>
+</table>
+<p class="note">旧实验用 <code>--direction_speed</code> flag，将 dx,dy,dz,dyaw,gripper 全部归一化（正确只应归一化前 3 维）。结果有参考价值但不能作为严格对照。</p>
+
+<!-- ========== DS Support Matrix ========== -->
+<h2>DS 模式 × 算法 支持矩阵</h2>
+<table>
+<tr><th>DS Mode</th><th>ACRLPD (RLPD/SAC)</th><th>ACFQL (FQL)</th><th>入口</th><th>log_prob</th></tr>
+<tr>
+  <td><span class="tag tag-baseline">none</span></td><td>✅ TanhNormal</td><td>✅ ActorVectorField</td>
+  <td>—</td><td>TanhNormal (仅 RLPD)</td>
+</tr>
+<tr>
+  <td><span class="tag tag-posthoc">posthoc</span></td><td>✅ (需 allow_posthoc)</td><td>✅ 无需额外 flag</td>
+  <td><code>--ds_mode=posthoc</code></td>
+  <td>近似（分解空间密度）</td>
+</tr>
+<tr>
+  <td><span class="tag tag-stereo">stereographic</span></td><td>✅</td><td>❌ 不支持</td>
+  <td><code>--ds_mode=stereographic</code></td>
+  <td>Jacobian-corrected</td>
+</tr>
+<tr>
+  <td><span class="tag tag-sphere">spherical</span></td><td>✅</td><td>❌ 不支持</td>
+  <td><code>--ds_mode=spherical</code></td>
+  <td>Jacobian-corrected</td>
+</tr>
+</table>
+<p class="note">FQL 不支持 bijector 模式因为其 actor 使用 flow-based ActorVectorField，无 TanhNormal 分布可替换。</p>
+
+</body>
+</html>

@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction-Speed 架构对比</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b1117;
+  --panel: rgba(17, 24, 39, 0.78);
+  --panel-strong: rgba(18, 28, 42, 0.96);
+  --line: rgba(148, 163, 184, 0.22);
+  --text: #e6edf3;
+  --muted: #8ea0b5;
+  --blue: #55b7ff;
+  --green: #61e6a0;
+  --amber: #ffc857;
+  --red: #ff6b6b;
+  --violet: #c9a3ff;
+  --cyan: #6ee7f9;
+  --radius: 26px;
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: "Avenir Next", "Trebuchet MS", "Noto Sans SC", sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(85, 183, 255, 0.22), transparent 32rem),
+    radial-gradient(circle at 90% 14%, rgba(97, 230, 160, 0.17), transparent 34rem),
+    radial-gradient(circle at 60% 100%, rgba(255, 200, 87, 0.12), transparent 30rem),
+    linear-gradient(135deg, #071018 0%, #101722 45%, #080d13 100%);
+  color: var(--text);
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent 78%);
+}
+
+button {
+  font: inherit;
+}
+
+.page {
+  width: min(1480px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 42px 0 56px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 28px;
+  align-items: stretch;
+  margin-bottom: 28px;
+}
+
+.hero-copy,
+.scene-card,
+.card,
+.matrix {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.hero-copy {
+  position: relative;
+  overflow: hidden;
+  padding: 34px;
+}
+
+.hero-copy::after {
+  position: absolute;
+  right: -90px;
+  bottom: -120px;
+  width: 310px;
+  height: 310px;
+  border-radius: 999px;
+  content: "";
+  background: radial-gradient(circle, rgba(110, 231, 249, 0.2), transparent 66%);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  content: "";
+  background: var(--green);
+  box-shadow: 0 0 18px var(--green);
+}
+
+h1 {
+  max-width: 920px;
+  margin: 0;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(36px, 4.6vw, 64px);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+}
+
+.hero-copy p {
+  max-width: 900px;
+  margin: 22px 0 0;
+  color: #b8c4d4;
+  font-size: clamp(16px, 1.6vw, 19px);
+  line-height: 1.72;
+}
+
+.verdict {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.verdict-item {
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.verdict-item strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fff;
+  font-size: 15px;
+}
+
+.verdict-item span {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.scene-card {
+  position: relative;
+  display: grid;
+  min-height: 430px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(12, 20, 31, 0.64), rgba(12, 18, 28, 0.95)),
+    radial-gradient(circle at 50% 30%, rgba(97, 230, 160, 0.16), transparent 20rem);
+}
+
+.scene-ghost {
+  position: absolute;
+  inset: 34px 34px 118px;
+  border: 1px solid rgba(110, 231, 249, 0.14);
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 52% 45%, rgba(97, 230, 160, 0.18), transparent 9rem),
+    linear-gradient(90deg, transparent 49.7%, rgba(110, 231, 249, 0.18) 49.7%, rgba(110, 231, 249, 0.18) 50.3%, transparent 50.3%),
+    linear-gradient(0deg, transparent 49.7%, rgba(110, 231, 249, 0.12) 49.7%, rgba(110, 231, 249, 0.12) 50.3%, transparent 50.3%);
+  opacity: 0.92;
+}
+
+.scene-ghost::before,
+.scene-ghost::after {
+  position: absolute;
+  content: "";
+  border-radius: 999px;
+}
+
+.scene-ghost::before {
+  left: 50%;
+  top: 50%;
+  width: min(58%, 260px);
+  aspect-ratio: 1;
+  border: 1px dashed rgba(97, 230, 160, 0.38);
+  transform: translate(-50%, -50%);
+  animation: orbit 8s linear infinite;
+}
+
+.scene-ghost::after {
+  left: calc(50% + 58px);
+  top: calc(50% - 62px);
+  width: 15px;
+  height: 15px;
+  background: var(--amber);
+  box-shadow:
+    -94px 72px 0 var(--blue),
+    0 0 28px rgba(255, 200, 87, 0.85);
+}
+
+.vector-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 142px;
+  height: 2px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(255, 200, 87, 0.12), var(--amber));
+  transform: rotate(-42deg);
+  transform-origin: left center;
+  box-shadow: 0 0 26px rgba(255, 200, 87, 0.28);
+}
+
+@keyframes orbit {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+#threeScene {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+}
+
+.scene-fallback {
+  display: none;
+  place-items: center;
+  min-height: 430px;
+  padding: 28px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.scene-label {
+  position: absolute;
+  z-index: 2;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(5, 10, 17, 0.62);
+  backdrop-filter: blur(12px);
+}
+
+.scene-label strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.scene-label span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.toolbar {
+  position: sticky;
+  top: 14px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 22px;
+  background: rgba(7, 13, 20, 0.78);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.step-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.step-button,
+.play-button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: #c8d5e4;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.step-button {
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.play-button {
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+.step-button:hover,
+.play-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.step-button.active {
+  color: #061018;
+  border-color: rgba(97, 230, 160, 0.9);
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  transition: transform 300ms ease, border-color 300ms ease;
+}
+
+.card.active-card {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.card.posthoc {
+  --accent: var(--blue);
+}
+
+.card.bijector {
+  --accent: var(--green);
+}
+
+.card::before {
+  position: absolute;
+  top: -90px;
+  right: -90px;
+  width: 230px;
+  height: 230px;
+  border-radius: 999px;
+  content: "";
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 25%, transparent), transparent 70%);
+}
+
+.card-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: clamp(24px, 2vw, 33px);
+  letter-spacing: -0.04em;
+}
+
+.pill {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.diagram {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  min-height: 430px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(0, 0, 0, 0.16);
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.lane-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rail {
+  position: relative;
+  min-height: 88px;
+  border: 1px dashed rgba(255, 255, 255, 0.13);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.rail.flow-active::after {
+  position: absolute;
+  inset: 8px;
+  border-radius: 14px;
+  content: "";
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-55%); opacity: 0; }
+  20% { opacity: 1; }
+  to { transform: translateX(55%); opacity: 0; }
+}
+
+.nodes {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 88px;
+  padding: 12px;
+}
+
+.node {
+  position: relative;
+  min-width: 118px;
+  max-width: 175px;
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(10, 17, 27, 0.8);
+  transform: translateY(0);
+  transition: transform 260ms ease, border-color 260ms ease, box-shadow 260ms ease;
+}
+
+.node.is-hot {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 72%, white 10%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 18px 42px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.node strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.node span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.arrow {
+  width: 42px;
+  height: 2px;
+  flex: 0 0 42px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.25), var(--accent));
+}
+
+.arrow::after {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin-top: -3px;
+  margin-left: auto;
+  content: "";
+  border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+  transform: rotate(45deg);
+}
+
+.note {
+  margin-top: 16px;
+  padding: 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 16px;
+  color: #c5d2e0;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.matrix {
+  margin-top: 24px;
+  overflow: hidden;
+}
+
+.matrix-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.matrix h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.035em;
+}
+
+.matrix-grid {
+  display: grid;
+  grid-template-columns: 1.05fr repeat(2, minmax(0, 1fr));
+}
+
+.cell {
+  min-height: 72px;
+  padding: 16px 18px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: #cbd6e4;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.cell:nth-child(3n) {
+  border-right: none;
+}
+
+.head {
+  color: #fff;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+code {
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #e5f2ff;
+  background: rgba(255, 255, 255, 0.065);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.footnote {
+  margin: 18px 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  .hero,
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-card,
+  #threeScene,
+  .scene-fallback {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    width: min(100vw - 18px, 1480px);
+    padding-top: 12px;
+  }
+
+  .hero-copy,
+  .card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  h1 {
+    font-size: clamp(34px, 11vw, 46px);
+    line-height: 1.08;
+  }
+
+  .verdict,
+  .matrix-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cell,
+  .cell:nth-child(3n) {
+    border-right: none;
+  }
+
+  .toolbar {
+    position: static;
+  }
+
+  .lane {
+    grid-template-columns: 1fr;
+  }
+
+  .nodes {
+    overflow-x: auto;
+    padding-bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="hero" aria-labelledby="title">
+    <div class="hero-copy">
+      <div class="eyebrow">Direction-Speed Architecture</div>
+      <h1 id="title">Post-hoc 是外部坐标转换，Bijector 是 actor 内部分布变换</h1>
+      <p>
+        两者都想把位移拆成方向和速度，但发生的位置完全不同：post-hoc 在数据到模型之间做
+        <code>decompose</code>，在模型到环境之间做 <code>compose</code>；bijector 只在 actor
+        概率分布内部把 5D latent action 双向变换为 5D env action。
+      </p>
+      <div class="verdict">
+        <div class="verdict-item">
+          <strong>Post-hoc: 模型看到 6D</strong>
+          <span>dataset/env 是 5D，但 actor 和 critic 学习的是 decomposed 6D 动作。</span>
+        </div>
+        <div class="verdict-item">
+          <strong>Bijector: 外部始终 5D</strong>
+          <span>dataset、critic、actor output、env action 都是 5D；只有分布内部有 latent → output。</span>
+        </div>
+      </div>
+    </div>
+
+    <aside class="scene-card" aria-label="Three.js 3D action flow">
+      <div class="scene-ghost" aria-hidden="true"><div class="vector-line"></div></div>
+      <div id="threeScene"></div>
+      <div class="scene-fallback" id="sceneFallback">
+        Three.js 场景未加载。下方流程图仍可完整解释两种架构。
+      </div>
+      <div class="scene-label">
+        <strong id="sceneTitle">3D 位移组: direction × speed</strong>
+        <span id="sceneText">彩色轨迹表示 actor 的随机性如何作用在方向和速度坐标上。</span>
+      </div>
+    </aside>
+  </section>
+
+  <nav class="toolbar" aria-label="Animation controls">
+    <div class="step-buttons">
+      <button class="step-button active" data-step="0" type="button">总览</button>
+      <button class="step-button" data-step="1" type="button">数据进入</button>
+      <button class="step-button" data-step="2" type="button">Actor 内部</button>
+      <button class="step-button" data-step="3" type="button">环境执行</button>
+      <button class="step-button" data-step="4" type="button">概率密度</button>
+    </div>
+    <button class="play-button" id="playButton" type="button">暂停自动播放</button>
+  </nav>
+
+  <section class="main-grid">
+    <article class="card posthoc active-card" id="posthocCard">
+      <div class="card-header">
+        <h2>Post-hoc DS</h2>
+        <span class="pill">模型外部 · D+1</span>
+      </div>
+      <div class="diagram">
+        <div class="lane">
+          <div class="lane-label">Dataset</div>
+          <div class="rail" data-flow="data">
+            <div class="nodes">
+              <div class="node" data-hot="data"><strong>5D raw</strong><span>env 真实动作</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="data"><strong>decompose</strong><span>5D → 6D</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="data"><strong>6D batch</strong><span>dir, log-speed, yaw, grip</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-label">Model</div>
+          <div class="rail" data-flow="actor">
+            <div class="nodes">
+              <div class="node" data-hot="actor"><strong>actor / critic</strong><span>输入输出都是 6D</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="actor"><strong>6D output</strong><span>模型并不直接输出 env action</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-label">Execution</div>
+          <div class="rail" data-flow="env">
+            <div class="nodes">
+              <div class="node" data-hot="env"><strong>compose</strong><span>6D → 5D，多对一</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="env"><strong>Env receives 5D</strong><span>真实执行动作</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        关键点：post-hoc 的 6D 是模型外部显式动作表示。它工程上直接，但
+        <code>D+1 → D</code> 不是 bijection，所以 SAC/RLPD 的 <code>log_prob</code>
+        不是环境动作的严格概率密度。
+      </p>
+    </article>
+
+    <article class="card bijector active-card" id="bijectorCard">
+      <div class="card-header">
+        <h2>Bijector DS</h2>
+        <span class="pill">Actor 内部 · D</span>
+      </div>
+      <div class="diagram">
+        <div class="lane">
+          <div class="lane-label">Dataset</div>
+          <div class="rail" data-flow="data">
+            <div class="nodes">
+              <div class="node" data-hot="data"><strong>5D raw</strong><span>不做 decompose</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="data"><strong>critic batch</strong><span>仍是 5D</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-label">Actor</div>
+          <div class="rail" data-flow="actor">
+            <div class="nodes">
+              <div class="node" data-hot="actor"><strong>MLP params</strong><span>5D Gaussian μ, σ</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="actor"><strong>latent 5D</strong><span>Gaussian-space action</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="actor"><strong>bijector</strong><span>forward / inverse / log-det</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-label">Execution</div>
+          <div class="rail" data-flow="env">
+            <div class="nodes">
+              <div class="node" data-hot="env"><strong>output 5D</strong><span>structured env action</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="env"><strong>Env receives 5D</strong><span>不再 compose</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        关键点：bijector 内部的 “raw/latent action” 不是 post-hoc 的 6D decomposed action。
+        它仍是 5D，只存在于 actor 分布内部；forward 后的 5D output action 直接传给环境。
+      </p>
+    </article>
+  </section>
+
+  <section class="matrix" aria-labelledby="matrixTitle">
+    <div class="matrix-header">
+      <h2 id="matrixTitle">一眼区分</h2>
+      <span class="pill">建议实验汇报中按此口径描述</span>
+    </div>
+    <div class="matrix-grid">
+      <div class="cell head">问题</div>
+      <div class="cell head">Post-hoc</div>
+      <div class="cell head">Bijector</div>
+
+      <div class="cell">数据集动作如何进入模型？</div>
+      <div class="cell">5D 先 <code>decompose</code> 成 6D。</div>
+      <div class="cell">保持 5D，不预处理动作维度。</div>
+
+      <div class="cell">Actor / critic 看到几维？</div>
+      <div class="cell">6D decomposed action。</div>
+      <div class="cell">5D real action；仅 actor 分布内部有 latent 5D。</div>
+
+      <div class="cell">Actor 输出能否直接给 env？</div>
+      <div class="cell">不能，必须先 <code>compose</code> 成 5D。</div>
+      <div class="cell">可以，output action 已经是 5D env action。</div>
+
+      <div class="cell">是否是严格 bijection？</div>
+      <div class="cell">不是。<code>D+1 → D</code> 多对一。</div>
+      <div class="cell">是。提供 <code>forward</code> / <code>inverse</code> / <code>log_det</code>。</div>
+
+      <div class="cell">适合什么实验定位？</div>
+      <div class="cell">FQL 或 D+1 表示消融；RLPD 中只能算近似 ablation。</div>
+      <div class="cell">SAC/RLPD 的正式 DS 概率模型对照。</div>
+    </div>
+  </section>
+
+  <p class="footnote">
+    说明：本页使用 Three.js 做 3D 动作语义的渐进增强演示；Remotion 更适合生成 React 视频资产，
+    当前文档是可直接打开的静态 HTML，因此没有引入额外构建链路。
+  </p>
+</main>
+
+<script>
+const steps = [
+  {
+    key: "overview",
+    title: "总览: 同一个 DS 先验，不同层级",
+    text: "Post-hoc 改外部动作坐标；bijector 改 actor 内部分布。"
+  },
+  {
+    key: "data",
+    title: "数据进入: post-hoc 变成 6D，bijector 保持 5D",
+    text: "这一步决定了 actor 和 critic 到底在什么动作空间里学习。"
+  },
+  {
+    key: "actor",
+    title: "Actor 内部: bijector 的核心只在这里",
+    text: "MLP 输出 5D Gaussian 参数，latent 5D 经过 bijector forward 变成 output 5D。"
+  },
+  {
+    key: "env",
+    title: "环境执行: post-hoc 需要 compose，bijector 不需要",
+    text: "bijector actor 对外采样出的 output action 就是 env 接收的 real action。"
+  },
+  {
+    key: "density",
+    title: "概率密度: D+1 多对一 vs D 维可逆",
+    text: "RLPD/SAC 的严格 log_prob 对照应该使用 stereographic 或 spherical bijector。"
+  }
+];
+
+let currentStep = 0;
+let autoPlay = true;
+let timer = window.setInterval(nextStep, 4200);
+
+const buttons = Array.from(document.querySelectorAll(".step-button"));
+const playButton = document.getElementById("playButton");
+const sceneTitle = document.getElementById("sceneTitle");
+const sceneText = document.getElementById("sceneText");
+
+function setStep(index, userInitiated = false) {
+  currentStep = index;
+  const step = steps[index];
+
+  buttons.forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.step) === index);
+  });
+
+  document.querySelectorAll(".rail").forEach((rail) => {
+    const isActive = index === 0 || rail.dataset.flow === step.key || (index === 4 && rail.dataset.flow === "actor");
+    rail.classList.toggle("flow-active", isActive);
+  });
+
+  document.querySelectorAll(".node").forEach((node) => {
+    const isHot = index === 0 || node.dataset.hot === step.key || (index === 4 && node.dataset.hot === "actor");
+    node.classList.toggle("is-hot", isHot);
+  });
+
+  document.getElementById("posthocCard").classList.toggle("active-card", index !== 2 || index === 0);
+  document.getElementById("bijectorCard").classList.toggle("active-card", index !== 1 || index === 0);
+
+  sceneTitle.textContent = step.title;
+  sceneText.textContent = step.text;
+  window.dispatchEvent(new CustomEvent("ds-step", { detail: { step: index, key: step.key } }));
+
+  if (userInitiated && autoPlay) {
+    toggleAutoplay(false);
+  }
+}
+
+function nextStep() {
+  setStep((currentStep + 1) % steps.length);
+}
+
+function toggleAutoplay(force) {
+  autoPlay = typeof force === "boolean" ? force : !autoPlay;
+  playButton.textContent = autoPlay ? "暂停自动播放" : "继续自动播放";
+  window.clearInterval(timer);
+  if (autoPlay) {
+    timer = window.setInterval(nextStep, 4200);
+  }
+}
+
+buttons.forEach((button) => {
+  button.addEventListener("click", () => setStep(Number(button.dataset.step), true));
+});
+
+playButton.addEventListener("click", () => toggleAutoplay());
+setStep(0);
+</script>
+
+<script type="module">
+const host = document.getElementById("threeScene");
+const fallback = document.getElementById("sceneFallback");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+try {
+  const THREE = await import("https://unpkg.com/three@0.164.1/build/three.module.js");
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(3.6, 3.0, 5.6);
+  camera.lookAt(0, 0, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  host.appendChild(renderer.domElement);
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  const grid = new THREE.GridHelper(4.2, 16, 0x2e4a5d, 0x1b2d3a);
+  grid.position.y = -1.05;
+  group.add(grid);
+
+  const axisMaterial = new THREE.LineBasicMaterial({ color: 0x6ee7f9, transparent: true, opacity: 0.42 });
+  const axisPoints = [
+    [new THREE.Vector3(-2.1, 0, 0), new THREE.Vector3(2.1, 0, 0)],
+    [new THREE.Vector3(0, -1.45, 0), new THREE.Vector3(0, 1.45, 0)],
+    [new THREE.Vector3(0, 0, -2.1), new THREE.Vector3(0, 0, 2.1)]
+  ];
+  axisPoints.forEach((points) => {
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), axisMaterial));
+  });
+
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(1.05, 48, 24),
+    new THREE.MeshBasicMaterial({ color: 0x61e6a0, wireframe: true, transparent: true, opacity: 0.2 })
+  );
+  group.add(sphere);
+
+  const latent = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.13, 1),
+    new THREE.MeshStandardMaterial({ color: 0x55b7ff, roughness: 0.45, metalness: 0.1 })
+  );
+  group.add(latent);
+
+  const output = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 32, 16),
+    new THREE.MeshStandardMaterial({ color: 0xffc857, roughness: 0.35, metalness: 0.15 })
+  );
+  group.add(output);
+
+  const directionMaterial = new THREE.LineBasicMaterial({ color: 0xffc857, transparent: true, opacity: 0.95 });
+  const directionLine = new THREE.Line(new THREE.BufferGeometry(), directionMaterial);
+  group.add(directionLine);
+
+  const bridgeMaterial = new THREE.LineBasicMaterial({ color: 0xc9a3ff, transparent: true, opacity: 0.6 });
+  const bridgeLine = new THREE.Line(new THREE.BufferGeometry(), bridgeMaterial);
+  group.add(bridgeLine);
+
+  const light = new THREE.DirectionalLight(0xffffff, 2.1);
+  light.position.set(3, 4, 5);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x9db8ff, 0.95));
+
+  let mode = 0;
+  window.addEventListener("ds-step", (event) => {
+    mode = event.detail.step;
+  });
+
+  function resize() {
+    const width = host.clientWidth || 500;
+    const height = host.clientHeight || 430;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+
+  function animate(timeMs) {
+    const t = timeMs * 0.001;
+    const phase = mode * 0.75;
+    const radius = mode === 1 ? 0.72 : mode === 3 ? 1.22 : 1.0 + Math.sin(t * 1.7) * 0.08;
+    const theta = t * 0.8 + phase;
+    const phi = Math.sin(t * 0.62 + phase) * 0.8 + 1.15;
+
+    const direction = new THREE.Vector3(
+      Math.cos(theta) * Math.sin(phi),
+      Math.cos(phi),
+      Math.sin(theta) * Math.sin(phi)
+    ).normalize();
+
+    const outputPosition = direction.clone().multiplyScalar(radius);
+    const latentPosition = new THREE.Vector3(
+      Math.sin(t * 1.3 + phase) * 1.35,
+      Math.cos(t * 0.9 + phase) * 0.72,
+      Math.cos(t * 1.1 + phase) * 1.2
+    );
+
+    latent.position.copy(latentPosition);
+    output.position.copy(outputPosition);
+    directionLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), outputPosition]);
+    bridgeLine.geometry.setFromPoints([latentPosition, outputPosition]);
+
+    const actorFocus = mode === 2 || mode === 4;
+    bridgeMaterial.opacity = actorFocus ? 0.95 : 0.34;
+    sphere.material.opacity = actorFocus ? 0.32 : 0.18;
+    output.scale.setScalar(mode === 3 ? 1.35 : 1);
+    latent.scale.setScalar(actorFocus ? 1.28 : 1);
+
+    if (!reduceMotion) {
+      group.rotation.y = Math.sin(t * 0.2) * 0.16;
+      group.rotation.x = Math.sin(t * 0.16) * 0.06;
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+} catch (error) {
+  host.style.display = "none";
+  fallback.style.display = "grid";
+  console.warn("Three.js scene failed to load:", error);
+}
+</script>
+</body>
+</html>

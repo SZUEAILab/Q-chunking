@@ -49,14 +49,14 @@ $$
 
 ### 2.1 结构化随机策略
 
-DS 不在环境执行端额外注入噪声；探索仍来自 actor 自身的随机策略。区别在于随机变量的坐标系不同。baseline 在原始动作维度上使用独立 Gaussian，再通过 tanh squash；DS 则让 Gaussian latent 经过方向-速度参数化后生成动作：
+DS 不在环境执行端额外注入噪声；探索仍来自 actor 自身的随机策略。区别在于随机变量的坐标系不同。baseline 在原始动作维度上使用独立 Gaussian，再通过 tanh squash；DS 则让 Gaussian latent 经过方向-速度参数化后生成环境动作：
 
 $$
 \xi \sim \mathcal{N}(\mu_\theta(o), \Sigma_\theta(o)),\qquad
 a = f_{\text{DS}}(\xi).
 $$
 
-在 post-hoc 模式中，$f_{\text{DS}}$ 是执行前的确定性 compose；在 stereographic/spherical 模式中，$f_{\text{DS}}$ 是带 inverse 和 log-det 的 bijector。这样，actor 的随机性仍然存在，但其作用方向与速度坐标一致，而不是在原始 Cartesian 维度上彼此纠缠。
+在 post-hoc 模式中，$f_{\text{DS}}$ 位于模型外部：数据进入模型前先 `decompose`，actor 输出后再 `compose` 成环境动作。在 stereographic/spherical 模式中，$f_{\text{DS}}$ 位于 actor 概率分布内部：MLP 仍输出 $D$ 维 Gaussian 参数，采样得到 $D$ 维 latent action，再由 bijector 变换成 $D$ 维环境动作。这样，actor 的随机性仍然存在，但其作用方向与速度坐标一致，而不是在原始 Cartesian 维度上彼此纠缠。
 
 对数速度坐标的一个好处是，latent 中速度方向的加性变化对应原始速度中的乘性变化：
 
@@ -78,7 +78,7 @@ $$
 
 ## 3. 两种 RLPD-valid 参数化实例
 
-上述语义分解可以通过两种可逆策略参数化实现。二者共享方向-速度先验，并且都保持单步动作维度为 $D$，因此 SAC/RLPD 中的 entropy、actor loss 和 BC `log_prob` 都可以包含正确的 change-of-variables Jacobian。
+上述语义分解可以通过两种可逆策略参数化实现。二者共享方向-速度先验，并且都保持单步动作维度为 $D$：数据集动作、critic 输入、actor 对外输出、环境执行动作全都是原始 $D$ 维。只有 actor 分布内部存在 latent action 与 output action 的双向变换。因此 SAC/RLPD 中的 entropy、actor loss 和 BC `log_prob` 都可以包含正确的 change-of-variables Jacobian。
 
 ### 3.1 Stereographic Cartesian Bijector
 
@@ -190,7 +190,65 @@ $$
 | 实现入口 | `--ds_mode=stereographic` | `--ds_mode=spherical` |
 | 主要风险 | stereographic chart 在一个极点退化 | 球坐标极点/角度周期退化 |
 
-## 4. 实验开关
+## 4. 架构比较：Post-hoc vs Bijector
+
+两种 DS 实现的核心区别在于**变换发生在哪个层级**，以及**模型对外看到的动作空间是什么**。
+
+### 4.1 Post-hoc（数据层变换）
+
+```
+Dataset (5D) → decompose → 模型 (6D) → compose → Env (5D)
+                          ↑ 模型看到6D      ↑ 执行前6D→5D
+```
+
+模型在 6D 空间学习（前 3 维方向 + 1 维速度对数 + 2 维标量），外部模块 `decompose`/`compose` 负责 5D↔6D 转换。也就是说，post-hoc 不是 actor 内部的分布变换，而是在数据到模型之间插入 `decompose`，在模型到环境之间插入 `compose`。
+
+**特点**：
+- 变换在模型**外部**：数据预处理和执行后处理
+- 对任何算法通用（FQL、RLPD），只需在数据管线插入 decompose，执行端插入 compose
+- actor 和 critic 看到的都是 6D decomposed action，而不是环境真实接收的 5D action
+- D+1 → D 是**多对一映射**（任意 $\lambda \tilde{u}$ 映射到同一单位方向），不可逆
+- 没有 Jacobian 修正，`log_prob` 不是环境动作的严格概率密度
+- 工程上简单有效，适合作为表示消融
+
+### 4.2 Bijector（分布层变换）
+
+```
+Dataset (5D) → 模型看到5D → MLP输出5D Gaussian参数 → Bijector变换 → 模型输出5D → Env (5D)
+                           ↑ 高斯空间         ↑ 方向-速度参数化
+```
+
+变换发生在 Actor 的**概率分布内部**——用 `DirectionSpeedNormal` 替换 `TanhNormal`，分布内部通过 bijector 实现 latent action → output action 的可逆映射。外部数据流不需要 `decompose`，执行前也不需要 `compose`：actor 对外采样出的 5D output action 就是直接传给环境的 real action。
+
+**特点**：
+- 变换在模型**内部**：数据流、critic 输入、actor 对外输出和 env action 都是 5D
+- MLP 输出的是 5D Gaussian 参数；Gaussian 采样出的 latent action 不是环境动作语义，bijector forward 后的 output action 才是 env action
+- 仅适用于有概率分布接口的 Actor（RLPD/SAC 的 TanhNormal）
+- 有 `forward`/`inverse`/`log-det Jacobian`，可逆且概率一致
+- `log_prob` 是严格 Jacobian-corrected 的
+- 需要算法支持 SAC-style entropy/loss，不适用于 FQL 等 flow-based 方法
+
+这里建议避免把 bijector 内部的 Gaussian sample 直接称为“raw action”。更准确的命名是 **latent action / Gaussian-space action**；它与环境动作同为 5D，但坐标语义不同。经过 bijector forward 后的 **output action** 才是模型对外输出、critic 评估和环境执行的 5D real action。
+
+### 4.3 对比表
+
+| 维度 | Post-hoc | Bijector |
+|------|----------|----------|
+| 变换位置 | 模型外部（数据 + 执行） | 模型内部（分布） |
+| 模型视角 | 输入输出 6D | 输入输出 5D |
+| Actor 内部 | 普通 6D actor 分布或 flow | 5D Gaussian latent → bijector → 5D output |
+| Env 接收 | `compose(actor_output)` 后的 5D | actor output 直接作为 5D action |
+| 可逆性 | ❌ 多对一 | ✅ forward + inverse |
+| log_prob | 近似（分解空间密度） | 严格（Jacobian-corrected） |
+| 适用算法 | 所有（FQL, RLPD, etc.） | 仅 TanhNormal 分布（RLPD/SAC） |
+| Actor 要求 | 无 | 需要可替换的分布接口 |
+| 实现复杂度 | 低（数据管线 + 执行包装） | 中（需实现 Bijector） |
+
+### 4.4 动画说明
+
+打开 [`ds_arch_comparison.html`](ds_arch_comparison.html) 查看 Post-hoc 和 Bijector 的数据流动画对比，包括各层级 5D/6D 维度变换。
+
+## 5. 实验开关
 
 DS 相关入口统一为 `--ds_mode`：
 
@@ -265,11 +323,11 @@ MUJOCO_GL=egl python main_online.py \
 
 这条路径的结果应标注为 approximate ablation，不应与 Jacobian-corrected bijector 结果混为同一类。
 
-## 5. 实现流程
+## 6. 实现流程
 
-下述流程对应 post-hoc Cartesian 方案。`stereographic` 和 `spherical` bijector 方案不预处理数据动作，也不在环境执行前调用 `compose`；它们只在 actor 分布内部替换 TanhNormal。
+下述流程明确区分 post-hoc 和 bijector。post-hoc 改造的是模型外部动作坐标系；`stereographic` 和 `spherical` bijector 不预处理数据动作，也不在环境执行前调用 `compose`，它们只在 actor 分布内部替换 TanhNormal。
 
-### 5.1 离线数据预处理
+### 6.1 Post-hoc 离线数据预处理
 
 ```python
 # 数据集动作是 5D raw，一次性 decompose 成 6D
@@ -278,7 +336,7 @@ decomposed = decompose(dataset_actions)  # (N, 6)
 # Agent 学习 obs → 6D decomposed 的映射
 ```
 
-### 5.2 在线交互（每步）
+### 6.2 Post-hoc 在线交互（每步）
 
 ```python
 decomposed = agent.act(obs)                        # Actor 出 6D
@@ -286,7 +344,7 @@ raw = compose(decomposed)                          # 6D → 5D
 env.step(raw)                                      # 环境吃 5D
 ```
 
-### 5.3 Critic 训练
+### 6.3 Post-hoc Critic 训练
 
 Replay buffer 存 raw action（5D）。训练前 decompose 回 6D 给 Critic：
 
@@ -296,18 +354,38 @@ batch['actions'] = decompose_chunked(batch['actions'])  # 5D → 6D
 critic.update(batch)  # Critic 在分解空间评估 Q 值
 ```
 
-### 5.4 探索来源
+### 6.4 Bijector 数据流
+
+Bijector 模式保持外部动作空间不变：
+
+```python
+# 数据集动作保持 5D raw，不做 decompose
+dataset_actions  # (N, 5)
+
+# Actor 分布内部：
+latent = gaussian.sample()                 # 5D Gaussian-space action
+action = direction_speed_bijector.forward(latent)  # 5D env action
+
+# 对外：
+critic.update(batch_with_5d_actions)
+env.step(action)                           # 直接传 5D，不做 compose
+```
+
+因此，bijector 的“raw/latent action”和 post-hoc 的“6D decomposed action”不是同一个概念。前者只存在于 actor 分布内部，维度仍是 $D$；后者存在于数据管线、actor/critic 输入输出和训练 batch 中，维度是 $D+1$。
+
+### 6.5 探索来源
 
 所有 DS 模式都不再额外注入外部动作噪声。探索来自 actor 自身的随机策略：
 
 ```text
-baseline/posthoc:       Normal -> TanhNormal action
-stereographic/spherical: Normal -> DS bijector -> raw action
+baseline:                Normal -> TanhNormal -> 5D env action
+posthoc:                 actor -> 6D decomposed action -> compose -> 5D env action
+stereographic/spherical: Normal -> DS bijector -> 5D env action
 ```
 
 这样训练时的 `log_prob` 与执行时的 action 分布保持一致；post-hoc 模式也只作为 D+1 表示的近似消融，而不是额外手工噪声消融。
 
-## 6. 数值和 JAX 检查
+## 7. 数值和 JAX 检查
 
 - `reshape(H * D -> H x D)` 不会切断 XLA 的精度或梯度链路；它不改变 dtype，也不是 `stop_gradient`。
 - post-hoc DS 的 compose 是确定性变换；不会额外改变 actor 采样出的动作分布。
@@ -316,7 +394,7 @@ stereographic/spherical: Normal -> DS bijector -> raw action
 - 仍需监控的风险：球坐标极点附近的 Jacobian 很小，log-det 会很负；如果 actor 均值长期饱和，可能导致梯度变小。建议实验日志里同时看 `actor/entropy`、`actor/alpha`、`critic/q_max`、`critic/q_min`。
 - post-hoc DS 的主要近似不是 XLA，而是概率模型：D+1 分解动作没有完整 Jacobian 修正，且 TanhNormal 对 `log_speed` 的取值范围有约束。
 
-## 7. 实现
+## 8. 实现
 
 ```python
 # posthoc_direction_speed.py
