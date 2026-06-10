@@ -17,3 +17,5 @@ docs/data/ds_experiments/**/videos/
 
 # Reproduce experiment checkpoints
 docs/data/reproduce/**/params_*.pkl
+# FQL experiment checkpoints
+docs/data/fql_h5_2m/**/params_*.pkl

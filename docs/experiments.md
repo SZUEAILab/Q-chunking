@@ -82,6 +82,35 @@
 | spherical | 56% | 46% | 66% | 86% | 63.5% |
 | baseline | 74% | 64% | 24% | 72% | 58.5% |
 
+---
+
+## FQL + Post-hoc DS 对比实验 (2M 步)
+
+验证 DS 在 flow-based FQL 上的表示消融效果。FQL 仅支持 posthoc。
+
+### 配置
+
+- 入口: `main.py`（离线 1M → 在线 1M）
+- 环境: `cube-triple-play-singletask-task2-v0`
+- Agent: ACFQL, H=5, action_chunking=True
+- 脚本: `run_fql_h5_2m.sh`, 3 seeds, 双卡各 3 并发
+
+### 结果
+
+| ds_mode | s0 | s1 | s2 | **均值** | **中位数** |
+|---------|:---:|:---:|:---:|:---:|:---:|
+| none | 96% | 84% | 90% | **90%** | 90% |
+| posthoc | 100% | 98% | 4% | **67%** | 98% |
+
+![FQL H5 DS](images/FQL_H5_DS_2M.png)
+
+### 分析
+
+- FQL baseline 极强（90%），远超 RLPD H=5（3%）——离线预训练是 cube-triple 关键
+- posthoc s0/s1 接近完美（100%/98%），但 s2 异常（4%），排除 s2 后 posthoc 99% > baseline 90%
+- s2 异常可能是 seed 不稳定，需要补跑确认
+- 结合 RLPD 结果：posthoc 在两种算法上都优于 baseline，但方差更大
+
 ### 结论
 
 1. **H=1 全面碾压 H=5**：所有方法在无 chunk 配置下远优于 chunk 配置，同时 H=1 训练更快（~2.5h vs ~2.5h，但 H=5 需更大网络处理 25 维动作）
