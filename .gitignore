@@ -10,3 +10,6 @@ dist/
 exp/
 replay_videos/
 exp_logs/
+# Experiment checkpoint and video files
+docs/data/ds_experiments/**/params_*.pkl
+docs/data/ds_experiments/**/videos/

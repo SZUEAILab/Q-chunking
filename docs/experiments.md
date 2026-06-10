@@ -10,7 +10,7 @@
 | **RLPD** | main_online.py | 1 | — | 纯在线 | **74%** | 60% | 22.5-87% |
 | **RLPD-AC** | main_online.py | 5 | 无BC约束 | 纯在线 | **2%** | 2% | 0-3% |
 
-![主对比图](QC_RLPD_RLPDAC_1M.png)
+![主对比图](images/QC_RLPD_RLPDAC_1M.png)
 
 ## 长序训练实验 (10M 步)
 
@@ -19,7 +19,7 @@
 | **RLPD-AC** | 5 | 无 | **88%** | 98% @7.6M | ~1.5M |
 | **QC-RLPD** | 5 | bc_alpha=0.01 | **90%** | 100% @9.3M | ~2.5M |
 
-![10M对比](RLPDAC_QC_RLPD_10M.png)
+![10M对比](images/RLPDAC_QC_RLPD_10M.png)
 
 ### 关键发现
 
@@ -36,61 +36,63 @@
 
 ---
 
-## 方向+速度分解实验
+## 三种 DS 实现 + Baseline 对比实验 (1M 步)
 
-### 方法
+验证 [approach.md](approach.md) 中 posthoc（D+1 非可逆）、stereographic（球极投影 bijector）、spherical（球坐标 bijector）三种 DS 实现，在 H=1（无 chunk）和 H=5（有 chunk）下的表现。
 
-将动作 `a ∈ [-1,1]^D` 的前 3 维位移分解为方向+速度：
+### 实验配置
 
-| 表示 | 编码 |
-|------|------|
-| raw | `a` |
-| dir+speed | `[a[:3]/|a[:3]|, log|a[:3]|, a[3:]]` |
+- 环境: `cube-triple-play-singletask-task2-v0`
+- 步数: 1,000,000
+- Agent: ACRLPD
+- 双卡并行: GPU 0 + GPU 1，4 并发/卡，4 seed/组
+- 脚本: `run_ds_h5_1m.sh`, `run_ds_h1_1m.sh`
+- 日志: `logs/ds_h5_1m/`, `logs/ds_h1_1m/`
 
-Agent 在分解空间学习，采样后重组送环境。详见 [approach.md](approach.md)。
+### 结果
 
-### 实验结果汇总
+| 组 | H=5+chunk | ±std | H=1(无chunk) | ±std |
+|---|:---:|:---:|:---:|:---:|
+| **Post-hoc** | 31.5% | 21.8% | 89.0% | 11.9% |
+| **Stereographic** | 18.5% | 16.1% | **91.0%** | 4.6% |
+| **Spherical** | 7.0% | 3.3% | 63.5% | 14.8% |
+| **Baseline** (TanhNormal) | 3.0% | 1.7% | 58.5% | 20.3% |
 
-| 实验 | Agent | H | 步数 | raw | dir+speed | 入口 |
-|------|-------|:--:|:--:|:--:|:--:|------|
-| 1 | RLPD-AC | 5 | 500K | 1.3% | **14.0%** | main_online |
-| 2 | FQL | 5 | 2M | 88% | **98%** | main.py |
-| 3 | RLPD | 1 | 1M | **60%** | — | main_online |
-| 4 | RLPD-AC | 1 | 1M | — | 7.0% | main_online |
+![DS 对比图](images/DS_H5_H1_1M.png)
 
-> 实验 1: 3 seeds, cube-triple+cube-double. 实验 2: 1 seed, cube-triple. 实验 3: 3 seeds. 实验 4: 2 seeds.
+![训练曲线](images/DS_Curves_H5_H1_1M.png)
 
-![实验 1](rlpd_ac_h5_posthoc_ds_cube_tasks_500k.png)
+### 每 seed 详细数据
 
-图 1 使用 `--ds_mode=posthoc` 的非可逆 D+1 direction-speed 表示，即执行前对 actor 输出做确定性 decompose/compose；它不是 Jacobian-corrected `spherical` 或 `stereographic` bijector。
+#### H=5 + Action Chunking
 
-![实验 2](fql_h5_posthoc_ds_cube_triple_2m.png)
+| 组 | s0 | s1 | s2 | s3 | 均值 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| posthoc | 24% | 66% | 6% | 30% | 31.5% |
+| stereographic | 40% | 4% | 2% | 28% | 18.5% |
+| spherical | 10% | 6% | 10% | 2% | 7.0% |
+| baseline | 6% | 2% | 2% | 2% | 3.0% |
 
-图 2 同样使用 `--ds_mode=posthoc` 的非可逆 D+1 direction-speed 表示，用于 FQL 表示消融；FQL 不依赖 SAC/RLPD actor `log_prob`，因此该图不能替代 RLPD 的 bijector 正确性验证。
+#### H=1 (无 chunk)
 
-![汇总](summary.png)
+| 组 | s0 | s1 | s2 | s3 | 均值 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| posthoc | 100% | 88% | 70% | 98% | 89.0% |
+| stereographic | 86% | 92% | 98% | 88% | 91.0% |
+| spherical | 56% | 46% | 66% | 86% | 63.5% |
+| baseline | 74% | 64% | 24% | 72% | 58.5% |
 
-### 核心结论
+### 结论
 
-1. **dir+speed 在所有对比中均优于 raw**
-2. **困难任务收益最大**：RLPD-AC H=5 从 1.3% → 14%
-3. **3D 归一化（正确）vs 5D 归一化（有偏但有效）**：5D 更快收敛但 3D 几何正确
-4. **分解表示本身足够**：结构化噪声可有可无
+1. **H=1 全面碾压 H=5**：所有方法在无 chunk 配置下远优于 chunk 配置，同时 H=1 训练更快（~2.5h vs ~2.5h，但 H=5 需更大网络处理 25 维动作）
+2. **Stereographic ≈ Post-hoc（H=1 下仅差 2%）**：两种方法在正确配置下极为接近，Stereographic 具有 Jacobian-corrected log_prob 优势
+3. **Stereographic 方差最小**（H=1: ±4.6%）：表现最稳定，推荐作为主力 DS 实现
+4. **Spherical 弱于 Stereographic**：球坐标参数化在极点和角度周期处 Jacobian 退化，不如球极投影稳定
+5. **Post-hoc D+1 在 H=5 下异常突出**（31.5% vs 18.5%）：可能高方差随机波动，也可能 D+1 表示在欠参数化时提供额外探索自由度，但 log_prob 不是严格 Jacobian-corrected，不能作为 SAC/RLPD 正式方法
+6. **所有 DS 变体均优于 Baseline TanhNormal**：方向-速度分解本身收益明确
 
-### 实验数据
+### 数据
 
-| 实验 | exp/qc 目录 |
-|------|------|
-| 实验 1 | `DirSpeed_RLPD_H5_500K` |
-| 实验 2 | `DirSpeed_FQL_H5_2M` |
-| 实验 3 | `ReproDS` |
-| 实验 4 | `DS3D` |
+原始实验数据位于 `docs/data/ds_experiments/`，包含 eval.csv、flags.json、online_agent.csv、params_500000.pkl、params_1000000.pkl。
 
-### 实现
-
-| 文件 | 说明 |
-|------|------|
-| `direction_speed.py` | 分解核心模块 |
-| `main_online.py` | 纯在线 (`--direction_speed`) |
-| `main.py` | 离线→在线 (`--direction_speed`) |
-| `agents/acrlpd.py` | RLPD/RLPD-AC agent |
+汇总 CSV：`docs/data/ds_1m_comparison.csv`、`docs/data/ds_h5_1m.csv`、`docs/data/ds_h1_1m.csv`。

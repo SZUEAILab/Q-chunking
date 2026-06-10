@@ -36,8 +36,14 @@ def main():
         flags = json.load(f)
 
     config = flags['agent']
+    ds_mode = flags.get('ds_mode', 'none')
 
-    # 还原训练时的环境变量
+    # Apply ds_mode to agent config (mirrors main_online.py)
+    if ds_mode in ('stereographic', 'spherical'):
+        config['use_ds_bijector'] = True
+        config['ds_bijector_type'] = ds_mode
+    use_posthoc = ds_mode == 'posthoc'
+
     if 'CUDA_VISIBLE_DEVICES' in os.environ:
         os.environ['EGL_DEVICE_ID'] = os.environ['CUDA_VISIBLE_DEVICES']
         os.environ['MUJOCO_EGL_DEVICE_ID'] = os.environ['CUDA_VISIBLE_DEVICES']
@@ -57,8 +63,9 @@ def main():
     else:
         env, eval_env, _, _ = make_env_and_datasets(env_name)
 
-    # 获取 action_dim
-    action_dim = eval_env.action_space.shape[-1]
+    # 获取 action_dim，posthoc 模式使用 D+1
+    raw_action_dim = eval_env.action_space.shape[-1]
+    agent_action_dim = raw_action_dim + 1 if use_posthoc else raw_action_dim
 
     # 提高渲染分辨率 (需要修改 MuJoCo offscreen framebuffer)
     for env_obj in [env, eval_env]:
@@ -73,7 +80,7 @@ def main():
     # 创建 agent (需要 example batch 来初始化网络形状)
     # 用零 batch 模拟
     dummy_obs = np.zeros((1, eval_env.observation_space.shape[-1]), dtype=np.float32)
-    dummy_act = np.zeros((1, action_dim), dtype=np.float32)
+    dummy_act = np.zeros((1, agent_action_dim), dtype=np.float32)
 
     seed = flags.get('seed', 0)
 
@@ -98,13 +105,34 @@ def main():
 
     agent = restore_agent_with_file(agent, ckpt_path)
 
+    # Posthoc: wrap agent to compose D+1 → D actions for eval
+    if use_posthoc:
+        from posthoc_direction_speed import compose as posthoc_compose
+        class _PosthocWrapper:
+            def __init__(self, wrapped, horizon, agent_dim, raw_dim):
+                self._wrapped = wrapped
+                self._horizon = horizon
+                self._d1 = raw_dim + 1  # D+1
+                self._raw_dim = raw_dim
+            def sample_actions(self, observations, rng=None):
+                sampled = self._wrapped.sample_actions(observations, rng=rng)
+                if self._horizon > 1:
+                    s = sampled.shape
+                    reshaped = sampled.reshape(-1, self._horizon, self._d1)
+                    composed = posthoc_compose(reshaped)  # (..., H, D+1) → (..., H, D)
+                    return composed.reshape(*s[:-1], -1)  # → (..., H*D)
+                return posthoc_compose(sampled)
+        eval_agent = _PosthocWrapper(agent, horizon_length, agent_action_dim, raw_action_dim)
+    else:
+        eval_agent = agent
+
     # 跑评估 + 录视频
     print(f"\n开始评估，录制 {NUM_VIDEO_EPISODES} 条视频...")
 
     eval_info, _, renders = evaluate(
-        agent=agent,
+        agent=eval_agent,
         env=eval_env,
-        action_dim=action_dim,
+        action_dim=raw_action_dim,
         num_eval_episodes=10,  # 统计用
         num_video_episodes=NUM_VIDEO_EPISODES,
         video_frame_skip=VIDEO_FRAME_SKIP,
