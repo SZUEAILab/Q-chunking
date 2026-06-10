@@ -13,3 +13,6 @@ exp_logs/
 # Experiment checkpoint and video files
 docs/data/ds_experiments/**/params_*.pkl
 docs/data/ds_experiments/**/videos/
+
+# Reproduce experiment checkpoints
+docs/data/reproduce/**/params_*.pkl
