@@ -1,4 +1,10 @@
 import glob, tqdm, wandb, os, json, random, time, jax
+
+# Fix numpy 2.x compatibility for robosuite.
+import numpy as _np
+if not hasattr(_np.dtypes, 'StringDType'):
+    _np.dtypes.StringDType = _np.dtypes.StrDType
+
 from absl import app, flags
 from ml_collections import config_flags
 from log_utils import setup_wandb, get_exp_name, get_flag_dict, CsvLogger
