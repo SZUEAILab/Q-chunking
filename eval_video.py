@@ -20,6 +20,10 @@ def _is_robomimic(env_name):
     return any(env_name.startswith(p) for p in ('lift', 'can', 'square', 'transport', 'tool_hang'))
 
 
+def _is_libero(env_name):
+    return env_name.startswith("libero_")
+
+
 def main():
     exp_dir = sys.argv[1] if len(sys.argv) > 1 else None
     if exp_dir is None:
@@ -51,6 +55,7 @@ def main():
 
     # ---- env ----
     is_robo = _is_robomimic(env_name)
+    is_libero = _is_libero(env_name)
     if is_robo:
         if not hasattr(np.dtypes, 'StringDType'):
             np.dtypes.StringDType = np.dtypes.StrDType
@@ -67,6 +72,14 @@ def main():
         eval_env = RobomimicLowdimWrapper(eval_env, low_dim_keys=low_dim_keys["low_dim"],
                                           max_episode_length=max_ep_len)
         eval_env.seed(seed)
+
+        raw_action_dim = eval_env.action_space.shape[-1]
+        obs_sample = eval_env.reset()
+        obs_dim = obs_sample[0].shape[-1] if isinstance(obs_sample, tuple) else obs_sample.shape[-1]
+    elif is_libero:
+        from envs.libero_utils import make_env as libero_make_env
+
+        eval_env = libero_make_env(env_name, seed=seed, render_offscreen=True)
 
         raw_action_dim = eval_env.action_space.shape[-1]
         obs_sample = eval_env.reset()
@@ -125,7 +138,7 @@ def main():
         eval_agent = agent
 
     # ---- eval + video ----
-    if is_robo:
+    if is_robo or is_libero:
         video_dir = os.path.join(exp_dir, 'videos')
         os.makedirs(video_dir, exist_ok=True)
 
@@ -135,8 +148,12 @@ def main():
             obs = eval_env.reset()
             step, done = 0, False
             while not done and step < 500:
-                # RobomimicLowdimWrapper -> EnvRobosuite -> robosuite env -> MjSim
-                img = eval_env.env.env.sim.render(camera_name="agentview", width=WIDTH, height=HEIGHT)
+                if is_libero:
+                    # LiberoLowdimWrapper -> OffScreenRenderEnv.sim
+                    img = eval_env.env.sim.render(camera_name="agentview", width=WIDTH, height=HEIGHT)
+                else:
+                    # RobomimicLowdimWrapper -> EnvRobosuite -> robosuite env -> MjSim
+                    img = eval_env.env.env.sim.render(camera_name="agentview", width=WIDTH, height=HEIGHT)
                 if img is not None: frames.append(img[::-1])
 
                 if isinstance(obs, tuple):
