@@ -136,6 +136,16 @@ def make_env_and_datasets(env_name, frame_stack=None, action_clip_eps=1e-5):
         eval_env = EpisodeMonitor(eval_env)
         dataset = robomimic_utils.get_dataset(env, env_name)
         train_dataset, val_dataset = dataset, None
+    elif env_name.startswith("libero_"):
+        # LIBERO.
+        from envs import libero_utils
+
+        env = libero_utils.make_env(env_name, seed=0)
+        eval_env = libero_utils.make_env(env_name, seed=42)
+        env = EpisodeMonitor(env)
+        eval_env = EpisodeMonitor(eval_env)
+        dataset = libero_utils.get_dataset(env_name)
+        train_dataset, val_dataset = dataset, None
     else:
         raise ValueError(f'Unsupported environment: {env_name}')
 

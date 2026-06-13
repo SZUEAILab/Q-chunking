@@ -1,44 +1,49 @@
 """
-用保存的 checkpoint 跑评估并生成 rollout 视频
-用法: MUJOCO_GL=egl python eval_video.py <实验目录>
-示例: MUJOCO_GL=egl python eval_video.py exp/qc/reproduce/.../sd00020260603_213306
+load checkpoint, run eval, and save rollout videos.
+supports both OGBench (MuJoCo) and RoboMimic (robosuite) environments.
+
+usage: MUJOCO_GL=egl python eval_video.py <exp_dir>
+example: MUJOCO_GL=egl python eval_video.py exp/qc/RoboMimic/square-mh-low_dim/sd00020260611_212136_7ec5c9
 """
-import os, sys, json, pickle
-import jax
-import numpy as np
-import imageio
+import os, sys, json, re
+import jax, numpy as np, imageio
 from evaluation import evaluate
 from agents import agents
 from utils.flax_utils import restore_agent_with_file
-from envs.env_utils import make_env_and_datasets
-import tqdm
 
-NUM_VIDEO_EPISODES = 5
-VIDEO_FRAME_SKIP = 1
-RENDER_HEIGHT = 480
-RENDER_WIDTH = 480
+NUM_VIDEO = 5
+FRAME_SKIP = 1
+HEIGHT, WIDTH = 480, 480
+
+
+def _is_robomimic(env_name):
+    return any(env_name.startswith(p) for p in ('lift', 'can', 'square', 'transport', 'tool_hang'))
+
+
+def _is_libero(env_name):
+    return env_name.startswith("libero_")
+
 
 def main():
     exp_dir = sys.argv[1] if len(sys.argv) > 1 else None
     if exp_dir is None:
-        # find latest RLPD reproduce run
-        import glob
-        candidates = sorted(glob.glob('exp/qc/reproduce/*/sd*/'))
-        exp_dir = candidates[-1] if candidates else None
-        if exp_dir is None:
-            print("No experiment directory found")
-            return
+        import glob as _g
+        exp_dir = sorted(_g.glob('exp/qc/*/*/sd*'))[-1] if _g.glob('exp/qc/*/*/sd*') else None
+    if exp_dir is None:
+        print("No experiment directory found"); return
 
-    print(f"实验目录: {exp_dir}")
-
-    # 读取配置
+    print(f"exp dir: {exp_dir}")
     with open(os.path.join(exp_dir, 'flags.json')) as f:
         flags = json.load(f)
 
-    config = flags['agent']
+    config = flags.get('agent', flags.get('config', {}))
     ds_mode = flags.get('ds_mode', 'none')
+    env_name = flags.get('env_name', flags.get('env', '?'))
+    seed = flags.get('seed', 0)
+    horizon = flags.get('horizon_length', 1)
+    config['horizon_length'] = horizon
 
-    # Apply ds_mode to agent config (mirrors main_online.py)
+    # ---- ds_mode config ----
     if ds_mode in ('stereographic', 'spherical'):
         config['use_ds_bijector'] = True
         config['ds_bijector_type'] = ds_mode
@@ -48,114 +53,150 @@ def main():
         os.environ['EGL_DEVICE_ID'] = os.environ['CUDA_VISIBLE_DEVICES']
         os.environ['MUJOCO_EGL_DEVICE_ID'] = os.environ['CUDA_VISIBLE_DEVICES']
 
-    # 设置 horizon_length
-    horizon_length = flags.get('horizon_length', 1)
-    config['horizon_length'] = horizon_length
+    # ---- env ----
+    is_robo = _is_robomimic(env_name)
+    is_libero = _is_libero(env_name)
+    if is_robo:
+        if not hasattr(np.dtypes, 'StringDType'):
+            np.dtypes.StringDType = np.dtypes.StrDType
+        from envs.robomimic_utils import make_env, _check_dataset_exists
+        from robomimic.utils import env_utils as EnvUtils, file_utils as FileUtils
+        from envs.robomimic_utils import RobomimicLowdimWrapper, low_dim_keys, _get_max_episode_length
 
-    # 创建环境
-    env_name = flags['env_name']
-    ogbench_dataset_dir = flags.get('ogbench_dataset_dir')
+        # Create env WITH offscreen rendering
+        dataset_path = _check_dataset_exists(env_name)
+        env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path)
+        max_ep_len = _get_max_episode_length(env_name)
+        eval_env = EnvUtils.create_env_from_metadata(
+            env_meta=env_meta, render=False, render_offscreen=True)
+        eval_env = RobomimicLowdimWrapper(eval_env, low_dim_keys=low_dim_keys["low_dim"],
+                                          max_episode_length=max_ep_len)
+        eval_env.seed(seed)
 
-    if ogbench_dataset_dir is not None:
-        from envs.ogbench_utils import make_ogbench_env_and_datasets
-        env, eval_env, _, _ = make_ogbench_env_and_datasets(
-            env_name, dataset_path=None, compact_dataset=False)
+        raw_action_dim = eval_env.action_space.shape[-1]
+        obs_sample = eval_env.reset()
+        obs_dim = obs_sample[0].shape[-1] if isinstance(obs_sample, tuple) else obs_sample.shape[-1]
+    elif is_libero:
+        from envs.libero_utils import make_env as libero_make_env
+
+        eval_env = libero_make_env(env_name, seed=seed, render_offscreen=True)
+
+        raw_action_dim = eval_env.action_space.shape[-1]
+        obs_sample = eval_env.reset()
+        obs_dim = obs_sample[0].shape[-1] if isinstance(obs_sample, tuple) else obs_sample.shape[-1]
     else:
-        env, eval_env, _, _ = make_env_and_datasets(env_name)
+        ogbench_dataset_dir = flags.get('ogbench_dataset_dir')
+        if ogbench_dataset_dir is not None:
+            from envs.ogbench_utils import make_ogbench_env_and_datasets
+            env, eval_env, _, _ = make_ogbench_env_and_datasets(
+                env_name, dataset_path=None, compact_dataset=False)
+        else:
+            from envs.env_utils import make_env_and_datasets
+            env, eval_env, _, _ = make_env_and_datasets(env_name)
 
-    # 获取 action_dim，posthoc 模式使用 D+1
-    raw_action_dim = eval_env.action_space.shape[-1]
+        raw_action_dim = eval_env.action_space.shape[-1]
+        obs_dim = eval_env.observation_space.shape[-1]
+        render_env = eval_env  # OGBench renders from eval_env
+
+        # MuJoCo render setup
+        for env_obj in [env, eval_env]:
+            uw = env_obj.unwrapped
+            uw.model.vis.global_.offwidth = WIDTH
+            uw.model.vis.global_.offheight = HEIGHT
+            uw._render_height = HEIGHT; uw._render_width = WIDTH; uw._renderer = None
+
     agent_action_dim = raw_action_dim + 1 if use_posthoc else raw_action_dim
 
-    # 提高渲染分辨率 (需要修改 MuJoCo offscreen framebuffer)
-    for env_obj in [env, eval_env]:
-        uw = env_obj.unwrapped
-        uw.model.vis.global_.offwidth = RENDER_WIDTH
-        uw.model.vis.global_.offheight = RENDER_HEIGHT
-        uw._render_height = RENDER_HEIGHT
-        uw._render_width = RENDER_WIDTH
-        uw._renderer = None  # 强制重建 renderer
-    print(f"渲染分辨率: {RENDER_WIDTH}x{RENDER_HEIGHT}")
-
-    # 创建 agent (需要 example batch 来初始化网络形状)
-    # 用零 batch 模拟
-    dummy_obs = np.zeros((1, eval_env.observation_space.shape[-1]), dtype=np.float32)
+    # ---- agent ----
+    dummy_obs = np.zeros((1, obs_dim), dtype=np.float32)
     dummy_act = np.zeros((1, agent_action_dim), dtype=np.float32)
+    agent = agents[config['agent_name']].create(seed, dummy_obs, dummy_act, config)
 
-    seed = flags.get('seed', 0)
-
-    agent_class = agents[config['agent_name']]
-    agent = agent_class.create(
-        seed,
-        dummy_obs,
-        dummy_act,
-        config,
-    )
-
-    # 自动找最新 checkpoint (按数值排序)
-    import glob as _glob, re as _re
-    ckpt_candidates = sorted(_glob.glob(os.path.join(exp_dir, 'params_*.pkl')),
-                            key=lambda x: int(_re.search(r'params_(\d+)\.pkl', x).group(1)))
-    if not ckpt_candidates:
-        print(f"No checkpoint found in {exp_dir}")
-        return
-    ckpt_path = ckpt_candidates[-1]  # 最新的 (步数最大)
-    ckpt_epoch = int(os.path.basename(ckpt_path).replace('params_', '').replace('.pkl', ''))
-    print(f"Checkpoint: params_{ckpt_epoch}.pkl ({ckpt_epoch/1e6:.1f}M步)")
-
+    ckpts = sorted(
+        [f for f in os.listdir(exp_dir) if f.startswith('params_') and f.endswith('.pkl')],
+        key=lambda x: int(re.search(r'params_(\d+)\.pkl', x).group(1)))
+    if not ckpts: print("No checkpoint found"); return
+    ckpt_path = os.path.join(exp_dir, ckpts[-1])
+    epoch = int(ckpts[-1].replace('params_', '').replace('.pkl', ''))
+    print(f"checkpoint: params_{epoch}.pkl ({epoch/1e6:.1f}M steps)")
     agent = restore_agent_with_file(agent, ckpt_path)
 
-    # Posthoc: wrap agent to compose D+1 → D actions for eval
+    # ---- posthoc wrapper ----
     if use_posthoc:
-        from posthoc_direction_speed import compose as posthoc_compose
-        class _PosthocWrapper:
-            def __init__(self, wrapped, horizon, agent_dim, raw_dim):
-                self._wrapped = wrapped
-                self._horizon = horizon
-                self._d1 = raw_dim + 1  # D+1
-                self._raw_dim = raw_dim
-            def sample_actions(self, observations, rng=None):
-                sampled = self._wrapped.sample_actions(observations, rng=rng)
-                if self._horizon > 1:
-                    s = sampled.shape
-                    reshaped = sampled.reshape(-1, self._horizon, self._d1)
-                    composed = posthoc_compose(reshaped)  # (..., H, D+1) → (..., H, D)
-                    return composed.reshape(*s[:-1], -1)  # → (..., H*D)
-                return posthoc_compose(sampled)
-        eval_agent = _PosthocWrapper(agent, horizon_length, agent_action_dim, raw_action_dim)
+        from posthoc_direction_speed import compose as ph_compose
+        class _W:
+            def __init__(s, a, h, ad, rd): s._a, s._h, s._ad, s._rd = a, h, ad, rd
+            def sample_actions(s, o, rng=None):
+                d = s._a.sample_actions(o, rng=rng)
+                if s._h > 1:
+                    d = d.reshape(-1, s._h, s._ad)
+                    d = ph_compose(d).reshape(d.shape[0], -1)
+                    return d
+                return ph_compose(d)
+        eval_agent = _W(agent, horizon, agent_action_dim, raw_action_dim)
     else:
         eval_agent = agent
 
-    # 跑评估 + 录视频
-    print(f"\n开始评估，录制 {NUM_VIDEO_EPISODES} 条视频...")
+    # ---- eval + video ----
+    if is_robo or is_libero:
+        video_dir = os.path.join(exp_dir, 'videos')
+        os.makedirs(video_dir, exist_ok=True)
 
-    eval_info, _, renders = evaluate(
-        agent=eval_agent,
-        env=eval_env,
-        action_dim=raw_action_dim,
-        num_eval_episodes=10,  # 统计用
-        num_video_episodes=NUM_VIDEO_EPISODES,
-        video_frame_skip=VIDEO_FRAME_SKIP,
-    )
+        print(f"\nRecording {NUM_VIDEO} rollout videos...")
+        for ep in range(NUM_VIDEO):
+            frames = []
+            obs = eval_env.reset()
+            step, done = 0, False
+            while not done and step < 500:
+                if is_libero:
+                    # LiberoLowdimWrapper -> OffScreenRenderEnv.sim
+                    img = eval_env.env.sim.render(camera_name="agentview", width=WIDTH, height=HEIGHT)
+                else:
+                    # RobomimicLowdimWrapper -> EnvRobosuite -> robosuite env -> MjSim
+                    img = eval_env.env.env.sim.render(camera_name="agentview", width=WIDTH, height=HEIGHT)
+                if img is not None: frames.append(img[::-1])
 
-    # 保存统计
-    print(f"\n评估结果:")
-    for k, v in sorted(eval_info.items()):
-        print(f"  {k}: {v:.4f}")
+                if isinstance(obs, tuple):
+                    obs_in = obs[0][np.newaxis, :]
+                else:
+                    obs_in = obs[np.newaxis, :]
+                action = np.array(eval_agent.sample_actions(obs_in, rng=jax.random.PRNGKey(ep * 1000 + step)))
+                if action.ndim > 1: action = action[0]
+                result = eval_env.step(action)
+                obs, done = result[0], bool(result[2] or result[3])
+                step += 1
 
-    # 保存视频
-    video_dir = os.path.join(exp_dir, 'videos')
-    os.makedirs(video_dir, exist_ok=True)
+            path = os.path.join(video_dir, f'rollout_{ep}.mp4')
+            if frames:
+                imageio.mimsave(path, frames, fps=20)
+                print(f"  ep {ep}: {len(frames)} frames -> {path}")
+            else:
+                print(f"  ep {ep}: no frames")
 
-    for i, render in enumerate(renders):
-        if len(render) > 0:
-            video_path = os.path.join(video_dir, f'rollout_{i}.mp4')
-            imageio.mimsave(video_path, render, fps=20)  # control_timestep=0.05s → 20fps = 1x 真实速度
-            print(f"  视频 {i}: {len(render)} 帧 → {video_path}")
+        eval_env.close()
 
-    env.close()
-    eval_env.close()
-    print(f"\n视频保存到: {video_dir}/")
+    else:
+        # OGBench: evaluate() handles rendering natively
+        eval_info, _, renders = evaluate(
+            agent=eval_agent, env=eval_env, action_dim=raw_action_dim,
+            num_eval_episodes=50, num_video_episodes=NUM_VIDEO, video_frame_skip=FRAME_SKIP)
+
+        print("\n=== Eval Results ===")
+        for k, v in sorted(eval_info.items()):
+            print(f"  {k}: {v:.4f}")
+
+        video_dir = os.path.join(exp_dir, 'videos')
+        os.makedirs(video_dir, exist_ok=True)
+        for i, render in enumerate(renders):
+            if render:
+                path = os.path.join(video_dir, f'rollout_{i}.mp4')
+                imageio.mimsave(path, render, fps=20)
+                print(f"  video {i}: {len(render)} frames -> {path}")
+
+        env.close(); eval_env.close()
+
+    print(f"\nDone! videos saved to {video_dir}/")
+
 
 if __name__ == '__main__':
     main()
