@@ -29,8 +29,8 @@ FLAGS = flags.FLAGS
 # Flags
 # ---------------------------------------------------------------------------
 
-flags.DEFINE_string('tasks_config', None,
-                    '任务配置文件 (JSON)。与 --compile 搭配使用。')
+flags.DEFINE_string('tasks_config', 'tasks.json',
+                    '任务配置文件 (JSON)。默认 tasks.json。')
 flags.DEFINE_string('run', None,
                     '编译后的命令文件路径。未指定时尝试 ./tasks.compiled.json。')
 flags.DEFINE_bool('compile', False,
