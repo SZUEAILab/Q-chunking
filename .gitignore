@@ -10,6 +10,7 @@ dist/
 exp/
 exp_logs/
 logs/
+.venv/
 tasks.json
 tasks.compiled.json
 schedule.log

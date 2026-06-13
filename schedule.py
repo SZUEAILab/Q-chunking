@@ -241,6 +241,7 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
     env.setdefault('MUJOCO_GL', 'egl')
     env.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
     env.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.05')
+    env.setdefault('WANDB_MODE', 'disabled')
 
     # ---- 恢复状态：分类命令 ----
     queue = []
@@ -278,6 +279,11 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                 queue.append(c)
         else:
             queue.append(c)
+
+    if done_ok == total_commands:
+        print(f'[scheduler] 全部 {total_commands} 条命令已完成，无需执行。')
+        print(f'[scheduler] 重跑请先: python schedule.py --compile')
+        return
 
     if not any(c['status'] in ('done', 'running') for c in commands):
         # 首次运行
@@ -504,7 +510,7 @@ def main(_):
         run_scheduler(compiled, run_path, gpus, FLAGS.gpu_tasks, FLAGS.stagger)
         return
 
-    # ---- 模式：--compile 编译（或编译 + 预览） ----
+    # ---- 模式：编译（--compile 或 compiled 文件不存在时自动编译） ----
     if not FLAGS.tasks_config:
         sys.exit('编译需要 --tasks_config。')
 
@@ -519,8 +525,17 @@ def main(_):
         for i, c in enumerate(compiled['commands']):
             print(f'  [{i}] {c["name"]}  seed={c["seed"]}')
             print(f'      {c["cmd"]}')
-    print(f'\n执行: python schedule.py --gpus={",".join(str(g) for g in FLAGS.gpus)} '
-          f'--gpu_tasks={FLAGS.gpu_tasks}')
+        return
+
+    if FLAGS.compile:
+        print(f'\n审查通过后执行:')
+        print(f'  python schedule.py --gpus={",".join(str(g) for g in FLAGS.gpus)} '
+              f'--gpu_tasks={FLAGS.gpu_tasks}')
+        return
+
+    # --compile 未设置：编译后自动执行
+    gpus = [int(g) for g in FLAGS.gpus]
+    run_scheduler(compiled, out_path, gpus, FLAGS.gpu_tasks, FLAGS.stagger)
 
 
 if __name__ == '__main__':
