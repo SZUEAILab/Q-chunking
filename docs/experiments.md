@@ -122,7 +122,7 @@
 - **stereographic (59%) ≈ baseline (54.1%)**：stereo 在 H=5 下优势不明显
 - **spherical 最弱 (43.3%)**：与 task2 一致，球坐标 Jacobian 退化
 - **10 seeds 给出更可信的 CI**：旧实验 4 seeds 的 ±std 高达 55%，新实验 10 seeds 下 CI 更紧
-- **数据**：[`docs/data/ds_experiments/cube-triple-task1/H5/`](../docs/data/ds_experiments/cube-triple-task1/H5/)
+- **数据**：[`cube-triple-play-singletask/task1/h5/rlpd/`](../docs/data/ds_experiments/cube-triple-play-singletask/task1/h5/rlpd/)
 
 ---
 
@@ -149,24 +149,67 @@
 - FQL baseline 极强（90%），离线预训练是关键
 - posthoc s0/s1 近乎完美，s2 异常（4%）可能是 seed 崩溃
 - 排除 s2：posthoc 99% > baseline 90%，DS 在 FQL 上仍有收益
-- **数据**：[`docs/data/ds_experiments/task2_fql/`](../docs/data/ds_experiments/task2_fql/)
+- **数据**：[`cube-triple-play-singletask/task2/h5/fql/`](../docs/data/ds_experiments/cube-triple-play-singletask/task2/h5/fql/)
 
 ---
 
+---
+
+## 跨任务验证: cube-triple-task4 (10 seeds, H1+H5)
+
+完整消融实验：cube-triple-play-singletask-task4-v0，1M 纯在线，H1+H5，4 DS × 10 seeds × 100 eval
+
+### Task4 结果
+
+| 方法 | H=1 | ±std | H=5 | ±std |
+|------|:---:|:---:|:---:|:---:|
+| **stereographic** | **67.9%** | 14.8% | 4.8% | 5.2% |
+| posthoc | 66.5% | 15.1% | **17.6%** | 9.2% |
+| spherical | 64.8% | 18.6% | 2.0% | 1.6% |
+| none (baseline) | 49.4% | 19.8% | 1.6% | 1.8% |
+
+每 seed 数据 → 数据目录见下方。关键发现：
+- **H=1: stereo/spherical 首次发威**，追平 posthoc，三者均远超 baseline
+- **H=5: 仅 posthoc 勉强可用 (17.6%)**，其余 ≤5%
+- 数据：[`cube-triple-play-singletask/task4/`](../docs/data/ds_experiments/cube-triple-play-singletask/task4/)
+
+---
+
+## 跨任务验证: cube-triple-task5 (10 seeds, H1+H5)
+
+完整消融实验：cube-triple-play-singletask-task5-v0，配置同 task4。
+
+**全部 80 runs (H1+H5, 4 DS × 10 seeds) 成功率均为 0%。** task5 是目前最难的 cube-triple 任务，1M 步内任何方法均无信号。
+
+### 跨任务难度对比
+
+| Task | H1 baseline | H1 best DS | H5 baseline | H5 best DS |
+|------|:---:|:---:|:---:|:---:|
+| task1 | 83%* | 100% (posthoc)* | 54% | 85% (posthoc) |
+| task2 | 59%* | 91% (stereo)* | 3%* | 32% (posthoc)* |
+| task4 | 49% | 68% (stereo) | 1.6% | 18% (posthoc) |
+| **task5** | **0%** | **0%** | **0%** | **0%** |
+
+> *4 seeds, 50 eval（旧）；task4/5 为 10 seeds, 100 eval
+
+- 难度：task1 < task2 < task4 << task5
+- DS 相对收益在中等难度 (task4) 最显著
+- 数据：[`cube-triple-play-singletask/task5/`](../docs/data/ds_experiments/cube-triple-play-singletask/task5/)
+
 ### 结论
 
-1. **H=1 全面碾压 H=5**：所有方法在无 chunk 配置下远优于 chunk 配置，同时 H=1 训练更快（~2.5h vs ~2.5h，但 H=5 需更大网络处理 25 维动作）
-2. **Stereographic ≈ Post-hoc（H=1 下仅差 2%）**：两种方法在正确配置下极为接近，Stereographic 具有 Jacobian-corrected log_prob 优势
-3. **Stereographic 方差最小**（H=1: ±4.6%）：表现最稳定，推荐作为主力 DS 实现
-4. **Spherical 弱于 Stereographic**：球坐标参数化在极点和角度周期处 Jacobian 退化，不如球极投影稳定
-5. **Post-hoc D+1 在 H=5 下异常突出**（31.5% vs 18.5%）：可能高方差随机波动，也可能 D+1 表示在欠参数化时提供额外探索自由度，但 log_prob 不是严格 Jacobian-corrected，不能作为 SAC/RLPD 正式方法
-6. **所有 DS 变体均优于 Baseline TanhNormal**：方向-速度分解本身收益明确
+1. **H=1 全面优于 H=5**：所有任务上 H=1 表现更好，且训练更快
+2. **DS 方法在 H=1 下均有效**：task2/4 上 stereo≈posthoc≈spherical > baseline
+3. **H=5 仅 posthoc 可用**：stereo/spherical 在 H=5 下退化，posthoc 的 D+1 自由度提供额外探索
+4. **task5 为当前最难任务**：1M 步完全失败，需更长训练或 offline pretrain
 
 ### 更新日志
 
 | 日期 | 更新 |
 |------|------|
-| 2026-06-13 | cube-triple-task1 H=5: 10 seeds, 100 eval episodes |
+| 2026-06-14 | cube-triple-task5 (80 runs, 全 0%) + task4 (80 runs) |
+| 2026-06-14 | docs/data 重组为 `env/task/horizon/method/ds_mode/seed` 层级 |
+| 2026-06-13 | cube-triple-task1 H=5: 10 seeds, 100 eval |
 | 2026-06-11 | 初始实验（task2 H1/H5, task1 4 seeds, FQL） |
 
 ### 数据
