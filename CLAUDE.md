@@ -164,3 +164,72 @@ python -u schedule.py --run=tasks.compiled.json --gpus=0,1 --gpu_tasks=4
 | DS 消融       | `ds: posthoc`, `allow_posthoc_direction_speed_rlpd: true`（RLPD 必须）            |
 
 详见 `python schedule.py --helpfull` 和 `docs/experiments.md`。
+
+## 文档与数据
+
+### 图片
+
+所有实验曲线、对比图统一放在 `docs/images/`，在 `docs/experiments.md` 中通过相对路径引用：
+
+```markdown
+![task1 H5 曲线](images/cube-triple-task1_DS_Curves_new.png)
+```
+
+### 实验文档
+
+`docs/experiments.md` — 实验报告，按时间/实验分章节。格式要求：
+
+- 表格：方法、配置、结果（均值 ± 标准差，seed 范围）
+- 图片：学习曲线、柱状对比图
+- 分析：关键发现、与旧实验异同、局限性
+- 数据指针：链接到 `docs/data/ds_experiments/{task}/` 目录
+
+### 原始实验数据
+
+`docs/data` 是 git submodule，指向 HF 数据集仓库 `SZUEAILab/ds-experiments`：
+
+```bash
+# 首次克隆后初始化
+git submodule update --init --recursive
+
+# 更新到最新
+cd docs/data && git pull origin main
+```
+
+`docs/data/ds_experiments/` 存放原始实验结果，层级格式：
+
+```
+docs/data/ds_experiments/{task}/{horizon}/{ds_mode}/seed{N}/
+├── eval.csv           # step, success, episode.return, ...
+├── flags.json         # ds_mode, horizon_length, seed, ...
+├── online_agent.csv   # critic_loss, actor_loss, alpha, ...
+├── env.csv            # qpos, qvel, time, ...
+└── params_*.pkl       # 模型 checkpoint
+```
+
+详细见 `docs/data/README.md`。
+
+### HuggingFace 数据集
+
+原始数据通过 git submodule 同步到 HF 仓库 [SZUEAILab/ds-experiments](https://huggingface.co/datasets/SZUEAILab/ds-experiments)：
+
+```bash
+# 提交并推送子模块
+cd docs/data
+git add ds_experiments/ README.md
+git commit -m "feat: add experiment results"
+git push origin main
+
+# 回主仓库更新子模块引用
+cd ..
+git add docs/data
+git commit -m "chore: bump data submodule"
+```
+
+外部通过 `datasets` 库引用：
+```python
+from datasets import load_dataset
+ds = load_dataset("SZUEAILab/ds-experiments")
+```
+
+新实验结束后：整理到 `docs/data/ds_experiments/` → 更新 `docs/data/README.md` → cd docs/data 提交推送 → 回主仓库更新引用 → 更新 `docs/experiments.md`。

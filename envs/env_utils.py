@@ -10,6 +10,37 @@ from gymnasium.spaces import Box
 from utils.datasets import Dataset
 
 
+class SafeMujocoStep(gymnasium.Wrapper):
+    """Catch MuJoCo FatalError (e.g. excess contacts) and end episode gracefully."""
+
+    def _is_fatal_error(self, e):
+        return 'FatalError' in type(e).__name__ or 'mj_narrowphase' in str(e)
+
+    def step(self, action):
+        try:
+            return self.env.step(action)
+        except Exception as e:
+            if self._is_fatal_error(e):
+                try:
+                    obs, info = self.env.reset()
+                except Exception:
+                    obs, info = self.env.observation_space.sample(), {}
+                return obs, 0.0, True, True, info
+            raise
+
+    def reset(self, *, seed=None, options=None):
+        try:
+            return self.env.reset(seed=seed, options=options)
+        except Exception as e:
+            if self._is_fatal_error(e):
+                # MuJoCo physics crashed during init — retry once
+                try:
+                    return self.env.reset(seed=seed, options=options)
+                except Exception:
+                    return self.env.observation_space.sample(), {}
+            raise
+
+
 class EpisodeMonitor(gymnasium.Wrapper):
     """Environment wrapper to monitor episode statistics."""
 
@@ -104,7 +135,9 @@ def make_env_and_datasets(env_name, frame_stack=None, action_clip_eps=1e-5):
         # OGBench.
         env, train_dataset, val_dataset = ogbench.make_env_and_datasets(env_name)
         eval_env = ogbench.make_env_and_datasets(env_name, env_only=True)
+        env = SafeMujocoStep(env)
         env = EpisodeMonitor(env, filter_regexes=['.*privileged.*', '.*proprio.*'])
+        eval_env = SafeMujocoStep(eval_env)
         eval_env = EpisodeMonitor(eval_env, filter_regexes=['.*privileged.*', '.*proprio.*'])
         train_dataset = Dataset.create(**train_dataset)
         val_dataset = Dataset.create(**val_dataset)

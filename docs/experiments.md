@@ -82,9 +82,9 @@
 | spherical | 56% | 46% | 66% | 86% | 63.5% |
 | baseline | 74% | 64% | 24% | 72% | 58.5% |
 
-## 跨任务验证: cube-triple-task1
+## 跨任务验证: cube-triple-task1 (旧)
 
-验证 DS 在 task1（不同初始位置/颜色）上的泛化。配置同 task2：agent=acrlpd, 4 seeds, 1M 纯在线。
+验证 DS 在 task1（不同初始位置/颜色）上的泛化。配置同 task2：agent=acrlpd, 4 seeds, 50 eval episodes, 1M 纯在线。
 
 ### 结果
 
@@ -97,13 +97,32 @@
 
 ![task1 曲线](images/cube-triple-task1_DS_Curves.png)
 
+> 注：4 seeds、50 eval episodes 导致方差极大。10 seeds 版本见下方。
+
+---
+
+## 跨任务验证: cube-triple-task1 (10 seeds, H=5)
+
+**升级实验**：seeds 0–9 (10 seeds)，100 eval episodes，1M online steps。H=5 + action chunking。
+
+### 结果
+
+| 方法 | 1M 成功率 | ±std | 范围 |
+|------|:---:|:---:|:---:|
+| **DS-RLPD (posthoc)** | **84.9%** | 22.7% | 42–100% |
+| **DS-RLPD (stereographic)** | 59.0% | 38.2% | 6–100% |
+| **RLPD (baseline)** | 54.1% | 32.7% | 3–99% |
+| **DS-RLPD (spherical)** | 43.3% | 33.9% | 8–100% |
+
+![task1 H5 曲线](images/cube-triple-task1_DS_Curves_new.png)
+
 ### 分析
 
-- **task1 方差远大于 task2**：inter-seed 跨度 0-100%，说明 task1 对环境初始状态更敏感
-- **H1 Post-hoc 完美 100%**：但可能 seed 幸运——task1 baseline 也有 seed 到 100%
-- **Stereographic H1 仅 51%**：远低于 task2 的 91%，task1 更难
-- **H5 整体优于 H1**：和 task2 相反（task2 H1 >> H5）
-- **数据**：[`docs/data/ds_experiments/task1_rlpd/`](../docs/data/ds_experiments/task1_rlpd/)
+- **posthoc 84.9% 大幅领先**：但方差较大（42–100%），部分 seed 跑出满分
+- **stereographic (59%) ≈ baseline (54.1%)**：stereo 在 H=5 下优势不明显
+- **spherical 最弱 (43.3%)**：与 task2 一致，球坐标 Jacobian 退化
+- **10 seeds 给出更可信的 CI**：旧实验 4 seeds 的 ±std 高达 55%，新实验 10 seeds 下 CI 更紧
+- **数据**：[`docs/data/ds_experiments/cube-triple-task1/H5/`](../docs/data/ds_experiments/cube-triple-task1/H5/)
 
 ---
 
@@ -142,6 +161,13 @@
 4. **Spherical 弱于 Stereographic**：球坐标参数化在极点和角度周期处 Jacobian 退化，不如球极投影稳定
 5. **Post-hoc D+1 在 H=5 下异常突出**（31.5% vs 18.5%）：可能高方差随机波动，也可能 D+1 表示在欠参数化时提供额外探索自由度，但 log_prob 不是严格 Jacobian-corrected，不能作为 SAC/RLPD 正式方法
 6. **所有 DS 变体均优于 Baseline TanhNormal**：方向-速度分解本身收益明确
+
+### 更新日志
+
+| 日期 | 更新 |
+|------|------|
+| 2026-06-13 | cube-triple-task1 H=5: 10 seeds, 100 eval episodes |
+| 2026-06-11 | 初始实验（task2 H1/H5, task1 4 seeds, FQL） |
 
 ### 数据
 

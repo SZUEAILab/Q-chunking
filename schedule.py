@@ -18,6 +18,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -42,43 +43,6 @@ flags.DEFINE_integer('gpu_tasks', 1,
 flags.DEFINE_integer('stagger', 30,
                      '同一 GPU 上两次启动之间的冷却秒数，等 JIT 编译完成。')
 flags.DEFINE_bool('dry_run', False, '只打印命令，不实际启动。')
-
-
-# ---------------------------------------------------------------------------
-# GPU 检测
-# ---------------------------------------------------------------------------
-
-def query_gpus():
-    """返回 {index: {total_mb, used_mb, free_mb}}."""
-    out = subprocess.check_output(
-        ['nvidia-smi',
-         '--query-gpu=index,memory.total,memory.used,memory.free',
-         '--format=csv,noheader,nounits'],
-        text=True,
-    )
-    gpus = {}
-    for line in out.strip().split('\n'):
-        if not line:
-            continue
-        idx, total, used, free = line.strip().split(',')
-        gpus[int(idx.strip())] = {
-            'total_mb': int(total.strip()),
-            'used_mb': int(used.strip()),
-            'free_mb': int(free.strip()),
-        }
-    return gpus
-
-
-def calc_concurrency(free_mb, horizon_length):
-    """按显存公式估算单卡并发数。"""
-    if horizon_length == 1:
-        h_factor = 1.0
-    elif horizon_length == 5:
-        h_factor = 1.7
-    else:
-        h_factor = 1.0 + (horizon_length - 1) * (0.7 / 4)
-    per_proc_mb = 1500 * h_factor
-    return max(1, int(free_mb / per_proc_mb))
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +271,6 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
     def _gpu_available_slots(gpu_id):
         return gpu_tasks - len(running[gpu_id])
 
-    def _gpu_bar(gpu_id):
-        n = len(running[gpu_id])
-        return '[' + '█' * n + '░' * (gpu_tasks - n) + ']'
-
     def _print_status(now, force=False):
         nonlocal last_heartbeat
         if not force and now - last_heartbeat < 60:
@@ -318,19 +278,25 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
         last_heartbeat = now
         done = done_ok + done_fail
         elapsed = now - start_time
-        bars = '  '.join(f'GPU{g}:{_gpu_bar(g)}' for g in gpus)
         eta = ''
         if done > 0:
             eta_sec = (elapsed / done) * (total_commands - done)
             if eta_sec < 120:
-                eta = f'  ETA: {eta_sec:.0f}s'
+                eta = f'ETA {eta_sec:.0f}s'
             elif eta_sec < 7200:
-                eta = f'  ETA: {eta_sec/60:.1f}m'
+                eta = f'ETA {eta_sec/60:.1f}m'
             else:
-                eta = f'  ETA: {eta_sec/3600:.1f}h'
-        print(f'[{time.strftime("%T")}] {bars}  '
-              f'queue={len(queue)}  done={done}/{total_commands}'
-              f'{eta}  elapsed={elapsed/60:.1f}m')
+                eta = f'ETA {eta_sec/3600:.1f}h'
+        # per-GPU slot usage
+        gpu_info = ' '.join(f'G{g}:{len(running[g])}/{gpu_tasks}' for g in gpus)
+        # ok/fail split
+        if done_fail > 0:
+            okfail = f'  ok={done_ok} fail={done_fail}'
+        else:
+            okfail = ''
+        print(f'[{time.strftime("%T")}] {gpu_info}  '
+              f'q={len(queue)}  done={done}/{total_commands}{okfail}  '
+              f'{eta}  {elapsed/60:.1f}m')
 
     def _try_launch(gpu_id, now):
         nonlocal launched, log_index
@@ -362,10 +328,8 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
         launched += 1
         save_compiled(compiled, compiled_path)
 
-        remaining = _gpu_available_slots(gpu_id)
         print(f'[{time.strftime("%T")}] ▶ GPU={gpu_id}  {c["name"]}  seed={c["seed"]}  '
-              f'pid={proc.pid}  [{launched}/{total_commands}]  '
-              f'GPU{gpu_id}{_gpu_bar(gpu_id)} slot_free={remaining}')
+              f'pid={proc.pid}  [{launched}/{total_commands}]')
         _print_status(now, force=True)
         return True
 
@@ -375,15 +339,21 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
     signal.signal(signal.SIGTERM, _on_terminate)
 
     # ---- 首次填充 ----
+    name_seeds = Counter()
+    name_done = Counter()
+    for c in commands:
+        name_seeds[c['name']] += 1
+        if c['status'] == 'done':
+            name_done[c['name']] += 1
     print(f'\n{"─"*60}')
-    for i, c in enumerate(commands):
-        marker = '✓' if c['status'] == 'done' else '·'
-        print(f'  [{i}] [{marker}] {c["name"]}  seed={c["seed"]}')
-    print(f'{"─"*60}\n')
-
-    print(f'[scheduler] 命令总数={total_commands}  '
-          f'已完成={done_ok + done_fail}  待执行={len(queue)}  '
-          f'gpus={gpus}  gpu_tasks={gpu_tasks}  stagger={stagger}s')
+    for name in sorted(name_seeds):
+        d = name_done.get(name, 0)
+        t = name_seeds[name]
+        bar = '✓' * d + '·' * (t - d) if d < t else '✓' * t
+        print(f'  {name:40s}  [{bar}]  {d}/{t}')
+    print(f'{"─"*60}')
+    print(f'[scheduler] 命令={total_commands}  done={done_ok + done_fail}  '
+          f'pending={len(queue)}  gpus={gpus}  gpu_tasks={gpu_tasks}  stagger={stagger}s\n')
 
     # ---- 主循环 ----
     try:

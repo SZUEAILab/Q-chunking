@@ -11,6 +11,9 @@ exp/
 exp_logs/
 logs/
 .venv/
-tasks.json
-tasks.compiled.json
-schedule.log
+
+*.json
+!tasks.example.json
+*.compiled.json
+
+*.log
