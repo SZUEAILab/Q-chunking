@@ -3,8 +3,10 @@
 LIBERO is a robot manipulation benchmark built on robosuite with 7D action space
 (same structure as RoboMimic: dx,dy,dz, droll,dpitch,dyaw, grip).
 
-We use a 15D low-dim observation:
-    ee_pos(3) + ee_ori(3) + gripper_qpos(2) + joint_pos(7) = 15
+We use a 120D low-dim observation:
+    robot0_proprio-state(50) + object-state(70) = 120
+This includes robot proprioception AND all object positions — essential for
+the agent to know where objects are relative to the gripper.
 """
 
 import os
@@ -35,46 +37,18 @@ OnTheGroundPanda.arms = ["right"]
 REGISTERED_ROBOTS["MountedPanda"] = MountedPanda
 REGISTERED_ROBOTS["OnTheGroundPanda"] = OnTheGroundPanda
 
+# ── Observation: proprio-state(50) + object-state(70) = 120 ──────
+OBS_DIM = 50 + 70  # 120
 
-def _quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
-    """Convert quaternion (w,x,y,z) → axis-angle (3D)."""
-    w, x, y, z = float(q[0]), float(q[1]), float(q[2]), float(q[3])
-    w = np.clip(w, -1.0, 1.0)
-    angle = 2.0 * np.arccos(w)
-    sin_half = np.sqrt(1.0 - w * w)
-    if sin_half < 1e-8:
-        return np.zeros(3, dtype=np.float32)
-    axis = np.array([x, y, z]) / sin_half
-    return (axis * angle).astype(np.float32)
-
-
-# ── Low-dim observation keys ─────────────────────────────────────
-# Environment → observation feature mapping
-ENV_OBS_KEYS = [
-    "robot0_eef_pos",      # 3
-    "robot0_eef_quat",     # 4 → converted to axis-angle (3)
-    "robot0_gripper_qpos", # 2
-    "robot0_joint_pos",    # 7
-]
-OBS_DIM = 3 + 3 + 2 + 7  # 15
+# Cache for preprocessed datasets (avoid recomputing from MuJoCo states)
+_PREPROCESSED_CACHE: dict[str, dict] = {}
 
 
 def _extract_lowdim_obs(env_obs: dict) -> np.ndarray:
-    """Extract 15D low-dim observation from LIBERO env observation dict."""
-    ee_pos = env_obs["robot0_eef_pos"].astype(np.float32)
-    ee_ori = _quat_to_axis_angle(env_obs["robot0_eef_quat"])
-    gripper = env_obs["robot0_gripper_qpos"].astype(np.float32)
-    joint = env_obs["robot0_joint_pos"].astype(np.float32)
-    return np.concatenate([ee_pos, ee_ori, gripper, joint])
-
-
-# ── Dataset key names (HDF5) → observation feature mapping ───────
-HDF5_OBS_KEYS = [
-    "ee_pos",         # 3
-    "ee_ori",         # 3 (axis-angle)
-    "gripper_states", # 2
-    "joint_states",   # 7
-]
+    """Extract 120D rich observation from LIBERO env observation dict."""
+    proprio = env_obs["robot0_proprio-state"].astype(np.float32)
+    obj_state = env_obs["object-state"].astype(np.float32)
+    return np.concatenate([proprio, obj_state])
 
 
 def is_libero_env(env_name: str) -> bool:
@@ -223,19 +197,82 @@ def make_env(task_name: str, seed: int = 0, render_offscreen: bool = False):
     return env
 
 
+def _get_preprocessed_obs(task_name: str, hdf5_path: str) -> np.ndarray:
+    """Reconstruct rich 120D observations from HDF5 MuJoCo states.
+
+    The HDF5 only stores basic obs keys but has the full MuJoCo states(92D).
+    We load the env, set each state, and read robot0_proprio-state + object-state.
+    Results are cached per task.
+    """
+    cache_key = f"{task_name}"
+    if cache_key in _PREPROCESSED_CACHE:
+        return _PREPROCESSED_CACHE[cache_key]
+
+    from libero.libero.envs import OffScreenRenderEnv  # noqa: E402
+
+    suite = task_name.split("/")[0] if "/" in task_name else task_name
+    from libero.libero.benchmark import get_benchmark  # noqa: E402
+
+    bm = get_benchmark(suite)(task_order_index=0)
+
+    # Find the correct task index matching the HDF5 file
+    hdf5_task_name = os.path.splitext(os.path.basename(hdf5_path))[0]
+    hdf5_task_name = hdf5_task_name.replace("_demo", "")
+    task_idx = None
+    for i in range(bm.n_tasks):
+        if bm.tasks[i].name == hdf5_task_name:
+            task_idx = i
+            break
+    if task_idx is None:
+        task_idx = 0  # fallback
+
+    env = OffScreenRenderEnv(
+        bddl_file_name=bm.get_task_bddl_file_path(task_idx),
+        robots=["Panda"],
+        has_renderer=False,
+        has_offscreen_renderer=False,
+        control_freq=20,
+        horizon=1000,
+    )
+    # Must reset before state-setting works
+    env.reset()
+
+    f = h5py.File(hdf5_path, "r")
+    demos = sorted(f["data"].keys(), key=lambda x: int(x.split("_")[-1]))
+
+    all_obs = []
+    for ep in demos:
+        group = f[f"data/{ep}"]
+        states = np.array(group["states"], dtype=np.float64)
+        ep_obs = []
+        for i in range(len(states)):
+            env.env.sim.set_state_from_flattened(states[i])
+            env.env.sim.forward()
+            raw = env.env._get_observations()
+            ep_obs.append(_extract_lowdim_obs(raw))
+        all_obs.append(np.array(ep_obs, dtype=np.float32))
+
+    f.close()
+
+    # Cache
+    _PREPROCESSED_CACHE[cache_key] = all_obs
+    return all_obs
+
+
 def get_dataset(task_name: str):
-    """Load LIBERO HDF5 demonstrations as a Dataset.
+    """Load LIBERO HDF5 demonstrations as a Dataset with rich 120D observations.
 
     Returns:
-        Dataset with observations(15D), actions(7D), rewards, terminals, masks,
+        Dataset with observations(120D), actions(7D), rewards, terminals, masks,
         next_observations.
     """
     hdf5_path, suite, task_ref = _find_dataset_path(task_name)
 
+    # Get preprocessed rich observations
+    all_obs = _get_preprocessed_obs(task_name, hdf5_path)
+
     f = h5py.File(hdf5_path, "r")
-    demos = list(f["data"].keys())
-    # Sort numerically: demo_0, demo_1, ...
-    demos = sorted(demos, key=lambda x: int(x.split("_")[-1]))
+    demos = sorted(f["data"].keys(), key=lambda x: int(x.split("_")[-1]))
 
     observations = []
     actions = []
@@ -244,17 +281,12 @@ def get_dataset(task_name: str):
     rewards = []
     masks = []
 
-    for ep in demos:
+    for i, ep in enumerate(demos):
         group = f[f"data/{ep}"]
         a = np.array(group["actions"], dtype=np.float32)
+        obs = all_obs[i]
 
-        # Build lowdim observation matching env format
-        obs_parts = []
-        for key in HDF5_OBS_KEYS:
-            obs_parts.append(np.array(group[f"obs/{key}"], dtype=np.float32))
-        obs = np.concatenate(obs_parts, axis=-1)
-
-        # LIBERO HDF5 has no next_obs — compute from shifted obs
+        # No next_obs in HDF5 — shift obs
         next_obs = np.concatenate([obs[1:], obs[-1:]], axis=0)
 
         dones = np.array(group["dones"], dtype=np.float32)
@@ -282,8 +314,8 @@ def get_dataset(task_name: str):
 class LiberoLowdimWrapper(gym.Env):
     """Gymnasium wrapper for LIBERO envs that provides lowdim observations.
 
-    Converts LIBERO's dict observations into a 15D vector and handles
-    the standard (obs, reward, terminated, truncated, info) step interface.
+    Converts LIBERO's dict observations into a 120D vector (proprio-state + object-state)
+    and handles the standard (obs, reward, terminated, truncated, info) step interface.
     """
 
     def __init__(
