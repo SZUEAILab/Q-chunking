@@ -1,68 +1,164 @@
-# QC — RLPD with Direction-Speed Action Head
+# DS — RLPD with Direction-Speed Action Head
 
 OGBench / RoboMimic 离线+在线强化学习实验仓库。
+
+## 架构
+
+| 入口               | 范式              | Agent                      |
+| ------------------ | ----------------- | -------------------------- |
+| `main_online.py` | 纯在线 RL（RLPD） | `agents/acrlpd.py` (SAC) |
+| `main.py`        | 离线→在线（QC）  | `agents/acfql.py` (FQL)  |
+
+```
+agents/               — ACRLPD, ACFQL
+rlpd_distributions/   — TanhNormal, DirectionSpeed 动作分布
+rlpd_networks/        — MLP, StateActionValue, Ensemble
+envs/                 — OGBench, RoboMimic 环境封装
+utils/                — ReplayBuffer, flax 工具, encoders
+```
+
+DS 模式：`none` (TanhNormal) → `posthoc` (消融) → `stereographic` / `spherical` (Jacobian)。
+
+Agent 配置（`bc_alpha`, `num_qs` 等）在 `--agent` 指向的 config 文件里，不在 CLI flag。
 
 ## 环境
 
 ```bash
 source .venv/bin/activate
-export MUJOCO_GL=egl
+export MUJOCO_GL=egl XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.05
 ```
 
-GPU: 2× RTX 6000 Ada (48GB)。GPU 1 常被 RoboTwin 占用，默认用 GPU 0。
+`CUDA_VISIBLE_DEVICES` 由调度器自动设置。
 
-## 并行训练（单卡多进程）
+## 实验配置
 
-**单卡只能跑满 ~33% GPU，因为 CPU 数据管线是瓶颈。并行化在数据管线等 CPU 时让其他进程用 GPU。**
+任务矩阵通过 JSON 定义，模板见 [tasks.example.json](tasks.example.json)：
+
+```jsonc
+{
+  "common": { "online_steps": 1000000, "eval_episodes": 50, "video_episodes": 0 },
+  "tasks": [
+    {
+      "name": "ds_rlpd_task2",
+      "entry": "main_online.py",
+      "env_name": "cube-triple-play-singletask-task2-v0",
+      "horizon_length": 1,
+      "ds_mode": "stereographic"
+    }
+  ],
+  "seeds": [0]
+}
+```
+
+**task 字段**（可覆写 `common`）：
+
+| 字段                                   | 说明                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `name`                               | **必填**，log 文件名和调度器标签                                                                 |
+| `entry`                              | `main_online.py` / `main.py`                                                                       |
+| `env_name`                           | 见下方环境表                                                                                           |
+| `horizon_length`                     | 1 或 5                                                                                                 |
+| `ds_mode`                            | `none` / `posthoc` / `stereographic` / `spherical`                                             |
+| `action_chunking`                    | bool，覆写 agent 默认值                                                                                |
+| `offline_steps`                      | int，仅 `main.py` 需要                                                                               |
+| `save_interval` | int，ckpt 保存间隔（步数） |
+| `run_group` | wandb run group，默认由入口脚本设定 |
+| `allow_posthoc_direction_speed_rlpd` | bool，`ds_mode=posthoc` 且 `entry=main_online.py` 时 **必须设为 `true`**，否则代码主动拒绝 |
+
+其他可透传 flag：`sparse`, `discount`, `utd_ratio`, `buffer_size`, `save_interval`, `dataset_proportion` 等，完整列表见 `schedule.py` 中 `FIELD_TO_FLAG`。
+
+**工作流：Claude 根据用户需求生成 `tasks.json` → 用户审查确认 → 启动实验。**
+
+### 支持的环境
+
+| 来源                | 格式                             | 示例                                                                                                               |
+| ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **OGBench**   | `{env}-singletask{ -taskN}-v0` | `cube-triple-play-singletask-task2-v0`, `cube-double-play-singletask-v0`                                       |
+| **RoboMimic** | `{task}-{type}-low_dim`        | `lift-ph-low_dim`, `can-mh-low_dim`, `square-ph-low_dim`, `transport-ph-low_dim`, `tool_hang-ph-low_dim` |
+
+RoboMimic `{type}`: `ph` = proficient human, `mh` = multi human。
+
+## GPU 与并行
+
+### GPU 检测
 
 ```bash
-# 8 并发，每进程 4 核，显存预分配 5%
-for seed in 0 1 2 3 4 5 6 7; do
-    taskset -c $((seed*4))-$((seed*4+3)) env \
-        CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_MEM_FRACTION=0.05 \
-        XLA_PYTHON_CLIENT_PREALLOCATE=false \
-        python main_online.py --seed=$seed ... &
-done
-wait
+nvidia-smi --query-gpu=index --format=csv,noheader | wc -l          # GPU 数量
+nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv,noheader  # 剩余显存
+nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader       # 占用进程
 ```
 
-关键参数：
-- `taskset -c <start>-<end>` — 绑定 CPU 核，避免进程争抢
-- `XLA_PYTHON_CLIENT_MEM_FRACTION` — 限制每进程显存预分配，按显卡总显存/任务数计算（如 48GB 卡跑 8 任务约 5%，24GB 卡跑 6 任务约 15%）；每个任务实际需约 1.5GB，分配 4GB 安全
-- `XLA_PYTHON_CLIENT_PREALLOCATE=false` — 禁用 JAX 显存预分配，动态分配（多进程必需）
-- 8 并发 × 4 核 = 32 核全用，总吞吐 ~535 it/s（单进程 113 it/s 的 4.7×）
-- 4 并发 × 8 核 = 32 核全用，总吞吐 ~480 it/s，每进程更快（适合少 seed）
+### 每卡并发数
 
-详见 `docs/parallel_benchmark.md`。
+默认 `--gpu_tasks=1`。已知测试结果：
 
-## 主要实验命令
+| GPU                 | `--gpu_tasks`   |
+| ------------------- | ----------------- |
+| RTX 6000 Ada (48GB) | 6                 |
+| RTX 4090 (24GB)     | 4                 |
+| 其他                | 1，按显存公式估算 |
 
-### RLPD baseline（TanhNormal, chunk=true）
+公式（参考）：`并发 ≈ 可用显存 / (1.5GB × H因子)`，H=1 因子 1.0，H=5 因子 1.7。
+
+CPU 不用手动分配——Python GIL + JAX GPU dispatch 意味着 CPU 不是瓶颈。
+
+### JIT 编译错开
+
+多进程同时启动 → JAX 同时编译 → 显存峰值叠加 → OOM。
+调度器在同一 GPU 两次启动间强制间隔 `--stagger=30`s。已验证 H=5 4 并发加 stagger 后全过。
+
+## 启动实验
+
+命名约定：`xxx.json` → `xxx.compiled.json`。当 compiled 文件**已存在**时，`--tasks_config=xxx.json` 默认读取编译文件执行，不会重新编译。
+
 ```bash
-python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
-    --sparse=False --horizon_length=1
+# 首次：编译并审查
+python schedule.py --tasks_config=tasks.json --compile
+# → 生成 tasks.compiled.json，逐条打印命令供审查
+
+# 审查通过后，以下命令等价——都默认走 compiled 文件：
+python schedule.py --tasks_config=tasks.json --gpus=0,1 --gpu_tasks=4
+python schedule.py --run=tasks.compiled.json --gpus=0,1 --gpu_tasks=4
+python schedule.py --gpus=0,1 --gpu_tasks=4                     # 自动找 ./tasks.compiled.json
+
+# 强制重编译（修改了 tasks.json 后）
+python schedule.py --tasks_config=tasks.json --compile
+
+# 后台执行
+nohup python -u schedule.py --gpus=0,1 --gpu_tasks=4 &> schedule.log &
+tail -f schedule.log
 ```
 
-### DS-RLPD（DirectionSpeed, chunk=false）★ 最佳
+> `python -u` 必须加，否则 stdout redirect 后缓冲导致日志空白。
+
+调度逻辑：tasks × seeds 展开为命令队列 → 按 GPU slot 空闲事件驱动：
+
+1. **进程结束** → 立即从队列取下一个分配到该 GPU，保持满载
+2. 同 GPU 两次启动间 `--stagger=30s` 冷却
+3. 启动/完成时**原地更新** `tasks.compiled.json` 中对应命令的 `status`
+4. 队列空 + 全部完成 → 打印汇总
+
+### 中断恢复
+
+Ctrl+C 或意外中断后，**进度已保存在 `tasks.compiled.json`**。直接重跑相同命令即可自动续跑：
+
 ```bash
-python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
-    --sparse=False --horizon_length=1 \
-    --ds_mode=stereographic --agent.action_chunking=false
+python -u schedule.py --run=tasks.compiled.json --gpus=0,1 --gpu_tasks=4
 ```
 
-### RLPD-AC / DS-RLPD-AC（H=5, action chunking）
-```bash
-python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
-    --sparse=False --horizon_length=5 \
-    --ds_mode=stereographic --agent.action_chunking=true
-```
+- `status: "done"` → 跳过
+- `status: "running"` + PID 存活 → 重连跟踪
+- `status: "running"` + PID 已死 / `"pending"` → 重新排队
 
-### 其他常用 flag
-- `--seed=0`（默认）
-- `--online_steps=1000000`
-- `--save_interval=500000`
-- `--eval_episodes=50 --video_episodes=0`（训练时关闭视频渲染，省显存）
-- `--ds_mode=stereographic` 或 `--ds_mode=spherical`（Jacobian-corrected DS）
-- `--ds_mode=posthoc`（D+1 post-hoc 近似消融）
+## 实验速查
 
-详见 `docs/experiment.md`。
+| 实验          | 关键字段                                                                              |
+| ------------- | ------------------------------------------------------------------------------------- |
+| RLPD baseline | `entry: main_online.py`, `H: 1`, `ds: none`                                     |
+| DS-RLPD ★    | `entry: main_online.py`, `H: 1`, `ds: stereographic`                            |
+| RLPD-AC       | `entry: main_online.py`, `H: 5`, `action_chunking: true`                        |
+| DS-RLPD-AC    | `entry: main_online.py`, `H: 5`, `ds: stereographic`, `action_chunking: true` |
+| QC ★         | `entry: main.py`, `H: 5`, `offline_steps: 1000000`                              |
+| DS 消融       | `ds: posthoc`, `allow_posthoc_direction_speed_rlpd: true`（RLPD 必须）            |
+
+详见 `python schedule.py --helpfull` 和 `docs/experiments.md`。

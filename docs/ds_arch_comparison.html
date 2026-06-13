@@ -69,16 +69,17 @@ button {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  grid-template-columns: 1fr;
   gap: 28px;
   align-items: stretch;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .hero-copy,
 .scene-card,
 .card,
 .matrix {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
@@ -131,7 +132,17 @@ h1 {
   font-size: clamp(36px, 4.6vw, 64px);
   font-weight: 700;
   line-height: 1.04;
-  letter-spacing: -0.045em;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+p,
+span,
+li,
+.cell,
+.node {
+  overflow-wrap: anywhere;
 }
 
 .hero-copy p {
@@ -168,6 +179,16 @@ h1 {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
+}
+
+.verdict-item.problem {
+  border-color: rgba(255, 107, 107, 0.26);
+  background: linear-gradient(180deg, rgba(255, 107, 107, 0.09), rgba(255, 255, 255, 0.035));
+}
+
+.verdict-item.solution {
+  border-color: rgba(97, 230, 160, 0.26);
+  background: linear-gradient(180deg, rgba(97, 230, 160, 0.09), rgba(255, 255, 255, 0.035));
 }
 
 .scene-card {
@@ -315,6 +336,7 @@ h1 {
 }
 
 .step-button {
+  min-width: 68px;
   padding: 10px 14px;
   font-size: 13px;
 }
@@ -322,6 +344,13 @@ h1 {
 .play-button {
   padding: 10px 16px;
   font-size: 13px;
+}
+
+.step-button:focus-visible,
+.play-button:focus-visible,
+.mode-tab:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
 }
 
 .step-button:hover,
@@ -341,7 +370,370 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+  margin-top: 24px;
 }
+
+.section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 24px;
+  margin: 24px 0;
+}
+
+.scene-section {
+  margin: 24px 0;
+}
+
+.scene-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.scene-section .toolbar {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.analysis-panel,
+.implementation-panel,
+.animation-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.analysis-panel,
+.implementation-panel {
+  padding: 24px;
+}
+
+.panel-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.panel-title h2 {
+  margin: 0;
+  font-size: clamp(24px, 2.3vw, 34px);
+  letter-spacing: -0.04em;
+}
+
+.panel-title p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.section-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: clamp(24px, 2.3vw, 34px);
+  letter-spacing: -0.04em;
+}
+
+.section-heading p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.reason-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.reason-item {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 12px;
+  align-items: start;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.042);
+}
+
+.reason-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #081018;
+  background: var(--amber);
+  font-weight: 900;
+}
+
+.reason-item strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.reason-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.optimize-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.optimize-item {
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid rgba(97, 230, 160, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(97, 230, 160, 0.075), rgba(255, 255, 255, 0.035));
+}
+
+.optimize-item strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.optimize-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.58;
+}
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.mode-tab {
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  color: #c8d5e4;
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.mode-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.mode-tab.active {
+  color: #061018;
+  border-color: rgba(110, 231, 249, 0.9);
+  background: linear-gradient(135deg, var(--cyan), var(--green));
+}
+
+.mode-panel {
+  display: none;
+}
+
+.mode-panel.active {
+  display: block;
+  animation: panelIn 260ms ease both;
+}
+
+@keyframes panelIn {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.mode-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.92fr);
+  gap: 16px;
+}
+
+.formula-box,
+.code-box {
+  min-height: 100%;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(3, 8, 14, 0.4);
+}
+
+.formula-box h3,
+.code-box h3 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 15px;
+}
+
+.formula-list {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.formula-list li {
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #cbd6e4;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.code-box pre {
+  margin: 0;
+  overflow: auto;
+  color: #dcecff;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #b9c7d6;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mini-badge.good {
+  color: var(--green);
+  border-color: rgba(97, 230, 160, 0.25);
+}
+
+.mini-badge.warn {
+  color: var(--amber);
+  border-color: rgba(255, 200, 87, 0.25);
+}
+
+.mini-badge.bad {
+  color: var(--red);
+  border-color: rgba(255, 107, 107, 0.25);
+}
+
+.animation-panel {
+  padding: 22px;
+}
+
+.animation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scene-stage .animation-grid {
+  grid-template-columns: 1fr;
+}
+
+.animation-step {
+  position: relative;
+  min-height: 132px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.animation-step::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: var(--cyan);
+}
+
+.animation-step strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.animation-step span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.legend-chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #cbd6e4;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 12px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cyan);
+  box-shadow: 0 0 14px currentColor;
+}
+
+.legend-dot.blue { color: var(--blue); background: var(--blue); }
+.legend-dot.amber { color: var(--amber); background: var(--amber); }
+.legend-dot.violet { color: var(--violet); background: var(--violet); }
+.legend-dot.red { color: var(--red); background: var(--red); }
 
 .card {
   position: relative;
@@ -389,6 +781,7 @@ h1 {
 }
 
 .pill {
+  --accent: var(--cyan);
   display: inline-flex;
   white-space: nowrap;
   align-items: center;
@@ -581,6 +974,8 @@ code {
   background: rgba(255, 255, 255, 0.065);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 0.92em;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .footnote {
@@ -592,8 +987,14 @@ code {
 
 @media (max-width: 1100px) {
   .hero,
-  .main-grid {
+  .main-grid,
+  .section-grid,
+  .scene-stage {
     grid-template-columns: 1fr;
+  }
+
+  .animation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .scene-card,
@@ -616,13 +1017,25 @@ code {
   }
 
   h1 {
-    font-size: clamp(34px, 11vw, 46px);
+    font-size: clamp(28px, 8.8vw, 38px);
     line-height: 1.08;
+    word-break: break-all;
+  }
+
+  .step-button {
+    flex: 1 1 92px;
   }
 
   .verdict,
-  .matrix-grid {
+  .matrix-grid,
+  .optimize-grid,
+  .mode-layout,
+  .animation-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mode-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .cell,
@@ -661,49 +1074,166 @@ code {
   <section class="hero" aria-labelledby="title">
     <div class="hero-copy">
       <div class="eyebrow">Direction-Speed Architecture</div>
-      <h1 id="title">Post-hoc 是外部坐标转换，Bijector 是 actor 内部分布变换</h1>
+      <h1 id="title">Direction-Speed：先解决 XYZ 表示，再选择实现层级</h1>
       <p>
-        两者都想把位移拆成方向和速度，但发生的位置完全不同：post-hoc 在数据到模型之间做
-        <code>decompose</code>，在模型到环境之间做 <code>compose</code>；bijector 只在 actor
-        概率分布内部把 5D latent action 双向变换为 5D env action。
+        本页按一条线往下读：先说明 raw <code>dx,dy,dz</code> 为什么不够，再用 3D 场景解释
+        direction × speed 的动作语义，随后对比 post-hoc 与 bijector 的数据流，最后落到
+        <code>--ds_mode</code> 的具体实现。
       </p>
       <div class="verdict">
-        <div class="verdict-item">
-          <strong>Post-hoc: 模型看到 6D</strong>
-          <span>dataset/env 是 5D，但 actor 和 critic 学习的是 decomposed 6D 动作。</span>
+        <div class="verdict-item problem">
+          <strong>1. 问题：XYZ 坐标</strong>
+          <span>独立高斯把 dx/dy/dz 当成三条轴采样，方向和速度被混在一起。</span>
+        </div>
+        <div class="verdict-item solution">
+          <strong>2. 语义：方向 × 速度</strong>
+          <span>把 3D 位移拆成 unit direction + speed，让随机性沿任务语义流动。</span>
         </div>
         <div class="verdict-item">
-          <strong>Bijector: 外部始终 5D</strong>
-          <span>dataset、critic、actor output、env action 都是 5D；只有分布内部有 latent → output。</span>
+          <strong>3. 架构：外部 vs 内部</strong>
+          <span>post-hoc 在模型外做坐标转换；bijector 在 actor 分布内部做可逆变换。</span>
+        </div>
+        <div class="verdict-item">
+          <strong>4. 实现：四种 mode</strong>
+          <span>按 none、post-hoc、spherical、stereographic 逐一确认维度、映射和 log_prob。</span>
         </div>
       </div>
     </div>
-
-    <aside class="scene-card" aria-label="Three.js 3D action flow">
-      <div class="scene-ghost" aria-hidden="true"><div class="vector-line"></div></div>
-      <div id="threeScene"></div>
-      <div class="scene-fallback" id="sceneFallback">
-        Three.js 场景未加载。下方流程图仍可完整解释两种架构。
-      </div>
-      <div class="scene-label">
-        <strong id="sceneTitle">3D 位移组: direction × speed</strong>
-        <span id="sceneText">彩色轨迹表示 actor 的随机性如何作用在方向和速度坐标上。</span>
-      </div>
-    </aside>
   </section>
 
-  <nav class="toolbar" aria-label="Animation controls">
-    <div class="step-buttons">
-      <button class="step-button active" data-step="0" type="button">总览</button>
-      <button class="step-button" data-step="1" type="button">数据进入</button>
-      <button class="step-button" data-step="2" type="button">Actor 内部</button>
-      <button class="step-button" data-step="3" type="button">环境执行</button>
-      <button class="step-button" data-step="4" type="button">概率密度</button>
+  <section class="section-grid" aria-labelledby="xyzTitle">
+    <article class="analysis-panel">
+      <div class="panel-title">
+        <h2 id="xyzTitle">为什么 raw XYZ 表示不理想</h2>
+        <span class="pill" style="--accent: var(--red)">问题不是维度，而是坐标系</span>
+        <p>OGBench 5D 动作里，前三维是空间位移 <code>dx, dy, dz</code>。直接用 TanhNormal 在 XYZ 上采样可以运行，但它把 “往哪里走” 和 “走多快” 交给同一组三维独立随机变量表达。</p>
+      </div>
+      <div class="reason-stack">
+        <div class="reason-item">
+          <div class="reason-mark">1</div>
+          <div>
+            <strong>方向和速度纠缠</strong>
+            <span><code>(0.1, 0.1, 0.1)</code> 同时改变方向和模长。actor 想提高速度时也会改变方向，想微调方向时也会改变步长。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">2</div>
+          <div>
+            <strong>探索噪声按坐标轴注入</strong>
+            <span>独立 Gaussian 更自然地产生 x/y/z 轴向扰动，而不是沿 “目标方向” 改变角度、沿 “速度” 改变半径。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">3</div>
+          <div>
+            <strong>tanh 边界压缩球体几何</strong>
+            <span>XYZ 每维各自 squash 到 [-1,1]，动作空间更像 cube；真实位移语义更接近 direction on sphere + radius。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">4</div>
+          <div>
+            <strong>chunk 后问题被重复 H 次</strong>
+            <span><code>H=5</code> 时不是一个 3D 问题，而是 5 个独立位移组。每一步都需要清楚地区分方向、速度、标量动作。</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="analysis-panel">
+      <div class="panel-title">
+        <h2>优化口径</h2>
+        <span class="pill" style="--accent: var(--green)">从 raw axes 到 task coordinates</span>
+        <p>DS 的目标不是增加外部噪声，而是把 actor 的随机策略放进更匹配任务的坐标系；探索仍来自 actor 自己。</p>
+      </div>
+      <div class="optimize-grid">
+        <div class="optimize-item">
+          <strong>1. 只分解真正的 3D 组</strong>
+          <span>OGBench 使用 <code>[dx,dy,dz]</code> 做 direction-speed；<code>dyaw</code> 和 <code>gripper</code> 保持普通 tanh scalar。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>2. RLPD/SAC 用可逆 bijector</strong>
+          <span>spherical/stereographic 让 <code>sample()</code> 返回 env action，<code>log_prob(action)</code> 自动包含 inverse 和 log-det。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>3. post-hoc 只作为表示消融</strong>
+          <span>D+1 多对一，不能给 SAC/RLPD 严格环境动作密度；适合 FQL 或 approximate ablation。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>4. chunk 按步复制 group</strong>
+          <span><code>H=5,D=5</code> 时是 5 份 DS group + scalar group，actor/critic 都看到 <code>HD=25</code>。</span>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="scene-section" aria-labelledby="sceneSectionTitle">
+    <div class="scene-stage">
+      <aside class="scene-card" aria-label="Three.js 3D action flow">
+        <div class="scene-ghost" aria-hidden="true"><div class="vector-line"></div></div>
+        <div id="threeScene"></div>
+        <div class="scene-fallback" id="sceneFallback">
+          正在切换内置 Canvas 动画。
+        </div>
+        <div class="scene-label">
+          <strong id="sceneTitle">3D 位移组: direction × speed</strong>
+          <span id="sceneText">彩色轨迹表示 actor 的随机性如何作用在方向和速度坐标上。</span>
+        </div>
+      </aside>
+
+      <section class="animation-panel" aria-labelledby="sceneSectionTitle">
+        <div class="panel-title">
+          <h2 id="sceneSectionTitle">3D 场景解释</h2>
+          <span class="pill" style="--accent: var(--violet)">动画先解释动作语义</span>
+          <p>这一栏只解释左侧 3D 场景里的视觉元素。理解它以后，再往下看 post-hoc 和 bijector 的架构差异。</p>
+        </div>
+        <div class="animation-grid">
+          <div class="animation-step">
+            <strong>蓝色点: latent / raw sample</strong>
+            <span>表示 actor 随机策略在内部坐标中采样的位置。XYZ 模式下它更像轴向散点；bijector 模式下它只是分布内部变量。</span>
+          </div>
+          <div class="animation-step">
+            <strong>绿色球面: direction manifold</strong>
+            <span>DS 把前三维位移动作拆成球面方向和半径速度，方向先落在单位球上。</span>
+          </div>
+          <div class="animation-step">
+            <strong>黄色向量: env displacement</strong>
+            <span>从原点指向环境实际接收的 <code>[dx,dy,dz]</code>，长度对应 speed，朝向对应 direction。</span>
+          </div>
+          <div class="animation-step">
+            <strong>紫色连线: bijector transform</strong>
+            <span>表示 actor 内部 latent action 到 output env action 的可逆变换；概率密度阶段会高亮这条路径。</span>
+          </div>
+        </div>
+        <div class="legend-row" aria-label="3D legend">
+          <span class="legend-chip"><span class="legend-dot blue"></span>latent sample</span>
+          <span class="legend-chip"><span class="legend-dot amber"></span>env action vector</span>
+          <span class="legend-chip"><span class="legend-dot violet"></span>bijector bridge</span>
+          <span class="legend-chip"><span class="legend-dot red"></span>XYZ axis noise</span>
+        </div>
+      </section>
     </div>
-    <button class="play-button" id="playButton" type="button">暂停自动播放</button>
-  </nav>
+
+    <nav class="toolbar" aria-label="Animation controls">
+      <div class="step-buttons">
+        <button class="step-button active" data-step="0" type="button">总览</button>
+        <button class="step-button" data-step="1" type="button">XYZ 问题</button>
+        <button class="step-button" data-step="2" type="button">数据进入</button>
+        <button class="step-button" data-step="3" type="button">Actor 内部</button>
+        <button class="step-button" data-step="4" type="button">环境执行</button>
+        <button class="step-button" data-step="5" type="button">概率密度</button>
+      </div>
+      <button class="play-button" id="playButton" type="button">暂停自动播放</button>
+    </nav>
+  </section>
 
   <section class="main-grid">
+    <div class="section-heading">
+      <h2>架构对比：转换发生在哪一层</h2>
+      <span class="pill" style="--accent: var(--blue)">先看数据流，再看实现</span>
+      <p>理解 3D 位移语义后，再区分两条工程路径：post-hoc 在模型外改动作表示，bijector 在 actor 分布内部改采样坐标。</p>
+    </div>
+
     <article class="card posthoc active-card" id="posthocCard">
       <div class="card-header">
         <h2>Post-hoc DS</h2>
@@ -727,9 +1257,20 @@ code {
           <div class="lane-label">Model</div>
           <div class="rail" data-flow="actor">
             <div class="nodes">
-              <div class="node" data-hot="actor"><strong>actor / critic</strong><span>输入输出都是 6D</span></div>
+              <div class="node" data-hot="actor"><strong>actor</strong><span>输出 6D decomposed action</span></div>
               <div class="arrow"></div>
               <div class="node" data-hot="actor"><strong>6D output</strong><span>模型并不直接输出 env action</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-label">Critic</div>
+          <div class="rail" data-flow="actor">
+            <div class="nodes">
+              <div class="node" data-hot="actor"><strong>Q(s, a<sub>6d</sub>)</strong><span>a 是 decomposed 6D</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="actor"><strong>Q_env via compose</strong><span>真实环境动作是 compose(a)</span></div>
             </div>
           </div>
         </div>
@@ -748,7 +1289,8 @@ code {
       <p class="note">
         关键点：post-hoc 的 6D 是模型外部显式动作表示。它工程上直接，但
         <code>D+1 → D</code> 不是 bijection，所以 SAC/RLPD 的 <code>log_prob</code>
-        不是环境动作的严格概率密度。
+        不是环境动作的严格概率密度。这里 critic 的 <code>a</code> 也是 6D decomposed action；
+        它实际学习的是 <code>Q_env(s, compose(a_6d))</code>。
       </p>
     </article>
 
@@ -764,7 +1306,7 @@ code {
             <div class="nodes">
               <div class="node" data-hot="data"><strong>5D raw</strong><span>不做 decompose</span></div>
               <div class="arrow"></div>
-              <div class="node" data-hot="data"><strong>critic batch</strong><span>仍是 5D</span></div>
+              <div class="node" data-hot="data"><strong>critic batch</strong><span>a 是 5D env action</span></div>
             </div>
           </div>
         </div>
@@ -783,6 +1325,17 @@ code {
         </div>
 
         <div class="lane">
+          <div class="lane-label">Critic</div>
+          <div class="rail" data-flow="actor">
+            <div class="nodes">
+              <div class="node" data-hot="actor"><strong>Q(s, a<sub>5d</sub>)</strong><span>a 是 bijector output</span></div>
+              <div class="arrow"></div>
+              <div class="node" data-hot="actor"><strong>same action</strong><span>Q 和 log π 对同一个 env action</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
           <div class="lane-label">Execution</div>
           <div class="rail" data-flow="env">
             <div class="nodes">
@@ -796,8 +1349,136 @@ code {
       <p class="note">
         关键点：bijector 内部的 “raw/latent action” 不是 post-hoc 的 6D decomposed action。
         它仍是 5D，只存在于 actor 分布内部；forward 后的 5D output action 直接传给环境。
+        这里 critic 的 <code>a</code> 是这个 output 5D env action，因此
+        <code>Q(s,a)</code> 和 <code>log π(a|s)</code> 对齐到同一个动作变量。
       </p>
     </article>
+  </section>
+
+  <section class="implementation-panel" aria-labelledby="implTitle">
+    <div class="panel-title">
+      <h2 id="implTitle">每种 DS 的具体实现</h2>
+      <span class="pill" style="--accent: var(--cyan)">入口统一为 --ds_mode</span>
+      <p>下面按代码里的真实路径描述：post-hoc 来自 <code>posthoc_direction_speed.py</code>，bijector 来自 <code>rlpd_distributions/direction_speed.py</code>。</p>
+    </div>
+
+    <div class="mode-tabs" role="tablist" aria-label="DS implementation modes">
+      <button class="mode-tab active" id="tab-none" data-mode="none" role="tab" aria-selected="true" aria-controls="panel-none" type="button">none / XYZ</button>
+      <button class="mode-tab" id="tab-posthoc" data-mode="posthoc" role="tab" aria-selected="false" aria-controls="panel-posthoc" type="button">post-hoc</button>
+      <button class="mode-tab" id="tab-spherical" data-mode="spherical" role="tab" aria-selected="false" aria-controls="panel-spherical" type="button">spherical</button>
+      <button class="mode-tab" id="tab-stereo" data-mode="stereo" role="tab" aria-selected="false" aria-controls="panel-stereo" type="button">stereographic</button>
+    </div>
+
+    <div class="mode-panel active" id="panel-none" role="tabpanel" aria-labelledby="tab-none">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h3>实现方式</h3>
+          <ul class="formula-list">
+            <li>actor 输出 <code>D</code> 维 TanhNormal；OGBench 是 <code>[dx,dy,dz,dyaw,grip]</code>。</li>
+            <li>critic、dataset、env 都使用同一个 raw 5D action。</li>
+            <li>每个维度独立建模，三维位移的方向和速度没有显式结构。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">严格 log_prob</span>
+            <span class="mini-badge warn">XYZ 轴向探索</span>
+            <span class="mini-badge">baseline</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h3>数据流</h3>
+          <pre>Normal(μ, σ)
+  -> tanh
+  -> [dx, dy, dz, dyaw, grip]
+
+Q(s, a) 和 log π(a|s)
+都对应 raw env action。</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-posthoc" role="tabpanel" aria-labelledby="tab-posthoc">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h3>实现方式</h3>
+          <ul class="formula-list">
+            <li><code>decompose</code>: <code>xyz -> unit_direction + log_speed</code>，其余维度原样保留。</li>
+            <li>OGBench 5D 进入模型前变成 <code>6D = [ux,uy,uz,log_r,dyaw,grip]</code>。</li>
+            <li><code>compose</code>: 先 normalize direction，再用 <code>exp(log_speed)</code> 还原 xyz，最后 clip 到 [-1,1]。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge warn">D+1 表示</span>
+            <span class="mini-badge bad">非可逆</span>
+            <span class="mini-badge good">FQL 可用</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h3>核心映射</h3>
+          <pre>r = ||xyz||
+u = xyz / max(r, eps)
+decomposed = [u, log(r), other]
+
+xyz = normalize(u) * exp(log_r)
+action = clip([xyz, other], -1, 1)</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-spherical" role="tabpanel" aria-labelledby="tab-spherical">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h3>实现方式</h3>
+          <ul class="formula-list">
+            <li>actor base distribution 仍是 <code>D</code> 维 Gaussian，但前三维 latent 解释为 <code>theta_raw, phi_raw, speed_raw</code>。</li>
+            <li>bounded sigmoid 将 <code>theta</code> 映射到 <code>(0,π)</code>，<code>phi</code> 映射到 <code>(0,2π)</code>，speed 映射到 <code>(0,max_speed)</code>。</li>
+            <li>log-det 包含球坐标体积项 <code>r² sin(theta)</code> 和三条 sigmoid 的导数。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">可逆 bijector</span>
+            <span class="mini-badge good">Jacobian-corrected</span>
+            <span class="mini-badge warn">极点附近更敏感</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h3>核心映射</h3>
+          <pre>theta = π * sigmoid(theta_raw)
+phi = 2π * sigmoid(phi_raw)
+r = max_speed * sigmoid(speed_raw)
+
+x = r sin(theta) cos(phi)
+y = r sin(theta) sin(phi)
+z = r cos(theta)</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-stereo" role="tabpanel" aria-labelledby="tab-stereo">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h3>实现方式</h3>
+          <ul class="formula-list">
+            <li>前三维 latent 是 <code>plane_x, plane_y, speed_raw</code>，先在平面采样，再 inverse stereographic 到单位球。</li>
+            <li>方向映射没有球坐标角度极点，实验中作为 RLPD/SAC 的 DS 主线。</li>
+            <li>log-det 使用球极投影面积项 <code>4 / (1 + rho²)²</code>，再乘上 <code>r²</code> 和 speed sigmoid 导数。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">推荐主线</span>
+            <span class="mini-badge good">可逆 bijector</span>
+            <span class="mini-badge good">方差更稳</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h3>核心映射</h3>
+          <pre>rho2 = px² + py²
+direction = [
+  2px / (1 + rho2),
+  2py / (1 + rho2),
+  (1 - rho2) / (1 + rho2)
+]
+
+action_xyz = speed * direction</pre>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="matrix" aria-labelledby="matrixTitle">
@@ -818,6 +1499,10 @@ code {
       <div class="cell">6D decomposed action。</div>
       <div class="cell">5D real action；仅 actor 分布内部有 latent 5D。</div>
 
+      <div class="cell">Critic 里的 <code>Q(s,a)</code>，<code>a</code> 是什么？</div>
+      <div class="cell"><code>a</code> 是 6D decomposed action；环境语义是 <code>compose(a)</code> 后的 5D 动作。</div>
+      <div class="cell"><code>a</code> 是 5D env action，也就是 bijector forward 后 actor sample 出来的动作。</div>
+
       <div class="cell">Actor 输出能否直接给 env？</div>
       <div class="cell">不能，必须先 <code>compose</code> 成 5D。</div>
       <div class="cell">可以，output action 已经是 5D env action。</div>
@@ -833,7 +1518,7 @@ code {
   </section>
 
   <p class="footnote">
-    说明：本页使用 Three.js 做 3D 动作语义的渐进增强演示；Remotion 更适合生成 React 视频资产，
+    说明：本页优先使用 Three.js 做 3D 动作语义演示；如果 CDN 不可用，会自动切换到内置 Canvas 动画。
     当前文档是可直接打开的静态 HTML，因此没有引入额外构建链路。
   </p>
 </main>
@@ -844,6 +1529,11 @@ const steps = [
     key: "overview",
     title: "总览: 同一个 DS 先验，不同层级",
     text: "Post-hoc 改外部动作坐标；bijector 改 actor 内部分布。"
+  },
+  {
+    key: "xyz",
+    title: "XYZ 问题: 方向和速度被三条轴混在一起",
+    text: "红色散点表示 raw XYZ 独立噪声；它能探索，但不直接表达“朝向”和“步长”。"
   },
   {
     key: "data",
@@ -885,17 +1575,17 @@ function setStep(index, userInitiated = false) {
   });
 
   document.querySelectorAll(".rail").forEach((rail) => {
-    const isActive = index === 0 || rail.dataset.flow === step.key || (index === 4 && rail.dataset.flow === "actor");
+    const isActive = index === 0 || rail.dataset.flow === step.key || (index === 5 && rail.dataset.flow === "actor");
     rail.classList.toggle("flow-active", isActive);
   });
 
   document.querySelectorAll(".node").forEach((node) => {
-    const isHot = index === 0 || node.dataset.hot === step.key || (index === 4 && node.dataset.hot === "actor");
+    const isHot = index === 0 || node.dataset.hot === step.key || (index === 5 && node.dataset.hot === "actor");
     node.classList.toggle("is-hot", isHot);
   });
 
-  document.getElementById("posthocCard").classList.toggle("active-card", index !== 2 || index === 0);
-  document.getElementById("bijectorCard").classList.toggle("active-card", index !== 1 || index === 0);
+  document.getElementById("posthocCard").classList.toggle("active-card", index === 0 || index === 2 || index === 4);
+  document.getElementById("bijectorCard").classList.toggle("active-card", index === 0 || index === 3 || index === 4 || index === 5);
 
   sceneTitle.textContent = step.title;
   sceneText.textContent = step.text;
@@ -925,6 +1615,23 @@ buttons.forEach((button) => {
 
 playButton.addEventListener("click", () => toggleAutoplay());
 setStep(0);
+
+const modeTabs = Array.from(document.querySelectorAll(".mode-tab"));
+const modePanels = Array.from(document.querySelectorAll(".mode-panel"));
+
+modeTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    const mode = tab.dataset.mode;
+    modeTabs.forEach((item) => {
+      const active = item === tab;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-selected", String(active));
+    });
+    modePanels.forEach((panel) => {
+      panel.classList.toggle("active", panel.id === `panel-${mode}`);
+    });
+  });
+});
 </script>
 
 <script type="module">
@@ -932,8 +1639,204 @@ const host = document.getElementById("threeScene");
 const fallback = document.getElementById("sceneFallback");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+async function loadThree() {
+  const sources = [
+    "https://unpkg.com/three@0.164.1/build/three.module.js",
+    "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "https://esm.sh/three@0.164.1"
+  ];
+  let lastError;
+  for (const source of sources) {
+    try {
+      return await import(source);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function startCanvasFallback(error) {
+  console.warn("Three.js scene failed to load; using Canvas fallback:", error);
+  fallback.style.display = "none";
+  host.style.display = "block";
+  host.innerHTML = "";
+
+  const canvas = document.createElement("canvas");
+  canvas.setAttribute("aria-label", "Canvas 3D direction-speed fallback scene");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.style.minHeight = "430px";
+  host.appendChild(canvas);
+
+  const ctx = canvas.getContext("2d");
+  let mode = 0;
+  window.addEventListener("ds-step", (event) => {
+    mode = event.detail.step;
+  });
+
+  const rawNoisePositions = [
+    [-1.05, -0.24, 0.18], [-0.72, 0.38, -0.42], [-0.42, -0.66, 0.54],
+    [-0.12, 0.76, -0.24], [0.22, -0.38, 0.82], [0.48, 0.18, -0.78],
+    [0.76, -0.72, 0.12], [1.04, 0.52, -0.08], [-0.88, 0.02, 0.72],
+    [0.08, -0.98, -0.52], [0.92, 0.82, 0.34], [-0.28, 0.24, -1.0]
+  ];
+
+  function resize() {
+    const rect = host.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function rotate(point, t) {
+    const yAngle = reduceMotion ? 0.12 : Math.sin(t * 0.2) * 0.18;
+    const xAngle = reduceMotion ? 0.04 : Math.sin(t * 0.16) * 0.08;
+    const cosY = Math.cos(yAngle);
+    const sinY = Math.sin(yAngle);
+    const cosX = Math.cos(xAngle);
+    const sinX = Math.sin(xAngle);
+    const x1 = point[0] * cosY - point[2] * sinY;
+    const z1 = point[0] * sinY + point[2] * cosY;
+    const y2 = point[1] * cosX - z1 * sinX;
+    const z2 = point[1] * sinX + z1 * cosX;
+    return [x1, y2, z2];
+  }
+
+  function project(point, t) {
+    const width = host.clientWidth || 500;
+    const height = host.clientHeight || 430;
+    const rotated = rotate(point, t);
+    const depth = rotated[2] + 4.3;
+    const scale = Math.min(width, height) * 0.72 / depth;
+    return {
+      x: width * 0.5 + rotated[0] * scale,
+      y: height * 0.47 - rotated[1] * scale,
+      depth,
+      scale
+    };
+  }
+
+  function line(a, b, color, alpha, width, t) {
+    const pa = project(a, t);
+    const pb = project(b, t);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function point(p, radius, color, alpha, t) {
+    const projected = project(p, t);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  function drawSphere(t, actorFocus, xyzFocus) {
+    const alpha = actorFocus || xyzFocus ? 0.44 : 0.24;
+    for (let ring = -4; ring <= 4; ring += 1) {
+      const y = ring / 4;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      let previous = null;
+      for (let i = 0; i <= 96; i += 1) {
+        const angle = (i / 96) * Math.PI * 2;
+        const current = [Math.cos(angle) * r, y, Math.sin(angle) * r];
+        if (previous) line(previous, current, "#61e6a0", alpha, 0.75, t);
+        previous = current;
+      }
+    }
+    for (let meridian = 0; meridian < 8; meridian += 1) {
+      const offset = (meridian / 8) * Math.PI;
+      let previous = null;
+      for (let i = -48; i <= 48; i += 1) {
+        const angle = (i / 48) * Math.PI;
+        const current = [Math.sin(angle) * Math.cos(offset), Math.cos(angle), Math.sin(angle) * Math.sin(offset)];
+        if (previous) line(previous, current, "#61e6a0", alpha, 0.7, t);
+        previous = current;
+      }
+    }
+  }
+
+  function drawGrid(t) {
+    for (let i = -5; i <= 5; i += 1) {
+      const v = i * 0.42;
+      line([-2.1, -1.05, v], [2.1, -1.05, v], "#2e4a5d", 0.55, 0.8, t);
+      line([v, -1.05, -2.1], [v, -1.05, 2.1], "#1b2d3a", 0.65, 0.8, t);
+    }
+    line([-2.1, 0, 0], [2.1, 0, 0], "#6ee7f9", 0.42, 1, t);
+    line([0, -1.45, 0], [0, 1.45, 0], "#6ee7f9", 0.42, 1, t);
+    line([0, 0, -2.1], [0, 0, 2.1], "#6ee7f9", 0.42, 1, t);
+  }
+
+  function animate(timeMs) {
+    const t = timeMs * 0.001;
+    const width = host.clientWidth || 500;
+    const height = host.clientHeight || 430;
+    ctx.clearRect(0, 0, width, height);
+
+    const gradient = ctx.createRadialGradient(width * 0.52, height * 0.38, 30, width * 0.52, height * 0.38, Math.min(width, height) * 0.54);
+    gradient.addColorStop(0, "rgba(97, 230, 160, 0.18)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    const phase = mode * 0.75;
+    const radius = mode === 2 ? 0.72 : mode === 4 ? 1.22 : 1.0 + Math.sin(t * 1.7) * 0.08;
+    const theta = t * 0.8 + phase;
+    const phi = Math.sin(t * 0.62 + phase) * 0.8 + 1.15;
+    const direction = [
+      Math.cos(theta) * Math.sin(phi),
+      Math.cos(phi),
+      Math.sin(theta) * Math.sin(phi)
+    ];
+    const outputPosition = direction.map((value) => value * radius);
+    const latentPosition = [
+      Math.sin(t * 1.3 + phase) * 1.35,
+      Math.cos(t * 0.9 + phase) * 0.72,
+      Math.cos(t * 1.1 + phase) * 1.2
+    ];
+
+    const xyzFocus = mode === 1;
+    const actorFocus = mode === 3 || mode === 5;
+    const envFocus = mode === 4;
+
+    drawGrid(t);
+    drawSphere(t, actorFocus, xyzFocus);
+
+    rawNoisePositions.forEach((p, index) => {
+      const pulse = xyzFocus ? 1 + Math.sin(t * 3.2 + index) * 0.28 : 0.72;
+      point(p, 3.7 * pulse, "#ff6b6b", xyzFocus ? 0.82 : 0.18, t);
+    });
+
+    line([0, 0, 0], outputPosition, "#ffc857", envFocus || actorFocus ? 0.98 : 0.72, 2.2, t);
+    line(latentPosition, outputPosition, "#c9a3ff", actorFocus ? 0.95 : 0.34, 1.8, t);
+    point(latentPosition, actorFocus ? 8 : 6, "#55b7ff", 0.95, t);
+    point(outputPosition, envFocus ? 9 : 7, "#ffc857", 0.98, t);
+
+    if (!reduceMotion) {
+      requestAnimationFrame(animate);
+    }
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(animate);
+}
+
 try {
-  const THREE = await import("https://unpkg.com/three@0.164.1/build/three.module.js");
+  const THREE = await loadThree();
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
@@ -967,6 +1870,29 @@ try {
     new THREE.MeshBasicMaterial({ color: 0x61e6a0, wireframe: true, transparent: true, opacity: 0.2 })
   );
   group.add(sphere);
+
+  const speedRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.05, 0.006, 8, 96),
+    new THREE.MeshBasicMaterial({ color: 0xffc857, transparent: true, opacity: 0.32 })
+  );
+  speedRing.rotation.x = Math.PI / 2;
+  group.add(speedRing);
+
+  const rawNoiseGroup = new THREE.Group();
+  const rawNoiseMaterial = new THREE.MeshBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.55 });
+  const rawNoiseGeometry = new THREE.SphereGeometry(0.035, 12, 8);
+  const rawNoisePositions = [
+    [-1.05, -0.24, 0.18], [-0.72, 0.38, -0.42], [-0.42, -0.66, 0.54],
+    [-0.12, 0.76, -0.24], [0.22, -0.38, 0.82], [0.48, 0.18, -0.78],
+    [0.76, -0.72, 0.12], [1.04, 0.52, -0.08], [-0.88, 0.02, 0.72],
+    [0.08, -0.98, -0.52], [0.92, 0.82, 0.34], [-0.28, 0.24, -1.0]
+  ];
+  rawNoisePositions.forEach((position) => {
+    const dot = new THREE.Mesh(rawNoiseGeometry, rawNoiseMaterial);
+    dot.position.set(position[0], position[1], position[2]);
+    rawNoiseGroup.add(dot);
+  });
+  group.add(rawNoiseGroup);
 
   const latent = new THREE.Mesh(
     new THREE.IcosahedronGeometry(0.13, 1),
@@ -1012,7 +1938,7 @@ try {
   function animate(timeMs) {
     const t = timeMs * 0.001;
     const phase = mode * 0.75;
-    const radius = mode === 1 ? 0.72 : mode === 3 ? 1.22 : 1.0 + Math.sin(t * 1.7) * 0.08;
+    const radius = mode === 2 ? 0.72 : mode === 4 ? 1.22 : 1.0 + Math.sin(t * 1.7) * 0.08;
     const theta = t * 0.8 + phase;
     const phi = Math.sin(t * 0.62 + phase) * 0.8 + 1.15;
 
@@ -1034,11 +1960,22 @@ try {
     directionLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), outputPosition]);
     bridgeLine.geometry.setFromPoints([latentPosition, outputPosition]);
 
-    const actorFocus = mode === 2 || mode === 4;
+    const xyzFocus = mode === 1;
+    const actorFocus = mode === 3 || mode === 5;
+    const envFocus = mode === 4;
     bridgeMaterial.opacity = actorFocus ? 0.95 : 0.34;
-    sphere.material.opacity = actorFocus ? 0.32 : 0.18;
-    output.scale.setScalar(mode === 3 ? 1.35 : 1);
+    sphere.material.opacity = actorFocus || xyzFocus ? 0.32 : 0.18;
+    speedRing.material.opacity = actorFocus || envFocus ? 0.58 : 0.22;
+    rawNoiseMaterial.opacity = xyzFocus ? 0.78 : 0.14;
+    rawNoiseGroup.visible = true;
+    rawNoiseGroup.children.forEach((dot, dotIndex) => {
+      const pulse = xyzFocus ? 1.0 + Math.sin(t * 3.2 + dotIndex) * 0.28 : 0.72;
+      dot.scale.setScalar(pulse);
+    });
+    output.scale.setScalar(envFocus ? 1.35 : 1);
     latent.scale.setScalar(actorFocus ? 1.28 : 1);
+    directionMaterial.opacity = envFocus || actorFocus ? 0.98 : 0.72;
+    speedRing.scale.setScalar(Math.max(radius, 0.2));
 
     if (!reduceMotion) {
       group.rotation.y = Math.sin(t * 0.2) * 0.16;
@@ -1051,9 +1988,7 @@ try {
 
   requestAnimationFrame(animate);
 } catch (error) {
-  host.style.display = "none";
-  fallback.style.display = "grid";
-  console.warn("Three.js scene failed to load:", error);
+  startCanvasFallback(error);
 }
 </script>
 </body>

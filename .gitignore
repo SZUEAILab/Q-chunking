@@ -8,14 +8,8 @@ dist/
 .idea/
 .ruff_cache/
 exp/
-replay_videos/
 exp_logs/
 logs/
-# Experiment checkpoint and video files
-docs/data/ds_experiments/**/params_*.pkl
-docs/data/ds_experiments/**/videos/
-
-# Reproduce experiment checkpoints
-docs/data/reproduce/**/params_*.pkl
-# FQL experiment checkpoints
-docs/data/fql_h5_2m/**/params_*.pkl
+tasks.json
+tasks.compiled.json
+schedule.log

@@ -1,0 +1,43 @@
+{
+  "common": {
+    "online_steps": 1000000,
+    "eval_episodes": 50,
+    "video_episodes": 0,
+    "sparse": false,
+    "run_group": "default"
+  },
+
+  "tasks": [
+    {
+      "name": "rlpd_cube_task2",
+      "entry": "main_online.py",
+      "env_name": "cube-triple-play-singletask-task2-v0",
+      "horizon_length": 1,
+      "ds_mode": "none"
+    },
+    {
+      "name": "ds_rlpd_cube_task2",
+      "entry": "main_online.py",
+      "env_name": "cube-triple-play-singletask-task2-v0",
+      "horizon_length": 1,
+      "ds_mode": "stereographic"
+    },
+    {
+      "name": "qc_cube_task2",
+      "entry": "main.py",
+      "env_name": "cube-triple-play-singletask-task2-v0",
+      "horizon_length": 5,
+      "ds_mode": "none",
+      "offline_steps": 1000000
+    },
+    {
+      "name": "rlpd_lift_ph",
+      "entry": "main_online.py",
+      "env_name": "lift-ph-low_dim",
+      "horizon_length": 1,
+      "ds_mode": "none"
+    }
+  ],
+
+  "seeds": [0]
+}

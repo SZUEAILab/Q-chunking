@@ -2,8 +2,6 @@
 
 本文档整理 DS 实现讨论中的关键疑问，目的是后续按条验证、补实验或改代码。主线设计见 [`approach.md`](approach.md)。
 
-2026-06-10 已完成轻量验证和 6 组真实环境 smoke；逐项结论见 [`ds_question_resolution.md`](ds_question_resolution.md)，完整机器输出见 [`ds_validation_results.md`](ds_validation_results.md)。
-
 ## 0. 当前结论
 
 当前保留三种 DS 实现：
@@ -265,11 +263,3 @@ Q_raw(s, raw) = Q_env(s, compose(raw))
 - [ ] 训练日志：`actor_loss`、`entropy`、`alpha`、`log_prob`、`q_min/q_max`。
 - [ ] 如果 spherical 不稳定，优先比较 stereographic，而不是回退到 post-hoc 主线。
 
-## 12. 待办优先级
-
-1. 补启动日志和 shape assert，确认 H/chunk/DS 输出维度。
-2. 补 smoke test，覆盖 spherical/stereographic 的 H=1 与 H=5 chunk。
-3. 统一实验图命名和 caption，标注 `ds_mode` 与 Jacobian 状态。
-4. 跑 RLPD H=1 三组：none、spherical、stereographic。
-5. 跑 RLPD-AC H=5 chunk 三组：none、spherical、stereographic。
-6. 将 post-hoc 保留为 FQL/历史消融，不进入 RLPD 主结论。

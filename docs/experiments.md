@@ -10,7 +10,7 @@
 | **RLPD** | main_online.py | 1 | — | 纯在线 | **74%** | 60% | 22.5-87% |
 | **RLPD-AC** | main_online.py | 5 | 无BC约束 | 纯在线 | **2%** | 2% | 0-3% |
 
-![主对比图](images/QC_RLPD_RLPDAC_1M.png)
+![主对比图](images/reproduce_RLPD_RLPDAC_1M.png)
 
 ## 长序训练实验 (10M 步)
 
@@ -19,7 +19,7 @@
 | **RLPD-AC** | 5 | 无 | **88%** | 98% @7.6M | ~1.5M |
 | **QC-RLPD** | 5 | bc_alpha=0.01 | **90%** | 100% @9.3M | ~2.5M |
 
-![10M对比](images/RLPDAC_QC_RLPD_10M.png)
+![10M对比](images/reproduce_RLPDAC_QCRLPD_10M.png)
 
 ### 关键发现
 
@@ -58,9 +58,9 @@
 | **Spherical** | 7.0% | 3.3% | 63.5% | 14.8% |
 | **Baseline** (TanhNormal) | 3.0% | 1.7% | 58.5% | 20.3% |
 
-![DS 对比图](images/DS_H5_H1_1M.png)
+![DS 对比图](images/cube-triple-task2_DS_Bar.png)
 
-![训练曲线](images/DS_Curves_H5_H1_1M.png)
+![训练曲线](images/cube-triple-task2_DS_Curves.png)
 
 ### 每 seed 详细数据
 
@@ -82,18 +82,39 @@
 | spherical | 56% | 46% | 66% | 86% | 63.5% |
 | baseline | 74% | 64% | 24% | 72% | 58.5% |
 
+## 跨任务验证: cube-triple-task1
+
+验证 DS 在 task1（不同初始位置/颜色）上的泛化。配置同 task2：agent=acrlpd, 4 seeds, 1M 纯在线。
+
+### 结果
+
+| 组 | H=1 | ±std | H=5 | ±std |
+|---|:---:|:---:|:---:|:---:|
+| **Post-hoc** | **100%** | 0% | 94% | 9% |
+| **Baseline** | 83% | 34% | 53% | 55% |
+| **Stereographic** | 51% | 32% | 72% | 43% |
+| **Spherical** | 40% | 37% | 48% | 38% |
+
+![task1 曲线](images/cube-triple-task1_DS_Curves.png)
+
+### 分析
+
+- **task1 方差远大于 task2**：inter-seed 跨度 0-100%，说明 task1 对环境初始状态更敏感
+- **H1 Post-hoc 完美 100%**：但可能 seed 幸运——task1 baseline 也有 seed 到 100%
+- **Stereographic H1 仅 51%**：远低于 task2 的 91%，task1 更难
+- **H5 整体优于 H1**：和 task2 相反（task2 H1 >> H5）
+- **数据**：[`docs/data/ds_experiments/task1_rlpd/`](../docs/data/ds_experiments/task1_rlpd/)
+
 ---
 
-## FQL + Post-hoc DS 对比实验 (2M 步)
+## FQL + Post-hoc DS (2M 步)
 
-验证 DS 在 flow-based FQL 上的表示消融效果。FQL 仅支持 posthoc。
+验证 DS 在 flow-based FQL 上的效果。入口：`main.py`（离线 1M → 在线 1M）。FQL 仅支持 posthoc。
 
 ### 配置
 
-- 入口: `main.py`（离线 1M → 在线 1M）
 - 环境: `cube-triple-play-singletask-task2-v0`
-- Agent: ACFQL, H=5, action_chunking=True
-- 脚本: `run_fql_h5_2m.sh`, 3 seeds, 双卡各 3 并发
+- Agent: ACFQL, H=5, action_chunking=True, 3 seeds
 
 ### 结果
 
@@ -102,14 +123,16 @@
 | none | 96% | 84% | 90% | **90%** | 90% |
 | posthoc | 100% | 98% | 4% | **67%** | 98% |
 
-![FQL H5 DS](images/FQL_H5_DS_2M.png)
+![FQL H5 DS](images/cube-triple-task2_FQL_DS.png)
 
 ### 分析
 
-- FQL baseline 极强（90%），远超 RLPD H=5（3%）——离线预训练是 cube-triple 关键
-- posthoc s0/s1 接近完美（100%/98%），但 s2 异常（4%），排除 s2 后 posthoc 99% > baseline 90%
-- s2 异常可能是 seed 不稳定，需要补跑确认
-- 结合 RLPD 结果：posthoc 在两种算法上都优于 baseline，但方差更大
+- FQL baseline 极强（90%），离线预训练是关键
+- posthoc s0/s1 近乎完美，s2 异常（4%）可能是 seed 崩溃
+- 排除 s2：posthoc 99% > baseline 90%，DS 在 FQL 上仍有收益
+- **数据**：[`docs/data/ds_experiments/task2_fql/`](../docs/data/ds_experiments/task2_fql/)
+
+---
 
 ### 结论
 
@@ -122,6 +145,4 @@
 
 ### 数据
 
-原始实验数据位于 `docs/data/ds_experiments/`，包含 eval.csv、flags.json、online_agent.csv、params_500000.pkl、params_1000000.pkl。
-
-汇总 CSV：`docs/data/ds_1m_comparison.csv`、`docs/data/ds_h5_1m.csv`、`docs/data/ds_h1_1m.csv`。
+原始实验数据: [SZUEAILab/ds-experiments](https://huggingface.co/datasets/SZUEAILab/ds-experiments) (`datasets.load_dataset("SZUEAILab/ds-experiments")`)。
