@@ -153,6 +153,43 @@
 
 ---
 
+## 跨任务验证: cube-triple-task3 (10 seeds, H1+H5)
+
+完整消融实验：cube-triple-play-singletask-task3-v0，1M 纯在线，H1+H5，4 DS × 10 seeds × 100 eval
+
+### Task3 结果
+
+| 方法 | H=1 | ±std | H=5 | ±std |
+|------|:---:|:---:|:---:|:---:|
+| **posthoc** | **28.4%** | 22.2% | **31.7%** | 14.4% |
+| spherical | 4.3% | 4.8% | 1.5% | 2.1% |
+| stereographic | 4.0% | 4.6% | 1.7% | 1.9% |
+| none (baseline) | 1.1% | 1.9% | 0.7% | 1.0% |
+
+每 seed 数据见下方。关键发现：
+- **posthoc 独大**：H1 28.4%、H5 31.7%，远超过其他方法（stereo/spherical 均 ≤5%）
+- **H5 posthoc 略优于 H1**（31.7% vs 28.4%）— 与 task2 类似，但绝对值低得多
+- **stereo/spherical 在 task3 上完全失败**：与 task4（H1 下 stereo 67%）形成鲜明对比
+- 数据：[`cube-triple-play-singletask/task3/`](../docs/data/ds_experiments/cube-triple-play-singletask/task3/)
+
+#### H=1 每 seed
+
+| 方法 | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | 均值 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|
+| posthoc | 28 | 35 | 65 | 47 | 2 | 10 | 31 | 52 | 13 | 1 | 28.4 |
+| spherical | 4 | 16 | 2 | 2 | 2 | 4 | 1 | 1 | 9 | 2 | 4.3 |
+| stereographic | 14 | 7 | 0 | 0 | 5 | 4 | 7 | 0 | 3 | 0 | 4.0 |
+| baseline | 4 | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 1 | 0 | 1.1 |
+
+#### H=5 每 seed
+
+| 方法 | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | 均值 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|
+| posthoc | 31 | 30 | 32 | 33 | 53 | 46 | 14 | 14 | 20 | 44 | 31.7 |
+| stereographic | 1 | 4 | 0 | 3 | 0 | 5 | 0 | 2 | 0 | 2 | 1.7 |
+| spherical | 1 | 0 | 2 | 3 | 0 | 7 | 1 | 0 | 0 | 1 | 1.5 |
+| baseline | 1 | 1 | 0 | 3 | 0 | 2 | 0 | 0 | 0 | 0 | 0.7 |
+
 ---
 
 ## 跨任务验证: cube-triple-task4 (10 seeds, H1+H5)
@@ -187,6 +224,7 @@
 |------|:---:|:---:|:---:|:---:|
 | task1 | 83%* | 100% (posthoc)* | 54% | 85% (posthoc) |
 | task2 | 59%* | 91% (stereo)* | 3%* | 32% (posthoc)* |
+| task3 | 1% | 28% (posthoc) | 0.7% | 32% (posthoc) |
 | task4 | 49% | 68% (stereo) | 1.6% | 18% (posthoc) |
 | **task5** | **0%** | **0%** | **0%** | **0%** |
 
