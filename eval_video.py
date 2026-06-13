@@ -188,7 +188,7 @@ def main():
         video_dir = os.path.join(exp_dir, 'videos')
         os.makedirs(video_dir, exist_ok=True)
         for i, render in enumerate(renders):
-            if render:
+            if render is not None and len(render) > 0:
                 path = os.path.join(video_dir, f'rollout_{i}.mp4')
                 imageio.mimsave(path, render, fps=20)
                 print(f"  video {i}: {len(render)} frames -> {path}")
