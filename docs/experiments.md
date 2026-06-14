@@ -84,6 +84,20 @@
 | spherical | 56% | 46% | 66% | 86% | 63.5% |
 | baseline | 74% | 64% | 24% | 72% | 58.5% |
 
+### Task1 4-seed 泛化验证
+
+在 task1 上重复相同配置（4 seeds, 50 eval）验证 DS 泛化。task1 仅在 1 个 cube 需移动，其余 2 个原位不动，预期比 task2 简单。
+
+| 组 | H=1 | ±std | H=5 | ±std |
+|---|:---:|:---:|:---:|:---:|
+| **Post-hoc** | **100%** | 0% | 94% | 9% |
+| **Baseline** | 83% | 34% | 53% | 55% |
+| **Stereographic** | 51% | 32% | 72% | 43% |
+| **Spherical** | 40% | 37% | 48% | 38% |
+
+![task1 4-seed 曲线](images/cube-triple-task1_DS_Curves_full.png)
+- **4 seed / 50 eval 方差极大**（±55% 级别），10 seed 升级版见第三节。
+
 ### FQL + Post-hoc DS (2M 步)
 
 验证 DS 在 flow-based FQL 上的效果。入口：`main.py`（离线 1M → 在线 1M）。FQL 仅支持 posthoc。
@@ -118,20 +132,29 @@ cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在
 
 ### cube-triple-task1
 
-#### Task1 旧版 (4 seeds, 50 eval)
+> 4-seed 小批次验证见 [二、小批次验证](#二小批次验证--ds-消融-task2-4-seeds)。以下为 10-seed 升级版。
 
-验证 DS 在 task1（不同初始位置/颜色）上的泛化。配置同 task2：agent=acrlpd, 4 seeds, 50 eval episodes, 1M 纯在线。
+#### Task1 H=1 升级版 (10 seeds, 100 eval)
 
-| 组 | H=1 | ±std | H=5 | ±std |
-|---|:---:|:---:|:---:|:---:|
-| **Post-hoc** | **100%** | 0% | 94% | 9% |
-| **Baseline** | 83% | 34% | 53% | 55% |
-| **Stereographic** | 51% | 32% | 72% | 43% |
-| **Spherical** | 40% | 37% | 48% | 38% |
+| 方法 | 1M 成功率 | ±std |
+|------|:---:|:---:|
+| **DS-RLPD (posthoc)** | **99.7%** | 0.2% |
+| RLPD (baseline) | 89.4% | 21.4% |
+| DS-RLPD (stereographic) | 83.4% | 32.5% |
+| DS-RLPD (spherical) | 58.3% | 31.5% |
 
-![task1 曲线](images/cube-triple-task1_DS_Curves_full.png)
+| 方法 | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| posthoc | 100 | 100 | 100 | 100 | 99 | 100 | 100 | 100 | 99 | 99 |
+| none | 100 | 46 | 100 | 98 | 100 | 100 | 56 | 99 | 98 | 97 |
+| stereographic | 99 | 100 | 99 | 100 | 0 | 100 | 0 | 100 | 100 | 100 |
+| spherical | 52 | 47 | 47 | 45 | 98 | 48 | 100 | 48 | 52 | 46 |
 
-> 注：4 seeds、50 eval episodes 导致方差极大。10 seeds 版本见下方。
+- **posthoc 99.7% 近乎满分**：±0.2%，10 seed 全部 ≥99%，确认 task1 H=1 的最优配置
+- **baseline 89.4% 强于预期**：少数 seed 跑出满分，但方差大（46–100%）
+- **stereo/spherical 方差极大**：各有 2 个 seed 归零，其余接近满分，说明 seed 敏感
+- **与旧 4-seed 对比**：baseline 83%→89%，stereo 51%→83%，10 seed 更稳定但仍受 seed 影响大
+- **数据**：[`cube-triple-play-singletask/task1/h1/rlpd/`](data/ds_experiments/cube-triple-play-singletask/task1/h1/rlpd/)
 
 #### Task1 H=5 升级版 (10 seeds, 100 eval)
 
@@ -144,13 +167,32 @@ cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在
 | **RLPD (baseline)** | 54.1% | 32.7% | 3–99% |
 | **DS-RLPD (spherical)** | 43.3% | 33.9% | 8–100% |
 
-![task1 H5 曲线](images/cube-triple-task1_DS_Curves_new.png)
-
 - **posthoc 84.9% 大幅领先**：但方差较大（42–100%），部分 seed 跑出满分
 - **stereographic (59%) ≈ baseline (54.1%)**：stereo 在 H=5 下优势不明显
 - **spherical 最弱 (43.3%)**：与 task2 一致，球坐标 Jacobian 退化
 - **10 seeds 给出更可信的 CI**：旧实验 4 seeds 的 ±std 高达 55%，新实验 10 seeds 下 CI 更紧
 - **数据**：[`cube-triple-play-singletask/task1/h5/rlpd/`](data/ds_experiments/cube-triple-play-singletask/task1/h5/rlpd/)
+
+---
+
+### cube-triple-task2
+
+> 4-seed 小批次验证见 [二](#二小批次验证--ds-消融-task2-4-seeds)。以下为 10-seed 100 eval 升级版。
+
+| 方法 | H=1 | ±std | H=5 | ±std |
+|------|:---:|:---:|:---:|:---:|
+| **Post-hoc** | **91.0%** | 2.9% | 22.0% | 12.4% |
+| **Stereographic** | 61.6% | 28.3% | **23.5%** | 15.5% |
+| Spherical | 45.8% | 25.1% | 9.4% | 5.8% |
+| Baseline (TanhNormal) | 37.3% | 27.0% | 2.0% | 1.7% |
+
+![task2 10-seed 曲线](images/cube-triple-task2_DS_Curves_full.png)
+
+**与旧 4-seed 对比：**
+- H=1 stereo 从 91% 跌至 62%：旧 4 seed 恰中利好 seed
+- H=1 posthoc 稳定 91% ±2.9%，确认为 task2 最优 H=1 配置
+- H=5 stereo 首次反超 posthoc（23.5% vs 22.0%）：bijector Jacobian 在 chunking 下不再劣势
+- **数据**：[task2/h1/rlpd/](data/ds_experiments/cube-triple-play-singletask/task2/h1/rlpd/) / [task2/h5/rlpd/](data/ds_experiments/cube-triple-play-singletask/task2/h5/rlpd/)
 
 ---
 
@@ -250,13 +292,13 @@ cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在
 
 | Task | H1 baseline | H1 best DS | H5 baseline | H5 best DS |
 |------|:---:|:---:|:---:|:---:|
-| task1 | 83%* | 100% (posthoc)* | 54% | 85% (posthoc) |
-| task2 | 59%* | 91% (stereo)* | 3%* | 32% (posthoc)* |
+| task1 | 89% | 100% (posthoc) | 54% | 85% (posthoc) |
+| task2 | 37% | 91% (posthoc) | 2% | 24% (stereo) |
 | task3 | 1% | 28% (posthoc) | 0.7% | 32% (posthoc) |
 | task4 | 49% | 68% (stereo) | 1.6% | 18% (posthoc) |
 | **task5** | **0%** | **0%** | **0%** | **0%** |
 
-> *4 seeds, 50 eval（旧）；task3/4/5 为 10 seeds, 100 eval
+> task1/2 H1 为 10 seeds 100 eval；task1/2 H5 含 4-seed 遗留数据
 
 - 难度：task1 < task2 < task4 < task3 < task5
 - DS 相对收益在中等难度 (task4) 最显著
@@ -264,24 +306,29 @@ cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在
 
 ### 结论
 
-1. **H=1 全面优于 H=5**：所有任务上 H=1 表现更好，且训练更快
-2. **DS 方法在 H=1 下均有效**：task2/4 上 stereo≈posthoc≈spherical > baseline
-3. **H=5 仅 posthoc 可用**：stereo/spherical 在 H=5 下退化，posthoc 的 D+1 自由度提供额外探索
-4. **task5 为当前最难任务**：1M 步完全失败，需更长训练或 offline pretrain
+1. **posthoc 在多数场景最优**：H=1 和 H=5 下均稳居前二，D+1 自由度简单有效
+2. **H=1 的 stereo 在中等难度有效**（task4 68%，task1 83%），但在过简单/过难任务上不稳定
+3. **H=5 stereo 首次反超 posthoc**（task2 23.5% vs 22.0%）：Jacobian bijector 在 chunking 下不再劣势，但需要 10 seed 才能检出
+4. **spherical 全局最弱**：球坐标 Jacobian 退化，不推荐
+5. **10 seed 对结论可靠性至关重要**：旧 4 seed 的 task2 stereo 91%→62%，baseline 59%→37%
+6. **task5 为当前最难任务**：1M 步完全失败，需更长训练或 offline pretrain
 
 ### 已知局限
 
-| 问题 | 影响 | 建议 |
-|------|------|------|
-| task2 H1+H5 仅 4 seeds, 50 eval | 统计功效不足，跨任务对比 CI 不对等 | **优先重跑**: 10 seeds, 100 eval |
-| task1 H1 仅 4 seeds, 50 eval | 方差极大（std 高达 38%），与 H5 不可直接对比 | 补至 10 seeds, 100 eval |
-| task1 H5 存在两套数据 (`rlpd-4s` vs `rlpd`) | `rlpd-4s` 无 checkpoint；`rlpd` 的 `run_group=Debug` | 确认 canonical 版本 |
-| task5 全 0% | 无 DS 对比信号 | 需更长训练或 offline pretrain |
+| 问题 | 影响 | 建议 | 状态 |
+|------|------|------|:--:|
+| ~~task2 H1+H5 仅 4 seeds, 50 eval~~ | — | — | ✅ 已补全 10 seeds |
+| ~~task1 H1 仅 4 seeds, 50 eval~~ | — | — | ✅ 已补全 10 seeds |
+| task1 H5 存在两套数据 (`rlpd-4s` vs `rlpd`) | `rlpd-4s` 无 checkpoint；`rlpd` 的 `run_group=Debug` | 确认 canonical 版本 | ⚠️ |
+| task5 全 0% | 无 DS 对比信号 | 需更长训练或 offline pretrain | ⚠️ |
+
+> 更新：已有 task1 H1 的 10 seed 结果建议统一整理（当前仍有两套命名不一致的数据在同一目录）。
 
 ### 更新日志
 
 | 日期 | 更新 |
 |------|------|
+| 2026-06-15 | task1 H1 + task2 H1+H5 补全 10 seeds 100 eval，全部柱状图加误差线 |
 | 2026-06-14 | 统一重绘全部旧图（配色图例一致）+ 跨任务汇总图 + 已知局限 |
 | 2026-06-14 | cube-triple-task5 (80 runs, 全 0%) + task4 (80 runs) |
 | 2026-06-14 | docs/data 重组为 `env/task/horizon/method/ds_mode/seed` 层级 |
