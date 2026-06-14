@@ -62,7 +62,7 @@
 
 ![DS 对比图](images/cube-triple-task2_DS_Bar.png)
 
-![训练曲线](images/cube-triple-task2_DS_Curves_full.png)
+![训练曲线](images/cube-triple-task2_DS_Curves_4seed.png)
 
 ### 每 seed 详细数据
 
@@ -95,7 +95,7 @@
 | **Stereographic** | 51% | 32% | 72% | 43% |
 | **Spherical** | 40% | 37% | 48% | 38% |
 
-![task1 4-seed 曲线](images/cube-triple-task1_DS_Curves_full.png)
+![task1 4-seed 曲线](images/cube-triple-task1_DS_Curves_4seed.png)
 - **4 seed / 50 eval 方差极大**（±55% 级别），10 seed 升级版见第三节。
 
 ### FQL + Post-hoc DS (2M 步)
@@ -172,6 +172,8 @@ cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在
 - **spherical 最弱 (43.3%)**：与 task2 一致，球坐标 Jacobian 退化
 - **10 seeds 给出更可信的 CI**：旧实验 4 seeds 的 ±std 高达 55%，新实验 10 seeds 下 CI 更紧
 - **数据**：[`cube-triple-play-singletask/task1/h5/rlpd/`](data/ds_experiments/cube-triple-play-singletask/task1/h5/rlpd/)
+
+![task1 10-seed 曲线](images/cube-triple-task1_DS_Curves_full.png)
 
 ---
 

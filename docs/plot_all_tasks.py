@@ -24,8 +24,8 @@ DS_LINESTYLE = {"none": "--", "posthoc": "-", "stereographic": "-", "spherical":
 plt.rcParams.update({"font.size": 12, "axes.titlesize": 13, "legend.fontsize": 11})
 
 
-def load_eval(task, h, ds, seed):
-    p = BASE / task / f"h{h}" / "rlpd" / ds / f"seed{seed}" / "eval.csv"
+def load_eval(task, h, ds, seed, method="rlpd"):
+    p = BASE / task / f"h{h}" / method / ds / f"seed{seed}" / "eval.csv"
     if not p.exists():
         return None
     df = pd.read_csv(p)
@@ -33,11 +33,11 @@ def load_eval(task, h, ds, seed):
     return df
 
 
-def load_all(task, h, ds):
+def load_all(task, h, ds, method="rlpd", max_seeds=10):
     """Load all seeds for a task/horizon/ds_mode, return combined DataFrame."""
     frames = []
-    for s in range(10):
-        df = load_eval(task, h, ds, s)
+    for s in range(max_seeds):
+        df = load_eval(task, h, ds, s, method=method)
         if df is not None:
             frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else None
@@ -194,10 +194,70 @@ def print_summary():
 
 # ═══════════════════════════════════════════════════════════════════════════
 
+def plot_task1_4seed():
+    """task1 4-seed curve for small-batch section."""
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    for idx, h in enumerate([1, 5]):
+        ax = axes[idx]
+        for ds in DS_ORDER:
+            df = load_all("task1", h, ds, method="rlpd-4s", max_seeds=4)
+            if df is None or df.empty:
+                continue
+            steps, mean, std = smooth_curves(df)
+            ax.plot(steps, mean, color=DS_COLORS[ds], linestyle=DS_LINESTYLE[ds],
+                    linewidth=2, label=DS_LABELS[ds])
+            ax.fill_between(steps, mean - std, mean + std, color=DS_COLORS[ds],
+                            alpha=0.12)
+        ax.set_title(f"task1  H={h} (4 seeds)", fontweight="bold")
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Success %")
+        ax.legend(loc="best", framealpha=0.85, ncol=2)
+        ax.set_ylim(-5, 105)
+    fig.suptitle("cube-triple-task1 — DS Curves (4 seeds, 50 eval)", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    out = IMG / "cube-triple-task1_DS_Curves_4seed.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def plot_task2_4seed():
+    """task2 4-seed curves for small-batch section."""
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    for idx, h in enumerate([1, 5]):
+        ax = axes[idx]
+        for ds in DS_ORDER:
+            df = load_all("task2", h, ds, method="rlpd-4s", max_seeds=4)
+            if df is None or df.empty:
+                continue
+            steps, mean, std = smooth_curves(df)
+            ax.plot(steps, mean, color=DS_COLORS[ds], linestyle=DS_LINESTYLE[ds],
+                    linewidth=2, label=DS_LABELS[ds])
+            ax.fill_between(steps, mean - std, mean + std, color=DS_COLORS[ds],
+                            alpha=0.12)
+        ax.set_title(f"task2  H={h} (4 seeds)", fontweight="bold")
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Success %")
+        ax.legend(loc="best", framealpha=0.85, ncol=2)
+        ax.set_ylim(-5, 105)
+    fig.suptitle("cube-triple-task2 — DS Curves (4 seeds, 50 eval)", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    out = IMG / "cube-triple-task2_DS_Curves_4seed.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
 def main():
     print_summary()
 
-    print("\nGenerating per-task curves...")
+    print("\nGenerating 4-seed curves (small-batch)...")
+    out = plot_task1_4seed()
+    print(f"  ✓ {out}")
+    out = plot_task2_4seed()
+    print(f"  ✓ {out}")
+
+    print("\nGenerating per-task curves (10-seed)...")
     for task in TASKS:
         out = plot_per_task(task)
         print(f"  ✓ {out}")
