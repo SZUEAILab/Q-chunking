@@ -172,7 +172,7 @@ CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl \
 | 9 | 245 | 367 | 41 | 49% | 4.42× |
 | 10 | 249 | 402 | 40 | 48% | 4.84× |
 
-![RTX 4090 DS 压力测试](images/gpu_bench_4090.png)
+> 详细曲线见上方汇总对比图。
 
 > 数据：[`RTX4090_24GB/results_ds_stereographic.json`](data/parallel_benchmark/RTX4090_24GB/results_ds_stereographic.json)
 
