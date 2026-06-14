@@ -1,8 +1,14 @@
-# QC (Q-Chunking) 复现实验报告
+# DS-RLPD 实验报告
+
+环境: `cube-triple-play-singletask` (task1–5) | Agent: ACRLPD | 观察维度: 46 | 动作维度: 5
+
+---
+
+## 一、复现结果
 
 环境: `cube-triple-play-singletask-task2-v0` | seed: 0 | 观察维度: 46 | 动作维度: 5
 
-## 正式复现结果 (1M 步)
+### 正式复现结果 (1M 步)
 
 | 方法 | 入口 | H | 关键参数 | 训练方式 | 最终 | 论文 | CI |
 |------|------|---|---------|---------|------|------|-----|
@@ -12,7 +18,7 @@
 
 ![主对比图](images/reproduce_RLPD_RLPDAC_1M.png)
 
-## 长序训练实验 (10M 步)
+### 长序训练实验 (10M 步)
 
 | 方法 | H | BC约束 | 最终 | 最佳 | 突破点 |
 |------|---|--------|------|------|--------|
@@ -21,13 +27,9 @@
 
 ![10M对比](images/reproduce_RLPDAC_QCRLPD_10M.png)
 
-### 关键发现
+**关键发现**: H=5 纯在线需要更多样本但最终可达 90%；bc_alpha=0.01 在长序训练中有效；1M 步不足以判断 H=5 方法的优劣。
 
-1. **H=5 纯在线需要更多样本，但最终可达 90%**。
-2. **bc_alpha=0.01 在长序训练中有效**。
-3. **1M 步不足以判断 H=5 方法的优劣**。
-
-## 关键技术细节
+### 关键技术细节
 
 - **控制频率**: 20 Hz
 - **动作空间**: H=5 时 25 维
@@ -36,7 +38,7 @@
 
 ---
 
-## 三种 DS 实现 + Baseline 对比实验 (1M 步)
+## 二、小批次验证 — DS 消融 (task2, 4 seeds)
 
 验证 [approach.md](approach.md) 中 posthoc（D+1 非可逆）、stereographic（球极投影 bijector）、spherical（球坐标 bijector）三种 DS 实现，在 H=1（无 chunk）和 H=5（有 chunk）下的表现。
 
@@ -60,7 +62,7 @@
 
 ![DS 对比图](images/cube-triple-task2_DS_Bar.png)
 
-![训练曲线](images/cube-triple-task2_DS_Curves.png)
+![训练曲线](images/cube-triple-task2_DS_Curves_full.png)
 
 ### 每 seed 详细数据
 
@@ -82,11 +84,43 @@
 | spherical | 56% | 46% | 66% | 86% | 63.5% |
 | baseline | 74% | 64% | 24% | 72% | 58.5% |
 
-## 跨任务验证: cube-triple-task1 (旧)
+### FQL + Post-hoc DS (2M 步)
+
+验证 DS 在 flow-based FQL 上的效果。入口：`main.py`（离线 1M → 在线 1M）。FQL 仅支持 posthoc。
+
+| ds_mode | s0 | s1 | s2 | **均值** | **中位数** |
+|---------|:---:|:---:|:---:|:---:|:---:|
+| none | 96% | 84% | 90% | **90%** | 90% |
+| posthoc | 100% | 98% | 4% | **67%** | 98% |
+
+![FQL H5 DS](images/cube-triple-task2_FQL_DS.png)
+
+- FQL baseline 极强（90%），离线预训练是关键
+- posthoc s0/s1 近乎完美，s2 异常（4%）可能是 seed 崩溃
+- 排除 s2：posthoc 99% > baseline 90%，DS 在 FQL 上仍有收益
+- **数据**：[`cube-triple-play-singletask/task2/h5/fql/`](data/ds_experiments/cube-triple-play-singletask/task2/h5/fql/)
+
+---
+
+## 三、大规模 OGBench 跨任务验证 (task1–5)
+
+cube-triple 5 个子任务的完整 DS 消融（4 DS modes × H1/H5 × 1M 纯在线）。
+
+### 跨任务总览
+
+![Summary Grid](images/cube-triple_all_tasks_summary.png)
+
+![H1 Bar](images/cross-task_H1_bar.png)
+
+![H5 Bar](images/cross-task_H5_bar.png)
+
+---
+
+### cube-triple-task1
+
+#### Task1 旧版 (4 seeds, 50 eval)
 
 验证 DS 在 task1（不同初始位置/颜色）上的泛化。配置同 task2：agent=acrlpd, 4 seeds, 50 eval episodes, 1M 纯在线。
-
-### 结果
 
 | 组 | H=1 | ±std | H=5 | ±std |
 |---|:---:|:---:|:---:|:---:|
@@ -95,17 +129,13 @@
 | **Stereographic** | 51% | 32% | 72% | 43% |
 | **Spherical** | 40% | 37% | 48% | 38% |
 
-![task1 曲线](images/cube-triple-task1_DS_Curves.png)
+![task1 曲线](images/cube-triple-task1_DS_Curves_full.png)
 
 > 注：4 seeds、50 eval episodes 导致方差极大。10 seeds 版本见下方。
 
----
-
-## 跨任务验证: cube-triple-task1 (10 seeds, H=5)
+#### Task1 H=5 升级版 (10 seeds, 100 eval)
 
 **升级实验**：seeds 0–9 (10 seeds)，100 eval episodes，1M online steps。H=5 + action chunking。
-
-### 结果
 
 | 方法 | 1M 成功率 | ±std | 范围 |
 |------|:---:|:---:|:---:|
@@ -116,48 +146,19 @@
 
 ![task1 H5 曲线](images/cube-triple-task1_DS_Curves_new.png)
 
-### 分析
-
 - **posthoc 84.9% 大幅领先**：但方差较大（42–100%），部分 seed 跑出满分
 - **stereographic (59%) ≈ baseline (54.1%)**：stereo 在 H=5 下优势不明显
 - **spherical 最弱 (43.3%)**：与 task2 一致，球坐标 Jacobian 退化
 - **10 seeds 给出更可信的 CI**：旧实验 4 seeds 的 ±std 高达 55%，新实验 10 seeds 下 CI 更紧
-- **数据**：[`cube-triple-play-singletask/task1/h5/rlpd/`](../docs/data/ds_experiments/cube-triple-play-singletask/task1/h5/rlpd/)
+- **数据**：[`cube-triple-play-singletask/task1/h5/rlpd/`](data/ds_experiments/cube-triple-play-singletask/task1/h5/rlpd/)
 
 ---
 
-## FQL + Post-hoc DS (2M 步)
+### cube-triple-task3 (10 seeds, H1+H5)
 
-验证 DS 在 flow-based FQL 上的效果。入口：`main.py`（离线 1M → 在线 1M）。FQL 仅支持 posthoc。
+完整消融实验：cube-triple-play-singletask-task3-v0，1M 纯在线，H1+H5，4 DS × 10 seeds × 100 eval（MuJoCo `mj_narrowphase` 碰撞 bug 已修复）
 
-### 配置
-
-- 环境: `cube-triple-play-singletask-task2-v0`
-- Agent: ACFQL, H=5, action_chunking=True, 3 seeds
-
-### 结果
-
-| ds_mode | s0 | s1 | s2 | **均值** | **中位数** |
-|---------|:---:|:---:|:---:|:---:|:---:|
-| none | 96% | 84% | 90% | **90%** | 90% |
-| posthoc | 100% | 98% | 4% | **67%** | 98% |
-
-![FQL H5 DS](images/cube-triple-task2_FQL_DS.png)
-
-### 分析
-
-- FQL baseline 极强（90%），离线预训练是关键
-- posthoc s0/s1 近乎完美，s2 异常（4%）可能是 seed 崩溃
-- 排除 s2：posthoc 99% > baseline 90%，DS 在 FQL 上仍有收益
-- **数据**：[`cube-triple-play-singletask/task2/h5/fql/`](../docs/data/ds_experiments/cube-triple-play-singletask/task2/h5/fql/)
-
----
-
-## 跨任务验证: cube-triple-task3 (10 seeds, H1+H5)
-
-完整消融实验：cube-triple-play-singletask-task3-v0，1M 纯在线，H1+H5，4 DS × 10 seeds × 100 eval
-
-### Task3 结果
+#### Task3 结果
 
 | 方法 | H=1 | ±std | H=5 | ±std |
 |------|:---:|:---:|:---:|:---:|
@@ -170,7 +171,10 @@
 - **posthoc 独大**：H1 28.4%、H5 31.7%，远超过其他方法（stereo/spherical 均 ≤5%）
 - **H5 posthoc 略优于 H1**（31.7% vs 28.4%）— 与 task2 类似，但绝对值低得多
 - **stereo/spherical 在 task3 上完全失败**：与 task4（H1 下 stereo 67%）形成鲜明对比
-- 数据：[`cube-triple-play-singletask/task3/`](../docs/data/ds_experiments/cube-triple-play-singletask/task3/)
+
+![task3 曲线](images/cube-triple-task3_DS_Curves_full.png)
+
+- 数据：[`cube-triple-play-singletask/task3/`](data/ds_experiments/cube-triple-play-singletask/task3/)
 
 #### H=1 每 seed
 
@@ -192,11 +196,11 @@
 
 ---
 
-## 跨任务验证: cube-triple-task4 (10 seeds, H1+H5)
+### cube-triple-task4 (10 seeds, H1+H5)
 
 完整消融实验：cube-triple-play-singletask-task4-v0，1M 纯在线，H1+H5，4 DS × 10 seeds × 100 eval
 
-### Task4 结果
+#### Task4 结果
 
 | 方法 | H=1 | ±std | H=5 | ±std |
 |------|:---:|:---:|:---:|:---:|
@@ -205,18 +209,42 @@
 | spherical | 64.8% | 18.6% | 2.0% | 1.6% |
 | none (baseline) | 49.4% | 19.8% | 1.6% | 1.8% |
 
-每 seed 数据 → 数据目录见下方。关键发现：
+#### H=1 每 seed
+
+| 方法 | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | 均值 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|
+| stereographic | 66 | 51 | 72 | 35 | 76 | 70 | 48 | 67 | 69 | 70 | 62.4 |
+| posthoc | 51 | 58 | 67 | 44 | 61 | 88 | 69 | 68 | 53 | 55 | 61.4 |
+| spherical | 17 | 75 | 55 | 46 | 72 | 47 | 54 | 72 | 41 | 77 | 55.6 |
+| none | 46 | 50 | 41 | 19 | 63 | 54 | 59 | 27 | 20 | 65 | 44.4 |
+
+#### H=5 每 seed
+
+| 方法 | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | 均值 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|
+| posthoc | 13 | 9 | 18 | 12 | 20 | 29 | 20 | 11 | 3 | 11 | 14.6 |
+| stereographic | 10 | 3 | 1 | 5 | 12 | 3 | 1 | 2 | 1 | 1 | 3.9 |
+| spherical | 2 | 4 | 1 | 3 | 5 | 2 | 3 | 2 | 1 | 3 | 2.6 |
+| none | 1 | 0 | 2 | 0 | 3 | 2 | 1 | 0 | 1 | 1 | 1.1 |
+
 - **H=1: stereo/spherical 首次发威**，追平 posthoc，三者均远超 baseline
 - **H=5: 仅 posthoc 勉强可用 (17.6%)**，其余 ≤5%
-- 数据：[`cube-triple-play-singletask/task4/`](../docs/data/ds_experiments/cube-triple-play-singletask/task4/)
+
+![task4 曲线](images/cube-triple-task4_DS_Curves_full.png)
+
+- 数据：[`cube-triple-play-singletask/task4/`](data/ds_experiments/cube-triple-play-singletask/task4/)
 
 ---
 
-## 跨任务验证: cube-triple-task5 (10 seeds, H1+H5)
+### cube-triple-task5 (10 seeds, H1+H5)
 
 完整消融实验：cube-triple-play-singletask-task5-v0，配置同 task4。
 
 **全部 80 runs (H1+H5, 4 DS × 10 seeds) 成功率均为 0%。** task5 是目前最难的 cube-triple 任务，1M 步内任何方法均无信号。
+
+![task5 曲线](images/cube-triple-task5_DS_Curves_full.png)
+
+---
 
 ### 跨任务难度对比
 
@@ -228,11 +256,11 @@
 | task4 | 49% | 68% (stereo) | 1.6% | 18% (posthoc) |
 | **task5** | **0%** | **0%** | **0%** | **0%** |
 
-> *4 seeds, 50 eval（旧）；task4/5 为 10 seeds, 100 eval
+> *4 seeds, 50 eval（旧）；task3/4/5 为 10 seeds, 100 eval
 
-- 难度：task1 < task2 < task4 << task5
+- 难度：task1 < task2 < task4 < task3 < task5
 - DS 相对收益在中等难度 (task4) 最显著
-- 数据：[`cube-triple-play-singletask/task5/`](../docs/data/ds_experiments/cube-triple-play-singletask/task5/)
+- 数据：[`cube-triple-play-singletask/task5/`](data/ds_experiments/cube-triple-play-singletask/task5/)
 
 ### 结论
 
@@ -241,10 +269,20 @@
 3. **H=5 仅 posthoc 可用**：stereo/spherical 在 H=5 下退化，posthoc 的 D+1 自由度提供额外探索
 4. **task5 为当前最难任务**：1M 步完全失败，需更长训练或 offline pretrain
 
+### 已知局限
+
+| 问题 | 影响 | 建议 |
+|------|------|------|
+| task2 H1+H5 仅 4 seeds, 50 eval | 统计功效不足，跨任务对比 CI 不对等 | **优先重跑**: 10 seeds, 100 eval |
+| task1 H1 仅 4 seeds, 50 eval | 方差极大（std 高达 38%），与 H5 不可直接对比 | 补至 10 seeds, 100 eval |
+| task1 H5 存在两套数据 (`rlpd-4s` vs `rlpd`) | `rlpd-4s` 无 checkpoint；`rlpd` 的 `run_group=Debug` | 确认 canonical 版本 |
+| task5 全 0% | 无 DS 对比信号 | 需更长训练或 offline pretrain |
+
 ### 更新日志
 
 | 日期 | 更新 |
 |------|------|
+| 2026-06-14 | 统一重绘全部旧图（配色图例一致）+ 跨任务汇总图 + 已知局限 |
 | 2026-06-14 | cube-triple-task5 (80 runs, 全 0%) + task4 (80 runs) |
 | 2026-06-14 | docs/data 重组为 `env/task/horizon/method/ds_mode/seed` 层级 |
 | 2026-06-13 | cube-triple-task1 H=5: 10 seeds, 100 eval |

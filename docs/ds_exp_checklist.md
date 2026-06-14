@@ -67,64 +67,100 @@
 
 ## 3. OGBench 多任务验证
 
-每个任务 × 4 DS modes × 4 seeds × H=1+H=5 = 32 实验。agent: acrlpd, 1M 纯在线
+每个任务 4 DS modes × H1+H5 × (4 或 10 seeds)。agent: acrlpd, 1M 纯在线。task1 H=5 + task3/4/5 为 10 seeds，其余 4 seeds。
 
-### 3.1 cube-triple task1 / task3
+### 3.1 cube-triple task1
+
+| #       | 状态 | env               | H | ds_mode       | seeds | 步数 |
+| ------- | :--: | ----------------- | :-: | ------------- | :---: | ---- |
+| 57-60   |  ✅  | cube-triple-task1 | 1 | none          | 4 | 1M   |
+| 61-64   |  ✅  | cube-triple-task1 | 1 | posthoc       | 4 | 1M   |
+| 65-68   |  ✅  | cube-triple-task1 | 1 | stereographic | 4 | 1M   |
+| 69-72   |  ✅  | cube-triple-task1 | 1 | spherical     | 4 | 1M   |
+| 73-82   |  ✅  | cube-triple-task1 | 5 | none          | 10 | 1M   |
+| 83-92   |  ✅  | cube-triple-task1 | 5 | stereographic | 10 | 1M   |
+| 93-102  |  ✅  | cube-triple-task1 | 5 | spherical     | 10 | 1M   |
+| 103-112 |  ✅  | cube-triple-task1 | 5 | posthoc       | 10 | 1M   |
+
+> task1 H=1 为早期 4-seed；H=5 已升级为 10-seed。结果：H1 posthoc 99.7%, H5 posthoc 81.3%。
+
+### 3.2 cube-triple task3
+
+| #       | 状态 | env               | H | ds_mode       | seeds | 步数 |
+| ------- | :--: | ----------------- | :-: | ------------- | :---: | ---- |
+| 113-122 |  ✅  | cube-triple-task3 | 1 | none          | 10 | 1M   |
+| 123-132 |  ✅  | cube-triple-task3 | 1 | posthoc       | 10 | 1M   |
+| 133-142 |  ✅  | cube-triple-task3 | 1 | stereographic | 10 | 1M   |
+| 143-152 |  ✅  | cube-triple-task3 | 1 | spherical     | 10 | 1M   |
+| 153-162 |  ✅  | cube-triple-task3 | 5 | none          | 10 | 1M   |
+| 163-172 |  ✅  | cube-triple-task3 | 5 | stereographic | 10 | 1M   |
+| 173-182 |  ✅  | cube-triple-task3 | 5 | spherical     | 10 | 1M   |
+| 183-192 |  ✅  | cube-triple-task3 | 5 | posthoc       | 10 | 1M   |
+
+> ~~task3 有 MuJoCo 物理 bug（`mj_narrowphase` 碰撞超限），4 seed 反复崩溃。~~ **已解决**，10 seeds 全部完成。结果：H1 posthoc 22.4%, H5 posthoc 27.5%，仅 posthoc 有效。
+
+### 3.3 cube-triple task4
+
+| #       | 状态 | env               | H | ds_mode       | seeds | 步数 |
+| ------- | :--: | ----------------- | :-: | ------------- | :---: | ---- |
+| 193-202 |  ✅  | cube-triple-task4 | 1 | none          | 10 | 1M   |
+| 203-212 |  ✅  | cube-triple-task4 | 1 | posthoc       | 10 | 1M   |
+| 213-222 |  ✅  | cube-triple-task4 | 1 | stereographic | 10 | 1M   |
+| 223-232 |  ✅  | cube-triple-task4 | 1 | spherical     | 10 | 1M   |
+| 233-242 |  ✅  | cube-triple-task4 | 5 | none          | 10 | 1M   |
+| 243-252 |  ✅  | cube-triple-task4 | 5 | stereographic | 10 | 1M   |
+| 253-262 |  ✅  | cube-triple-task4 | 5 | spherical     | 10 | 1M   |
+| 263-272 |  ✅  | cube-triple-task4 | 5 | posthoc       | 10 | 1M   |
+
+> 结果：H1 stereo 62.4% ≈ posthoc 61.4% > spherical 55.6% > baseline 44.4%；H5 posthoc 14.6%。
+
+### 3.4 cube-triple task5
+
+| #       | 状态 | env               | H | ds_mode       | seeds | 步数 |
+| ------- | :--: | ----------------- | :-: | ------------- | :---: | ---- |
+| 273-282 |  ✅  | cube-triple-task5 | 1 | none          | 10 | 1M   |
+| 283-292 |  ✅  | cube-triple-task5 | 1 | posthoc       | 10 | 1M   |
+| 293-302 |  ✅  | cube-triple-task5 | 1 | stereographic | 10 | 1M   |
+| 303-312 |  ✅  | cube-triple-task5 | 1 | spherical     | 10 | 1M   |
+| 313-322 |  ✅  | cube-triple-task5 | 5 | none          | 10 | 1M   |
+| 323-332 |  ✅  | cube-triple-task5 | 5 | stereographic | 10 | 1M   |
+| 333-342 |  ✅  | cube-triple-task5 | 5 | spherical     | 10 | 1M   |
+| 343-352 |  ✅  | cube-triple-task5 | 5 | posthoc       | 10 | 1M   |
+
+> 最难任务，全部 80 runs 成功率 0%。1M 步不够，需更长训练或 offline pretrain。
+
+### 3.5 cube-double (待做)
 
 | #       | 状态 | env               | H | ds_mode       | 步数 |
 | ------- | :--: | ----------------- | :-: | ------------- | ---- |
-| 57-60   |  ✅  | cube-triple-task1 | 1 | none          | 1M   |
-| 61-64   |  ✅  | cube-triple-task1 | 1 | posthoc       | 1M   |
-| 65-68   |  ✅  | cube-triple-task1 | 1 | stereographic | 1M   |
-| 69-72   |  ✅  | cube-triple-task1 | 1 | spherical     | 1M   |
-| 73-76   |  ✅  | cube-triple-task1 | 5 | none          | 1M   |
-| 77-80   |  ✅  | cube-triple-task1 | 5 | stereographic | 1M   |
-| 81-84   |  ✅  | cube-triple-task1 | 5 | spherical     | 1M   |
-| 85-88   |  ✅  | cube-triple-task1 | 5 | posthoc       | 1M   |
-| 89-92   |  ⚠  | cube-triple-task3 | 1 | none          | 1M   |
-| 93-96   |  ⚠  | cube-triple-task3 | 1 | posthoc       | 1M   |
-| 97-100  |  ⚠  | cube-triple-task3 | 1 | stereographic | 1M   |
-| 101-104 |  ⚠  | cube-triple-task3 | 1 | spherical     | 1M   |
-| 105-108 |  ⚠  | cube-triple-task3 | 5 | none          | 1M   |
-| 109-112 |  ⚠  | cube-triple-task3 | 5 | stereographic | 1M   |
-| 113-116 |  ⚠  | cube-triple-task3 | 5 | spherical     | 1M   |
-| 117-120 |  ⚠  | cube-triple-task3 | 5 | posthoc       | 1M   |
+| 353-356 |  ⬜  | cube-double-task2 | 1 | none          | 1M   |
+| 357-360 |  ⬜  | cube-double-task2 | 1 | posthoc       | 1M   |
+| 361-364 |  ⬜  | cube-double-task2 | 1 | stereographic | 1M   |
+| 365-368 |  ⬜  | cube-double-task2 | 1 | spherical     | 1M   |
+| 369-372 |  ⬜  | cube-double-task2 | 5 | none          | 1M   |
+| 373-376 |  ⬜  | cube-double-task2 | 5 | posthoc       | 1M   |
+| 377-380 |  ⬜  | cube-double-task2 | 5 | stereographic | 1M   |
+| 381-384 |  ⬜  | cube-double-task2 | 5 | spherical     | 1M   |
 
-> task3 有 MuJoCo 物理 bug（`mj_narrowphase` 碰撞超限），4 seed 反复崩溃。跳过 task3，转向 cube-double。
-> H=5 的 posthoc 需要 `--allow_posthoc_direction_speed_rlpd=True`。
-
-### 3.2 cube-double
+### 3.6 cube-single (可选)
 
 | #       | 状态 | env               | H | ds_mode       | 步数 |
 | ------- | :--: | ----------------- | :-: | ------------- | ---- |
-| 113-116 |  ⬜  | cube-double-task2 | 1 | none          | 1M   |
-| 117-120 |  ⬜  | cube-double-task2 | 1 | posthoc       | 1M   |
-| 121-124 |  ⬜  | cube-double-task2 | 1 | stereographic | 1M   |
-| 125-128 |  ⬜  | cube-double-task2 | 1 | spherical     | 1M   |
-| 129-132 |  ⬜  | cube-double-task2 | 5 | none          | 1M   |
-| 133-136 |  ⬜  | cube-double-task2 | 5 | posthoc       | 1M   |
-| 137-140 |  ⬜  | cube-double-task2 | 5 | stereographic | 1M   |
-| 141-144 |  ⬜  | cube-double-task2 | 5 | spherical     | 1M   |
-
-### 3.3 cube-single (可选)
-
-| #       | 状态 | env               | H | ds_mode       | 步数 |
-| ------- | :--: | ----------------- | :-: | ------------- | ---- |
-| 145-148 |  ⬜  | cube-single-task2 | 1 | none          | 1M   |
-| 149-152 |  ⬜  | cube-single-task2 | 1 | stereographic | 1M   |
-| 153-156 |  ⬜  | cube-single-task2 | 5 | none          | 1M   |
-| 157-160 |  ⬜  | cube-single-task2 | 5 | stereographic | 1M   |
+| 385-388 |  ⬜  | cube-single-task2 | 1 | none          | 1M   |
+| 389-392 |  ⬜  | cube-single-task2 | 1 | stereographic | 1M   |
+| 393-396 |  ⬜  | cube-single-task2 | 5 | none          | 1M   |
+| 397-400 |  ⬜  | cube-single-task2 | 5 | stereographic | 1M   |
 
 > cube-single 最简单，先跑 stereo vs none，如有显著差异再加 posthoc/spherical。
 
-### 3.4 cube-quadruple (可选)
+### 3.7 cube-quadruple (可选)
 
 | #       | 状态 | env                  | H | ds_mode       | 步数 |
 | ------- | :--: | -------------------- | :-: | ------------- | ---- |
-| 161-164 |  ⬜  | cube-quadruple-task2 | 1 | none          | 1M   |
-| 165-168 |  ⬜  | cube-quadruple-task2 | 1 | stereographic | 1M   |
-| 169-172 |  ⬜  | cube-quadruple-task2 | 5 | none          | 1M   |
-| 173-176 |  ⬜  | cube-quadruple-task2 | 5 | stereographic | 1M   |
+| 401-404 |  ⬜  | cube-quadruple-task2 | 1 | none          | 1M   |
+| 405-408 |  ⬜  | cube-quadruple-task2 | 1 | stereographic | 1M   |
+| 409-412 |  ⬜  | cube-quadruple-task2 | 5 | none          | 1M   |
+| 413-416 |  ⬜  | cube-quadruple-task2 | 5 | stereographic | 1M   |
 
 > cube-quadruple 极难，先跑 stereo vs none，有信号再加满。
 
@@ -138,14 +174,14 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #       | 状态 | H | ds_mode       | 步数 |
 | ------- | :--: | :-: | ------------- | ---- |
-| 177-180 |  ⬜  | 1 | none          | 1M   |
-| 181-184 |  ⬜  | 1 | posthoc       | 1M   |
-| 185-188 |  ⬜  | 1 | stereographic | 1M   |
-| 189-192 |  ⬜  | 1 | spherical     | 1M   |
-| 193-196 |  ⬜  | 5 | none          | 1M   |
-| 197-200 |  ⬜  | 5 | stereographic | 1M   |
-| 201-204 |  ⬜  | 5 | spherical     | 1M   |
-| 205-208 |  ⬜  | 5 | posthoc       | 1M   |
+| 417-420 |  ⬜  | 1 | none          | 1M   |
+| 421-424 |  ⬜  | 1 | posthoc       | 1M   |
+| 425-428 |  ⬜  | 1 | stereographic | 1M   |
+| 429-432 |  ⬜  | 1 | spherical     | 1M   |
+| 433-436 |  ⬜  | 5 | none          | 1M   |
+| 437-440 |  ⬜  | 5 | stereographic | 1M   |
+| 441-444 |  ⬜  | 5 | spherical     | 1M   |
+| 445-448 |  ⬜  | 5 | posthoc       | 1M   |
 
 > 最简单 RoboMimic 任务，基线 ~80%+，先跑 lift 验证 DS 不损害简单任务。
 
@@ -153,14 +189,14 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #       | 状态 | H | ds_mode       | 步数 |
 | ------- | :--: | :-: | ------------- | ---- |
-| 209-212 |  ⬜  | 1 | none          | 1M   |
-| 213-216 |  ⬜  | 1 | posthoc       | 1M   |
-| 217-220 |  ⬜  | 1 | stereographic | 1M   |
-| 221-224 |  ⬜  | 1 | spherical     | 1M   |
-| 225-228 |  ⬜  | 5 | none          | 1M   |
-| 229-232 |  ⬜  | 5 | stereographic | 1M   |
-| 233-236 |  ⬜  | 5 | spherical     | 1M   |
-| 237-240 |  ⬜  | 5 | posthoc       | 1M   |
+| 449-452 |  ⬜  | 1 | none          | 1M   |
+| 453-456 |  ⬜  | 1 | posthoc       | 1M   |
+| 457-460 |  ⬜  | 1 | stereographic | 1M   |
+| 461-464 |  ⬜  | 1 | spherical     | 1M   |
+| 465-468 |  ⬜  | 5 | none          | 1M   |
+| 469-472 |  ⬜  | 5 | stereographic | 1M   |
+| 473-476 |  ⬜  | 5 | spherical     | 1M   |
+| 477-480 |  ⬜  | 5 | posthoc       | 1M   |
 
 > 最难任务，论文中 DS 预期收益最大。
 
@@ -168,14 +204,14 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #       | 状态 | H | ds_mode       | 步数 |
 | ------- | :--: | :-: | ------------- | ---- |
-| 241-244 |  ⬜  | 1 | none          | 1M   |
-| 245-248 |  ⬜  | 1 | posthoc       | 1M   |
-| 249-252 |  ⬜  | 1 | stereographic | 1M   |
-| 253-256 |  ⬜  | 1 | spherical     | 1M   |
-| 257-260 |  ⬜  | 5 | none          | 1M   |
-| 261-264 |  ⬜  | 5 | stereographic | 1M   |
-| 265-268 |  ⬜  | 5 | spherical     | 1M   |
-| 269-272 |  ⬜  | 5 | posthoc       | 1M   |
+| 481-484 |  ⬜  | 1 | none          | 1M   |
+| 485-488 |  ⬜  | 1 | posthoc       | 1M   |
+| 489-492 |  ⬜  | 1 | stereographic | 1M   |
+| 493-496 |  ⬜  | 1 | spherical     | 1M   |
+| 497-500 |  ⬜  | 5 | none          | 1M   |
+| 501-504 |  ⬜  | 5 | stereographic | 1M   |
+| 505-508 |  ⬜  | 5 | spherical     | 1M   |
+| 509-512 |  ⬜  | 5 | posthoc       | 1M   |
 
 ---
 
@@ -185,22 +221,22 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #   | 状态 | ds_mode | dataset_proportion | 步数  |
 | --- | :--: | ------- | :----------------: | ----- |
-| 273 |  ⬜  | none    |        0.1        | 1M+1M |
-| 274 |  ⬜  | posthoc |        0.1        | 1M+1M |
-| 275 |  ⬜  | none    |        0.25        | 1M+1M |
-| 276 |  ⬜  | posthoc |        0.25        | 1M+1M |
-| 277 |  ⬜  | none    |        0.5        | 1M+1M |
-| 278 |  ⬜  | posthoc |        0.5        | 1M+1M |
-| 279 |  ⬜  | none    |        1.0        | 1M+1M |
-| 280 |  ⬜  | posthoc |        1.0        | 1M+1M |
+| 513 |  ⬜  | none    |        0.1        | 1M+1M |
+| 514 |  ⬜  | posthoc |        0.1        | 1M+1M |
+| 515 |  ⬜  | none    |        0.25        | 1M+1M |
+| 516 |  ⬜  | posthoc |        0.25        | 1M+1M |
+| 517 |  ⬜  | none    |        0.5        | 1M+1M |
+| 518 |  ⬜  | posthoc |        0.5        | 1M+1M |
+| 519 |  ⬜  | none    |        1.0        | 1M+1M |
+| 520 |  ⬜  | posthoc |        1.0        | 1M+1M |
 
 ### 5.2 max_speed 消融 — 单 seed
 
 | #   | 状态 | ds_mode       | max_speed | 步数 |
 | --- | :--: | ------------- | :-------: | ---- |
-| 281 |  ⬜  | stereographic |    0.5    | 1M   |
-| 282 |  ⬜  | stereographic |    1.0    | 1M   |
-| 283 |  ⬜  | stereographic |    2.0    | 1M   |
+| 521 |  ⬜  | stereographic |    0.5    | 1M   |
+| 522 |  ⬜  | stereographic |    1.0    | 1M   |
+| 523 |  ⬜  | stereographic |    2.0    | 1M   |
 
 ### 5.3 Bijector 内部消融 — 单 seed
 
@@ -208,8 +244,8 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #   | 状态 | ds_mode       | 说明                                      |
 | --- | :--: | ------------- | ----------------------------------------- |
-| 284 |  ⬜  | stereographic | 禁用 log-det Jacobian → 验证修正是否必要 |
-| 285 |  ⬜  | spherical     | 禁用 epsilon-bounded sigmoid → 测极点 NaN |
+| 524 |  ⬜  | stereographic | 禁用 log-det Jacobian → 验证修正是否必要 |
+| 525 |  ⬜  | spherical     | 禁用 epsilon-bounded sigmoid → 测极点 NaN |
 
 ### 5.4 速度表示消融 — 4 seeds
 
@@ -217,8 +253,8 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | #     | 状态 | ds_mode       | 速度表示 | 步数 |
 | ----- | :--: | ------------- | -------- | ---- |
-| 286-289 | ⬜ | stereographic | log (默认) | 1M |
-| 290-293 | ⬜ | stereographic | linear (sigmoid 直出) | 1M |
+| 526-529 | ⬜ | stereographic | log (默认) | 1M |
+| 530-533 | ⬜ | stereographic | linear (sigmoid 直出) | 1M |
 
 > 在实现中把 `speed = exp(log_speed_raw)` 改成 `speed = bounded_sigmoid(speed_raw)` 即完成线性版本。
 
@@ -237,15 +273,17 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 | 类别                           |     完成     |    运行中    |     待做     |
 | ------------------------------ | :----------: | :----------: | :-----------: |
-| RLPD H=1 (task2 + task1)       |      20      |      0      |       0       |
-| RLPD H=5 (task2 + task1)       |      20      |      0      |       0       |
-| FQL H=5 (task2)                |      8      |      0      |       0       |
-| FQL H=1 (task2)                |      8      |      0      |       0       |
-| cube-triple task3 (MuJoCo bug) |      0      |      32      |       0       |
-| FQL H=5 QC                     |      0      |      0      |       8       |
-| OGBench 其他任务               |      0      |      0      |      88      |
-| RoboMimic                      |      0      |      0      |      96      |
-| 消融 (含 Bijector 内部)        |      0      |      0      |      13      |
-| **总计**                 | **56** | **32** | **205** |
+| RLPD H=1 (task2 + task1)       |      32      |      0      |       0       |
+| RLPD H=5 (task2 + task1)       |      56      |      0      |       0       |
+| FQL H=5 (task2)                |      8       |      0      |       0       |
+| FQL H=1 (task2)                |      8       |      0      |       0       |
+| cube-triple task3 (10 seeds)   |      80      |      0      |       0       |
+| cube-triple task4 (10 seeds)   |      80      |      0      |       0       |
+| cube-triple task5 (10 seeds)   |      80      |      0      |       0       |
+| FQL H=5 QC                     |      0       |      0      |       8       |
+| OGBench 其他任务               |      0       |      0      |      88      |
+| RoboMimic                      |      0       |      0      |      96      |
+| 消融 (含 Bijector 内部)        |      0       |      0      |      21      |
+| **总计**                 | **344** | **0** | **213** |
 
-> 不可行 2 个不计入总数
+> 不可行 2 个不计入总数。task1: H=1 为 4 seeds (早期), H=5 为 10 seeds。task3/4/5: 10 seeds。task3 MuJoCo bug 已解决。
