@@ -1,6 +1,6 @@
 # DS — RLPD with Direction-Speed Action Head
 
-OGBench / RoboMimic 离线+在线强化学习实验仓库。
+OGBench / RoboMimic / LIBERO 离线+在线强化学习实验仓库。
 
 ## 架构
 
@@ -13,7 +13,7 @@ OGBench / RoboMimic 离线+在线强化学习实验仓库。
 agents/               — ACRLPD, ACFQL
 rlpd_distributions/   — TanhNormal, DirectionSpeed 动作分布
 rlpd_networks/        — MLP, StateActionValue, Ensemble
-envs/                 — OGBench, RoboMimic 环境封装
+envs/                 — OGBench, RoboMimic, LIBERO 环境封装
 utils/                — ReplayBuffer, flax 工具, encoders
 ```
 
@@ -75,8 +75,11 @@ export MUJOCO_GL=egl XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_F
 | ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **OGBench**   | `{env}-singletask{ -taskN}-v0` | `cube-triple-play-singletask-task2-v0`, `cube-double-play-singletask-v0`                                       |
 | **RoboMimic** | `{task}-{type}-low_dim`        | `lift-ph-low_dim`, `can-mh-low_dim`, `square-ph-low_dim`, `transport-ph-low_dim`, `tool_hang-ph-low_dim` |
+| **LIBERO**   | `libero_{suite}/{index}`       | `libero_spatial/0`, `libero_object/2`, `libero_goal/0`                                                        |
 
 RoboMimic `{type}`: `ph` = proficient human, `mh` = multi human。
+
+> 数据集安装详见 [docs/datasets.md](docs/datasets.md)。
 
 ## GPU 与并行
 

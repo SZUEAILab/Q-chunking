@@ -34,6 +34,10 @@ dependencies = [
     "robomimic>=0.3.0",
     "d4rl>=1.1",
     "h5py>=3.0",
+    # LIBERO (requires manual git clone + pip install -e; these are its deps)
+    "bddl>=1.0",
+    "easydict>=1.9",
+    "huggingface-hub>=0.20",
     # ---- PyTorch (CPU — for robomimic data loading only) ----
     # Install with: --index-url https://download.pytorch.org/whl/cpu
     "torch>=2.12.0",

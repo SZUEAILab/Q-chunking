@@ -235,9 +235,42 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 ---
 
-## 5. 消融实验
+## 5. LIBERO — 复杂操作基准
 
-### 5.1 离线数据量消融 (FQL) — 单 seed
+验证 DS 在更真实的机械臂操作场景上的效果。LIBERO 基于 robosuite，7D 动作空间，120D 低维观测（proprio-state 50D + object-state 70D），场景含 5+ 个交互物体。
+
+**数据集**：HuggingFace `yifengzhu-hf/LIBERO-datasets`（LIBERO 作者 Yifeng Zhu 的 HF 镜像），3 suites × 10 tasks = 30 tasks，每 task 50 human demos，HDF5 格式。总大小 ~5GB。
+
+**安装**：详见 [datasets.md](datasets.md) LIBERO 章节。
+
+**任务命名**：`libero_{suite}/{index}`，如 `libero_spatial/0`、`libero_object/2`。
+
+| suite | 10 tasks | 描述 |
+|-------|:---:|------|
+| `libero_spatial` | ✅ | 空间关系推理（碗+盘子+烤杯等） |
+| `libero_object` | ✅ | 不同物体操作（罐头、牛奶、黄油等） |
+| `libero_goal` | ✅ | 目标条件任务（抽屉、炉灶、柜子等） |
+
+### 5.1 LIBERO Spatial (RLPD)
+
+> 📌 RLPD 纯在线，H=1 + H=5，4 DS modes × 4 seeds × 10M。
+
+| #       | 状态 | H | ds_mode       | seeds | 步数 |
+| ------- | :--: | :-: | ------------- | :---: | ---- |
+| 558-561 |  ⬜  | 1 | none          | 4 | 10M   |
+| 562-565 |  ⬜  | 1 | posthoc       | 4 | 10M   |
+| 566-569 |  ⬜  | 1 | stereographic | 4 | 10M   |
+| 570-573 |  ⬜  | 1 | spherical     | 4 | 10M   |
+| 574-577 |  ⬜  | 5 | none          | 4 | 10M   |
+| 578-581 |  ⬜  | 5 | posthoc       | 4 | 10M   |
+| 582-585 |  ⬜  | 5 | stereographic | 4 | 10M   |
+| 586-589 |  ⬜  | 5 | spherical     | 4 | 10M   |
+
+---
+
+## 6. 消融实验
+
+### 6.1 离线数据量消融 (FQL) — 单 seed
 
 | #   | 状态 | ds_mode | dataset_proportion | 步数  |
 | --- | :--: | ------- | :----------------: | ----- |
@@ -250,7 +283,7 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 | 519 |  ⬜  | none    |        1.0        | 1M+1M |
 | 520 |  ⬜  | posthoc |        1.0        | 1M+1M |
 
-### 5.2 max_speed 消融 — 单 seed
+### 6.2 max_speed 消融 — 单 seed
 
 | #   | 状态 | ds_mode       | max_speed | 步数 |
 | --- | :--: | ------------- | :-------: | ---- |
@@ -258,7 +291,7 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 | 522 |  ⬜  | stereographic |    1.0    | 1M   |
 | 523 |  ⬜  | stereographic |    2.0    | 1M   |
 
-### 5.3 Bijector 内部消融 — 单 seed
+### 6.3 Bijector 内部消融 — 单 seed
 
 验证 bijector 实现正确性而非方法有效性。
 
@@ -267,7 +300,7 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 | 524 |  ⬜  | stereographic | 禁用 log-det Jacobian → 验证修正是否必要 |
 | 525 |  ⬜  | spherical     | 禁用 epsilon-bounded sigmoid → 测极点 NaN |
 
-### 5.4 速度表示消融 — 4 seeds
+### 6.4 速度表示消融 — 4 seeds
 
 对比对数速度 `s=log(m)` vs 线性速度 `s=m`，验证乘性噪声的尺度不变性是否真的带来收益。
 
@@ -280,7 +313,7 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 
 ---
 
-## 6. 不可行 / 不适用
+## 7. 不可行 / 不适用
 
 | #  | 状态 | 说明                                                                    |
 | -- | :--: | ----------------------------------------------------------------------- |
@@ -303,7 +336,8 @@ agent: acrlpd, 4 seeds × 4 DS modes, 1M 纯在线. DS 将位移 3D + 旋转 3D 
 | FQL H=5 QC                     |      0       |      0      |       8       |
 | OGBench 其他任务               |      0       |      0      |      88      |
 | RoboMimic                      |      0       |      0      |      96      |
+| LIBERO (RLPD H1+H5 spatial)    |      0       |      0      |      32      |
 | 消融 (含 Bijector 内部)        |      0       |      0      |      21      |
-| **总计**                 | **344** | **0** | **213** |
+| **总计**                 | **344** | **0** | **237** |
 
 > 不可行 2 个不计入总数。task1: H=1 为 4 seeds (早期), H=5 为 10 seeds。task3/4/5: 10 seeds。task3 MuJoCo bug 已解决。
