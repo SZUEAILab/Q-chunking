@@ -10,19 +10,21 @@
 | CUDA | 12.9 |
 | Driver | 575.57.08 |
 
-> 注意：实验室有两张 RTX 6000 Ada，但压力测试仅使用单卡（`CUDA_VISIBLE_DEVICES=0`），另一张卡被 RoboTwin 占用。
 
 ## 方法
 
-每个实验跑 20,000 步，`start_training=5000`（默认，前 5000 步为 warmup 无训练更新），取 JAX 编译后的稳定速度。通过 `taskset` 绑定不同 CPU 核，`XLA_PYTHON_CLIENT_MEM_FRACTION=0.10` 限制显存预分配。命令：
+每个实验跑 20,000 步，`start_training=5000`（默认，前 5000 步为 warmup 无训练更新），取 JAX 编译后的稳定速度。环境变量遵循 [CLAUDE.md](../CLAUDE.md) 标准配置（`MUJOCO_GL=egl` + `XLA_PYTHON_CLIENT_PREALLOCATE=false` + `MEM_FRACTION=0.05`），CPU 由 OS 调度（Python GIL + JAX GPU dispatch 意味着 CPU 不是瓶颈）。命令：
 
 ```bash
-taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
-    XLA_PYTHON_CLIENT_MEM_FRACTION=0.10 \
-    python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
-    --sparse=False --horizon_length=1 \
-    --online_steps=20000 --start_training=5000 --eval_episodes=2 &
+env CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl \
+    XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.05 \
+    python -u main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
+    --horizon_length=1 --eval_interval=0 \
+    --online_steps=20000 --start_training=5000 \
+    > exp_logs/bench_ada.log 2>&1 &
 ```
+
+> **历史说明**：下方「核/进程」/「总核数」/「倍率」数据基于旧版手动 CPU 亲和性消融实验测得，用于研究不同 CPU 分配下的并发扩展性。当前生产配置见 [CLAUDE.md](../CLAUDE.md)（6000 Ada 推荐 `--gpu_tasks=6`），CPU 由 OS 调度。
 
 ## 结果
 
@@ -61,17 +63,18 @@ taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
 
 ### 方法
 
-每个实验跑 5,000 步，`start_training=1000`（前 1000 步为 warmup 无训练更新），取 JIT 编译后的稳定速度。通过 `taskset` 绑定 CPU 核，`XLA_PYTHON_CLIENT_MEM_FRACTION=0.05` 限制显存，`XLA_PYTHON_CLIENT_PREALLOCATE=false` 动态分配：
+每个实验跑 5,000 步，`start_training=1000`（前 1000 步为 warmup 无训练更新），取 JIT 编译后的稳定速度。环境变量遵循 [CLAUDE.md](../CLAUDE.md) 标准配置（`MUJOCO_GL=egl` + `XLA_PYTHON_CLIENT_PREALLOCATE=false` + `MEM_FRACTION=0.05`），CPU 由 OS 调度。命令：
 
 ```bash
-taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
-    XLA_PYTHON_CLIENT_MEM_FRACTION=0.05 XLA_PYTHON_CLIENT_PREALLOCATE=false \
-    .venv/bin/python main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
-    --online_steps=5000 --eval_episodes=2 --eval_interval=0 --horizon_length=1 \
-    --start_training=1000 --action_decompose=False &
+env CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl \
+    XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.05 \
+    python -u main_online.py --env_name=cube-triple-play-singletask-task2-v0 \
+    --horizon_length=1 --eval_interval=0 \
+    --online_steps=5000 --start_training=1000 \
+    > exp_logs/bench_4090.log 2>&1 &
 ```
 
-> 与 6000 Ada 测试差异：`main.py` 路径为 `.venv/bin/python`（不用 `uv run`），`MEM_FRACTION=0.05` 而非 `0.10`，步数 5K 而非 20K，核数固定每进程 32/N。
+> 与 6000 Ada 段差异：步数 5K 而非 20K（缩短测试时间）。下方「核/进程」数据为旧版手动 CPU 亲和性的历史消融实验结果，CPU 列已无现实指导意义，仅作扩展性参考。
 
 ### 结果
 
@@ -85,7 +88,7 @@ taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
 | 10 | 3 | 506 | 2.2× | 51 | 100% | 10GB | ✅ |
 | **12** | **2** | **554** | **2.4×** | 46 | 100% | 12GB | ✅ |
 
-> N=12 全部存活，总吞吐 554 it/s。N=8 时 GPU 已达 100% 利用率，继续增加并发通过更细粒度的 GPU 分时复用仍可小幅提升吞吐。12 并发每进程仅 2 核，CPU 严重受限但 GPU 端仍有重叠空间。
+> N=12 全部存活，总吞吐 554 it/s。N=8 时 GPU 已达 100% 利用率，继续增加并发通过更细粒度的 GPU 分时复用仍可小幅提升吞吐。
 
 ### 测试参数对比
 
@@ -123,7 +126,6 @@ taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
 - **RTX 4090 最佳配置：8–12 并发，总吞吐 505–554 it/s**
 - 4090 单进程 228 it/s 是 6000 Ada 113 it/s 的 **2×**，但并行倍率低（2.4× vs 4.9×）——因为 4090 GPU 更快，单进程已用 33% GPU，并行提升空间更小
 - 12 并发全部存活（6000 Ada 在 N=10 已崩溃），显存仅用 12GB/24GB——24GB 显存非瓶颈
-- 核数分配：`32/N` 自动均分，N=12 时每进程仅 2.7 核，CPU 严重受限但 JAX 编译 + MuJoCo 仿真仍可运行
 - 与 6000 Ada 一致：每实验实际显存 ~1.5GB，`MEM_FRACTION=0.05` 足够
 
 ---
@@ -144,7 +146,6 @@ taskset -c <start>-<end> env CUDA_VISIBLE_DEVICES=0 \
 - **无 eval**（`eval_interval=0`, `eval_episodes=0`）
 - **无 checkpoint**（`save_interval=-1`）
 - **WANDB_MODE=disabled**
-- **CPU**: 未手动绑核（由 OS 调度）
 - **显存**: `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `MEM_FRACTION=0.05`
 - **调度**: `schedule.py --gpu_tasks=N --stagger=0`，每并发级独立编译执行
 - **测量**: 解析 schedule.py 日志，从首个启动到末个完成的时间差计算墙钟
@@ -186,7 +187,7 @@ CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl \
 | 倍率 | 4.84× | 2.4× |
 | 瓶颈 | GPU + JIT | GPU 100% + CPU |
 | warmup | 5,000 步 | 1,000 步 |
-| 调度 | schedule.py | taskset + 子进程 |
+| 调度 | schedule.py | main_online.py 直接调用 |
 
 ### 结论
 
@@ -195,4 +196,3 @@ CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl \
 - **截至 N=10 无 OOM**，显存非瓶颈，总算力未饱和（仍在增长）
 - **推荐生产 --gpu_tasks=4**：均衡点，单任务 55 it/s 保持 66% 效率，总算力 2.64×
 - 追求总算力可开到 10+，但单任务效率降至 ~48%
-- `schedule.py` 调度与手动 `taskset` 在吞吐上表现一致，无额外开销
