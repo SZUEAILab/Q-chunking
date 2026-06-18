@@ -32,33 +32,35 @@ def _uses_ds_bijector(config):
     return bool(config.get("use_ds_bijector", False) or config.get("use_direction_speed", False))
 
 
-def _base_ds_action_groups(action_dim, max_speed, bijector_type):
+def _base_ds_action_groups(action_dim, max_speed, bijector_type, speed_bound="cube"):
     if bijector_type == "spherical":
         group_type = "direction_speed_3d"
     elif bijector_type in ("stereographic", "cartesian"):
         group_type = "direction_speed_stereographic_3d"
     else:
         raise ValueError(f"Unknown ds_bijector_type={bijector_type}")
+    if speed_bound not in ("fixed", "cube"):
+        raise ValueError(f"Unknown ds_speed_bound={speed_bound}")
 
     if action_dim == 5:
         return [
-            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed},
+            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed, "speed_bound": speed_bound},
             {"type": "scalar", "dims": [3]},
             {"type": "scalar", "dims": [4]},
         ]
     if action_dim == 7:
         return [
-            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed},
-            {"type": group_type, "dims": [3, 4, 5], "max_speed": max_speed},
+            {"type": group_type, "dims": [0, 1, 2], "max_speed": max_speed, "speed_bound": speed_bound},
+            {"type": group_type, "dims": [3, 4, 5], "max_speed": max_speed, "speed_bound": speed_bound},
             {"type": "scalar", "dims": [6]},
         ]
     raise ValueError(f"No default direction-speed action groups for action_dim={action_dim}")
 
 
-def _chunked_ds_action_groups(action_dim, horizon_length, action_chunking, max_speed, bijector_type):
+def _chunked_ds_action_groups(action_dim, horizon_length, action_chunking, max_speed, bijector_type, speed_bound="cube"):
     groups = []
     horizon = horizon_length if action_chunking else 1
-    base_groups = _base_ds_action_groups(action_dim, max_speed, bijector_type)
+    base_groups = _base_ds_action_groups(action_dim, max_speed, bijector_type, speed_bound)
     for h in range(horizon):
         offset = h * action_dim
         for group in base_groups:
@@ -262,6 +264,7 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
                 config["action_chunking"],
                 config["ds_max_speed"],
                 config["ds_bijector_type"],
+                config.get("ds_speed_bound", "cube"),
             )
             actor_def = DirectionSpeedNormal(actor_base_cls, full_action_dim, action_groups)
         else:
@@ -314,6 +317,7 @@ def get_config():
             use_direction_speed=False,  # Backward-compatible alias for use_ds_bijector.
             ds_max_speed=1.0,
             ds_bijector_type="spherical",  # "spherical" or "stereographic"/"cartesian".
+            ds_speed_bound="cube",  # "cube" uses the [-1, 1]^3 ray bound; "fixed" is a legacy option.
             init_temp=1.0,
         )
     )

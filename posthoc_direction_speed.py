@@ -3,7 +3,7 @@ Post-hoc direction + speed decomposition helpers.
 
 Decomposes a D-dimensional action a in [-1, 1]^D into:
   - direction: unit vector of the first dir_dims dimensions (on S^{dir_dims-1})
-  - log_speed:  scalar = log |a[:dir_dims]|
+  - speed coordinate: cube-normalized radius ratio in [-1, 1]
   - other dims: passed through unchanged (e.g. yaw, gripper)
 
 This module supports the non-invertible D+1 post-hoc DS ablation path. It is
@@ -17,6 +17,7 @@ For Robomimic (7D):      dir_dims=3  →  [dx, dy, dz] decomposed, orientation+g
 import jax
 import jax.numpy as jnp
 import numpy as np
+import functools
 
 EPS = 1e-6
 
@@ -24,12 +25,28 @@ EPS = 1e-6
 DEFAULT_DIR_DIMS = 3
 
 
+def _check_speed_bound(speed_bound: str):
+    if speed_bound not in ("fixed", "cube"):
+        raise ValueError(f"Unknown speed_bound={speed_bound}")
+
+
+def _cube_radial_bound_np(direction_unit: np.ndarray, eps: float):
+    max_abs = np.max(np.abs(direction_unit), axis=-1, keepdims=True)
+    return 1.0 / np.maximum(max_abs, eps)
+
+
+def _cube_radial_bound_jax(direction_unit: jnp.ndarray, eps: float):
+    max_abs = jnp.max(jnp.abs(direction_unit), axis=-1, keepdims=True)
+    return 1.0 / jnp.maximum(max_abs, eps)
+
+
 # =============================================================================
 # NumPy helpers (dataset preprocessing)
 # =============================================================================
 
-def decompose(np_actions: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS):
-    """Raw actions -> [direction_unit | log_speed | other_dims].
+def decompose(np_actions: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS,
+              speed_bound: str = "cube"):
+    """Raw actions -> [direction_unit | speed_coord | other_dims].
 
     Args:
         np_actions: (..., D) raw actions in [-1, 1].
@@ -37,38 +54,50 @@ def decompose(np_actions: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: flo
     Returns:
         (..., D+1) where:
           [..., :dir_dims]     = direction unit vector
-          [..., dir_dims]      = log_speed
+          [..., dir_dims]      = speed_coord in cube mode
           [..., dir_dims+1:]   = remaining dims unchanged
     """
+    _check_speed_bound(speed_bound)
     direction_raw = np_actions[..., :dir_dims]
     remainder = np_actions[..., dir_dims:]
 
     magnitude = np.linalg.norm(direction_raw, axis=-1, keepdims=True)
     direction_unit = direction_raw / np.maximum(magnitude, eps)
-    log_speed = np.log(np.maximum(magnitude, eps))
+    if speed_bound == "fixed":
+        speed_value = np.log(np.maximum(magnitude, eps))
+    else:
+        radial_bound = _cube_radial_bound_np(direction_unit, eps)
+        speed_frac = np.clip(magnitude / radial_bound, 0.0, 1.0)
+        speed_value = 2.0 * speed_frac - 1.0
 
-    parts = [direction_unit, log_speed]
+    parts = [direction_unit, speed_value]
     if remainder.shape[-1] > 0:
         parts.append(remainder)
     return np.concatenate(parts, axis=-1)
 
 
-def compose(np_decomposed: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS):
-    """[direction | log_speed | other] → raw actions.
+def compose(np_decomposed: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS,
+            speed_bound: str = "cube"):
+    """[direction | speed_coord | other] -> raw actions.
 
     Args:
-        np_decomposed: (..., D+1) with direction + log_speed + other dims.
+        np_decomposed: (..., D+1) with direction + speed_coord + other dims.
         dir_dims:      number of direction dimensions.
     Returns:
         (..., D) raw actions in [-1, 1].
     """
+    _check_speed_bound(speed_bound)
     direction = np_decomposed[..., :dir_dims]
-    log_speed = np_decomposed[..., dir_dims:dir_dims + 1]
+    speed_value = np_decomposed[..., dir_dims:dir_dims + 1]
     remainder = np_decomposed[..., dir_dims + 1:]
 
     direction_norm = np.linalg.norm(direction, axis=-1, keepdims=True)
     direction_unit = direction / np.maximum(direction_norm, eps)
-    speed = np.exp(log_speed)
+    if speed_bound == "fixed":
+        speed = np.exp(speed_value)
+    else:
+        speed_frac = np.clip((speed_value + 1.0) * 0.5, 0.0, 1.0)
+        speed = _cube_radial_bound_np(direction_unit, eps) * speed_frac
 
     xyz = direction_unit * speed
     parts = [xyz]
@@ -81,28 +110,41 @@ def compose(np_decomposed: np.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: fl
 # JAX helpers (online interaction)
 # =============================================================================
 
-@jax.jit
-def decompose_jax(actions: jnp.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS):
+@functools.partial(jax.jit, static_argnames=("dir_dims", "eps", "speed_bound"))
+def decompose_jax(actions: jnp.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS,
+                  speed_bound: str = "cube"):
+    _check_speed_bound(speed_bound)
     direction_raw = actions[..., :dir_dims]
     remainder = actions[..., dir_dims:]
     magnitude = jnp.linalg.norm(direction_raw, axis=-1, keepdims=True)
     direction_unit = direction_raw / jnp.maximum(magnitude, eps)
-    log_speed = jnp.log(jnp.maximum(magnitude, eps))
-    parts = [direction_unit, log_speed]
+    if speed_bound == "fixed":
+        speed_value = jnp.log(jnp.maximum(magnitude, eps))
+    else:
+        radial_bound = _cube_radial_bound_jax(direction_unit, eps)
+        speed_frac = jnp.clip(magnitude / radial_bound, 0.0, 1.0)
+        speed_value = 2.0 * speed_frac - 1.0
+    parts = [direction_unit, speed_value]
     if remainder.shape[-1] > 0:
         parts.append(remainder)
     return jnp.concatenate(parts, axis=-1)
 
 
-@jax.jit
-def compose_jax(decomposed: jnp.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS):
+@functools.partial(jax.jit, static_argnames=("dir_dims", "eps", "speed_bound"))
+def compose_jax(decomposed: jnp.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: float = EPS,
+                speed_bound: str = "cube"):
+    _check_speed_bound(speed_bound)
     direction = decomposed[..., :dir_dims]
-    log_speed = decomposed[..., dir_dims:dir_dims + 1]
+    speed_value = decomposed[..., dir_dims:dir_dims + 1]
     remainder = decomposed[..., dir_dims + 1:]
 
     direction_norm = jnp.linalg.norm(direction, axis=-1, keepdims=True)
     direction_unit = direction / jnp.maximum(direction_norm, eps)
-    speed = jnp.exp(log_speed)
+    if speed_bound == "fixed":
+        speed = jnp.exp(speed_value)
+    else:
+        speed_frac = jnp.clip((speed_value + 1.0) * 0.5, 0.0, 1.0)
+        speed = _cube_radial_bound_jax(direction_unit, eps) * speed_frac
     xyz = direction_unit * speed
     parts = [xyz]
     if remainder.shape[-1] > 0:
@@ -115,7 +157,8 @@ def compose_jax(decomposed: jnp.ndarray, dir_dims: int = DEFAULT_DIR_DIMS, eps: 
 # =============================================================================
 
 def decompose_chunked(actions: np.ndarray, horizon_length: int,
-                      dir_dims: int = DEFAULT_DIR_DIMS):
+                      dir_dims: int = DEFAULT_DIR_DIMS,
+                      speed_bound: str = "cube"):
     """Decompose a chunked action sequence (N, H, D) -> (N, (D+1)*H)."""
     if actions.ndim == 3:
         N, H, D = actions.shape
@@ -123,5 +166,8 @@ def decompose_chunked(actions: np.ndarray, horizon_length: int,
         N, H = actions.shape[0], horizon_length, actions.shape[-1] // horizon_length
         actions = actions.reshape(N, H, D)
 
-    parts = [decompose(actions[:, t, :], dir_dims=dir_dims) for t in range(H)]
+    parts = [
+        decompose(actions[:, t, :], dir_dims=dir_dims, speed_bound=speed_bound)
+        for t in range(H)
+    ]
     return np.concatenate(parts, axis=-1)

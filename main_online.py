@@ -69,6 +69,12 @@ flags.DEFINE_enum(
     ['none', 'posthoc', 'stereographic', 'spherical'],
     'Direction-speed implementation: none, posthoc D+1, or Jacobian-corrected bijector.',
 )
+flags.DEFINE_enum(
+    'ds_speed_bound',
+    'config',
+    ['config', 'fixed', 'cube'],
+    'Speed/radius bound for direction-speed actions: config, fixed, or cube radial bound.',
+)
 flags.DEFINE_bool('direction_speed', False, 'Deprecated alias for --ds_mode=posthoc.')
 flags.DEFINE_bool(
     'allow_posthoc_direction_speed_rlpd',
@@ -105,6 +111,11 @@ def main(_):
         if ds_mode != 'none':
             raise ValueError("Use either --ds_mode or deprecated --direction_speed, not both.")
         ds_mode = 'posthoc'
+    if FLAGS.ds_speed_bound != 'config':
+        config["ds_speed_bound"] = FLAGS.ds_speed_bound
+    ds_speed_bound = config.get("ds_speed_bound", "cube")
+    if ds_speed_bound not in ("fixed", "cube"):
+        raise ValueError(f"Unknown ds_speed_bound={ds_speed_bound}")
 
     legacy_agent_ds = bool(config.get("use_ds_bijector", False) or config.get("use_direction_speed", False))
     if config.get("use_direction_speed", False):
@@ -202,14 +213,14 @@ def main(_):
     raw_action_dim = train_dataset['actions'].shape[-1]
     if use_posthoc_ds:
         train_dataset = train_dataset.copy(
-            add_or_replace=dict(actions=decompose(train_dataset['actions'])))
+            add_or_replace=dict(actions=decompose(train_dataset['actions'], speed_bound=ds_speed_bound)))
         agent_action_dim = raw_action_dim + 1
     else:
         agent_action_dim = raw_action_dim
 
     def compose_posthoc_ds(sampled):
         sampled = np.asarray(sampled).reshape(-1, agent_action_dim)
-        return compose(sampled)
+        return compose(sampled, speed_bound=ds_speed_bound)
 
     def make_eval_agent(base_agent):
         if not use_posthoc_ds:
@@ -250,7 +261,7 @@ def main(_):
     # Replay buffer stores raw actions (D), not decomposed (D+1).
     if use_posthoc_ds:
         _raw_ex = dict(example_batch)
-        _raw_ex['actions'] = compose(example_batch['actions'][np.newaxis])[0]
+        _raw_ex['actions'] = compose(example_batch['actions'][np.newaxis], speed_bound=ds_speed_bound)[0]
         replay_buffer = ReplayBuffer.create(_raw_ex, size=FLAGS.buffer_size)
     else:
         replay_buffer = ReplayBuffer.create(example_batch, size=FLAGS.buffer_size)
@@ -346,7 +357,7 @@ def main(_):
                 for k in ('actions', 'next_actions'):
                     if k in replay_batch:
                         replay_batch[k] = decompose_chunked(
-                            replay_batch[k], FLAGS.horizon_length
+                            replay_batch[k], FLAGS.horizon_length, speed_bound=ds_speed_bound
                         ).reshape(replay_batch[k].shape[0], FLAGS.horizon_length, -1)
                 replay_batch = jax.tree_util.tree_map(lambda x: x, replay_batch)
 
@@ -391,7 +402,7 @@ def main(_):
             train_dataset = process_train_dataset(train_dataset)
             if use_posthoc_ds:
                 train_dataset = train_dataset.copy(
-                    add_or_replace=dict(actions=decompose(train_dataset['actions'])))
+                    add_or_replace=dict(actions=decompose(train_dataset['actions'], speed_bound=ds_speed_bound)))
 
 
     for key, csv_logger in logger.csv_loggers.items():

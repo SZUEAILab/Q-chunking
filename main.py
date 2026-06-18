@@ -63,6 +63,12 @@ flags.DEFINE_enum(
     ['none', 'posthoc', 'stereographic', 'spherical'],
     'Direction-speed implementation: none, posthoc D+1, or Jacobian-corrected bijector.',
 )
+flags.DEFINE_enum(
+    'ds_speed_bound',
+    'config',
+    ['config', 'fixed', 'cube'],
+    'Speed/radius bound for direction-speed actions: config, fixed, or cube radial bound.',
+)
 flags.DEFINE_bool('direction_speed', False, 'Deprecated alias for --ds_mode=posthoc.')
 flags.DEFINE_bool(
     'allow_posthoc_direction_speed_rlpd',
@@ -99,6 +105,11 @@ def main(_):
         if ds_mode != 'none':
             raise ValueError("Use either --ds_mode or deprecated --direction_speed, not both.")
         ds_mode = 'posthoc'
+    if FLAGS.ds_speed_bound != 'config':
+        config["ds_speed_bound"] = FLAGS.ds_speed_bound
+    ds_speed_bound = config.get("ds_speed_bound", "cube")
+    if ds_speed_bound not in ("fixed", "cube"):
+        raise ValueError(f"Unknown ds_speed_bound={ds_speed_bound}")
 
     legacy_agent_ds = bool(config.get("use_ds_bijector", False) or config.get("use_direction_speed", False))
     if config.get("use_direction_speed", False):
@@ -196,14 +207,14 @@ def main(_):
     raw_action_dim = train_dataset['actions'].shape[-1]
     if use_posthoc_ds:
         train_dataset = train_dataset.copy(
-            add_or_replace=dict(actions=decompose(train_dataset['actions'])))
+            add_or_replace=dict(actions=decompose(train_dataset['actions'], speed_bound=ds_speed_bound)))
         agent_action_dim = raw_action_dim + 1
     else:
         agent_action_dim = raw_action_dim
 
     def compose_posthoc_ds(sampled):
         sampled = np.asarray(sampled).reshape(-1, agent_action_dim)
-        return compose(sampled)
+        return compose(sampled, speed_bound=ds_speed_bound)
 
     def make_eval_agent(base_agent):
         if not use_posthoc_ds:
@@ -260,7 +271,7 @@ def main(_):
             train_dataset = process_train_dataset(train_dataset)
             if use_posthoc_ds:
                 train_dataset = train_dataset.copy(
-                    add_or_replace=dict(actions=decompose(train_dataset['actions'])))
+                    add_or_replace=dict(actions=decompose(train_dataset['actions'], speed_bound=ds_speed_bound)))
 
         batch = train_dataset.sample_sequence(config['batch_size'], sequence_length=FLAGS.horizon_length, discount=discount)
 
@@ -291,7 +302,7 @@ def main(_):
     # transition from offline to online
     if use_posthoc_ds:
         _raw = dict(train_dataset)
-        _raw['actions'] = compose(train_dataset['actions'])
+        _raw['actions'] = compose(train_dataset['actions'], speed_bound=ds_speed_bound)
         replay_buffer = ReplayBuffer.create_from_initial_dataset(
             _raw, size=max(FLAGS.buffer_size, train_dataset.size + 1))
     else:
@@ -383,7 +394,7 @@ def main(_):
                 for k in ('actions', 'next_actions'):
                     if k in batch:
                         batch[k] = decompose_chunked(
-                            batch[k], FLAGS.horizon_length
+                            batch[k], FLAGS.horizon_length, speed_bound=ds_speed_bound
                         ).reshape(batch[k].shape[0], FLAGS.horizon_length, -1)
                 batch = jax.tree_util.tree_map(lambda x: x, batch)
             batch = jax.tree.map(lambda x: x.reshape((

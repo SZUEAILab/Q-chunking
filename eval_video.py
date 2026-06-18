@@ -38,6 +38,12 @@ def main():
 
     config = flags.get('agent', flags.get('config', {}))
     ds_mode = flags.get('ds_mode', 'none')
+    ds_speed_bound = flags.get('ds_speed_bound', config.get('ds_speed_bound', 'fixed'))
+    if ds_speed_bound == 'config':
+        ds_speed_bound = config.get('ds_speed_bound', 'fixed')
+    if ds_speed_bound not in ('fixed', 'cube'):
+        raise ValueError(f"Unknown ds_speed_bound={ds_speed_bound}")
+    config['ds_speed_bound'] = ds_speed_bound
     env_name = flags.get('env_name', flags.get('env', '?'))
     seed = flags.get('seed', 0)
     horizon = flags.get('horizon_length', 1)
@@ -125,15 +131,15 @@ def main():
     if use_posthoc:
         from posthoc_direction_speed import compose as ph_compose
         class _W:
-            def __init__(s, a, h, ad, rd): s._a, s._h, s._ad, s._rd = a, h, ad, rd
+            def __init__(s, a, h, ad, rd, sb): s._a, s._h, s._ad, s._rd, s._sb = a, h, ad, rd, sb
             def sample_actions(s, o, rng=None):
                 d = s._a.sample_actions(o, rng=rng)
                 if s._h > 1:
                     d = d.reshape(-1, s._h, s._ad)
-                    d = ph_compose(d).reshape(d.shape[0], -1)
+                    d = ph_compose(d, speed_bound=s._sb).reshape(d.shape[0], -1)
                     return d
-                return ph_compose(d)
-        eval_agent = _W(agent, horizon, agent_action_dim, raw_action_dim)
+                return ph_compose(d, speed_bound=s._sb)
+        eval_agent = _W(agent, horizon, agent_action_dim, raw_action_dim, ds_speed_bound)
     else:
         eval_agent = agent
 

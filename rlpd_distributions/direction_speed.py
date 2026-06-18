@@ -44,6 +44,19 @@ def _bounded_sigmoid_grad(x, eps=1e-6):
     return (1.0 - 2.0 * eps) * sig * (1.0 - sig)
 
 
+def _cube_radial_bound(direction, eps=1e-6):
+    max_abs = jnp.max(jnp.abs(direction), axis=-1, keepdims=True)
+    return 1.0 / jnp.maximum(max_abs, eps)
+
+
+def _speed_bound(direction, max_speed, speed_bound):
+    if speed_bound == "fixed":
+        return jnp.ones(direction.shape[:-1] + (1,), dtype=direction.dtype) * max_speed
+    if speed_bound == "cube":
+        return _cube_radial_bound(direction)
+    raise ValueError(f"Unknown speed_bound={speed_bound}")
+
+
 class _DirectionSpeedBijector(tfb.Bijector):
     """
     Bijector from raw Gaussian params → structured action via direction-speed decomposition.
@@ -81,6 +94,9 @@ class _DirectionSpeedBijector(tfb.Bijector):
                 info["act_start"] = act_idx
                 info["act_len"] = 3  # x, y, z
                 info["max_speed"] = group.get("max_speed", 1.0)
+                info["speed_bound"] = group.get("speed_bound", "cube")
+                if info["speed_bound"] not in ("fixed", "cube"):
+                    raise ValueError(f"Unknown speed_bound={info['speed_bound']}")
             elif group["type"] == "scalar":
                 n = len(group["dims"])
                 info["raw_start"] = raw_idx
@@ -102,15 +118,15 @@ class _DirectionSpeedBijector(tfb.Bijector):
         for info in self._group_info:
             raw = x[..., info["raw_start"]:info["raw_start"] + info["raw_len"]]
             if info["type"] == "direction_speed_3d":
-                a = self._forward_ds3d(raw, info["max_speed"])
+                a = self._forward_ds3d(raw, info["max_speed"], info["speed_bound"])
             elif info["type"] == "direction_speed_stereographic_3d":
-                a = self._forward_stereo3d(raw, info["max_speed"])
+                a = self._forward_stereo3d(raw, info["max_speed"], info["speed_bound"])
             else:
                 a = jnp.tanh(raw)
             actions.append(a)
         return jnp.concatenate(actions, axis=-1)
 
-    def _forward_ds3d(self, raw, max_speed):
+    def _forward_ds3d(self, raw, max_speed, speed_bound):
         """Transform (theta_raw, phi_raw, speed_raw) → (x, y, z)."""
         theta_raw = raw[..., 0:1]
         phi_raw = raw[..., 1:2]
@@ -122,15 +138,19 @@ class _DirectionSpeedBijector(tfb.Bijector):
 
         theta = jnp.pi * theta_frac
         phi = 2.0 * jnp.pi * phi_frac
-        speed = max_speed * speed_frac
 
         sin_theta = jnp.sin(theta)
-        x = speed * sin_theta * jnp.cos(phi)
-        y = speed * sin_theta * jnp.sin(phi)
-        z = speed * jnp.cos(theta)
+        direction_x = sin_theta * jnp.cos(phi)
+        direction_y = sin_theta * jnp.sin(phi)
+        direction_z = jnp.cos(theta)
+        direction = jnp.concatenate([direction_x, direction_y, direction_z], axis=-1)
+        speed = _speed_bound(direction, max_speed, speed_bound) * speed_frac
+        x = speed * direction_x
+        y = speed * direction_y
+        z = speed * direction_z
         return jnp.concatenate([x, y, z], axis=-1)
 
-    def _forward_stereo3d(self, raw, max_speed):
+    def _forward_stereo3d(self, raw, max_speed, speed_bound):
         """Transform (plane_x, plane_y, speed_raw) -> (x, y, z)."""
         plane_x = raw[..., 0:1]
         plane_y = raw[..., 1:2]
@@ -141,7 +161,8 @@ class _DirectionSpeedBijector(tfb.Bijector):
         direction_x = 2.0 * plane_x / denom
         direction_y = 2.0 * plane_y / denom
         direction_z = (1.0 - rho2) / denom
-        speed = max_speed * _bounded_sigmoid(speed_raw)
+        direction = jnp.concatenate([direction_x, direction_y, direction_z], axis=-1)
+        speed = _speed_bound(direction, max_speed, speed_bound) * _bounded_sigmoid(speed_raw)
 
         return jnp.concatenate(
             [speed * direction_x, speed * direction_y, speed * direction_z],
@@ -155,9 +176,9 @@ class _DirectionSpeedBijector(tfb.Bijector):
         for info in self._group_info:
             raw = x[..., info["raw_start"]:info["raw_start"] + info["raw_len"]]
             if info["type"] == "direction_speed_3d":
-                log_det = self._forward_log_det_ds3d(raw, info["max_speed"])
+                log_det = self._forward_log_det_ds3d(raw, info["max_speed"], info["speed_bound"])
             elif info["type"] == "direction_speed_stereographic_3d":
-                log_det = self._forward_log_det_stereo3d(raw, info["max_speed"])
+                log_det = self._forward_log_det_stereo3d(raw, info["max_speed"], info["speed_bound"])
             else:
                 # tanh: log det = sum log(1 - tanh(raw)²)
                 a = jnp.tanh(raw)
@@ -166,7 +187,7 @@ class _DirectionSpeedBijector(tfb.Bijector):
 
         return total_log_det
 
-    def _forward_log_det_ds3d(self, raw, max_speed):
+    def _forward_log_det_ds3d(self, raw, max_speed, speed_bound):
         """Log det for spherical coordinate transformation."""
         theta_raw = raw[..., 0]
         phi_raw = raw[..., 1]
@@ -177,7 +198,18 @@ class _DirectionSpeedBijector(tfb.Bijector):
         sig_speed = _bounded_sigmoid(speed_raw)
 
         theta = jnp.pi * sig_theta
-        speed = max_speed * sig_speed
+        phi = 2.0 * jnp.pi * sig_phi
+        sin_theta = jnp.sin(theta)
+        direction = jnp.stack(
+            [
+                sin_theta * jnp.cos(phi),
+                sin_theta * jnp.sin(phi),
+                jnp.cos(theta),
+            ],
+            axis=-1,
+        )
+        radial_bound = _speed_bound(direction, max_speed, speed_bound).squeeze(-1)
+        speed = radial_bound * sig_speed
         sigmoid_theta_grad = _bounded_sigmoid_grad(theta_raw)
         sigmoid_phi_grad = _bounded_sigmoid_grad(phi_raw)
         sigmoid_speed_grad = _bounded_sigmoid_grad(speed_raw)
@@ -189,19 +221,29 @@ class _DirectionSpeedBijector(tfb.Bijector):
         # Sigmoid Jacobians
         log_dtheta = _safe_log(jnp.pi * sigmoid_theta_grad)
         log_dphi = _safe_log(2.0 * jnp.pi * sigmoid_phi_grad)
-        log_dspeed = _safe_log(max_speed * sigmoid_speed_grad)
+        log_dspeed = _safe_log(radial_bound * sigmoid_speed_grad)
 
         return log_r2 + log_sin_theta + log_dtheta + log_dphi + log_dspeed
 
-    def _forward_log_det_stereo3d(self, raw, max_speed):
+    def _forward_log_det_stereo3d(self, raw, max_speed, speed_bound):
         """Log det for stereographic direction + radial speed."""
         plane_x = raw[..., 0]
         plane_y = raw[..., 1]
         speed_raw = raw[..., 2]
 
         rho2 = plane_x**2 + plane_y**2
-        speed = max_speed * _bounded_sigmoid(speed_raw)
-        speed_grad = max_speed * _bounded_sigmoid_grad(speed_raw)
+        denom = 1.0 + rho2
+        direction = jnp.stack(
+            [
+                2.0 * plane_x / denom,
+                2.0 * plane_y / denom,
+                (1.0 - rho2) / denom,
+            ],
+            axis=-1,
+        )
+        radial_bound = _speed_bound(direction, max_speed, speed_bound).squeeze(-1)
+        speed = radial_bound * _bounded_sigmoid(speed_raw)
+        speed_grad = radial_bound * _bounded_sigmoid_grad(speed_raw)
 
         # Stereographic surface element on S^2 is 4 / (1 + rho^2)^2.
         log_surface = jnp.log(4.0) - 2.0 * jnp.log1p(rho2)
@@ -213,15 +255,15 @@ class _DirectionSpeedBijector(tfb.Bijector):
         for info in self._group_info:
             act = y[..., info["act_start"]:info["act_start"] + info["act_len"]]
             if info["type"] == "direction_speed_3d":
-                raw = self._inverse_ds3d(act, info["max_speed"])
+                raw = self._inverse_ds3d(act, info["max_speed"], info["speed_bound"])
             elif info["type"] == "direction_speed_stereographic_3d":
-                raw = self._inverse_stereo3d(act, info["max_speed"])
+                raw = self._inverse_stereo3d(act, info["max_speed"], info["speed_bound"])
             else:
                 raw = _safe_atanh(act)
             raws.append(raw)
         return jnp.concatenate(raws, axis=-1)
 
-    def _inverse_ds3d(self, action, max_speed):
+    def _inverse_ds3d(self, action, max_speed, speed_bound):
         """Transform (x, y, z) → (theta_raw, phi_raw, speed_raw)."""
         x = action[..., 0]
         y = action[..., 1]
@@ -237,11 +279,13 @@ class _DirectionSpeedBijector(tfb.Bijector):
         # phi = atan2(y, x), normalize to [0, 2π]
         phi = jnp.arctan2(y, x)
         phi = jnp.where(phi < 0, phi + 2.0 * jnp.pi, phi)
+        direction = action / jnp.clip(r[..., None], 1e-12, 1e8)
+        radial_bound = _speed_bound(direction, max_speed, speed_bound).squeeze(-1)
 
         # Invert sigmoids
         theta_frac = jnp.clip(theta / jnp.pi, eps, 1.0 - eps)
         phi_frac = jnp.clip(phi / (2.0 * jnp.pi), eps, 1.0 - eps)
-        speed_frac = jnp.clip(r / max_speed, eps, 1.0 - eps)
+        speed_frac = jnp.clip(r / radial_bound, eps, 1.0 - eps)
 
         theta_raw = jnp.log(theta_frac / (1.0 - theta_frac))
         phi_raw = jnp.log(phi_frac / (1.0 - phi_frac))
@@ -249,7 +293,7 @@ class _DirectionSpeedBijector(tfb.Bijector):
 
         return jnp.stack([theta_raw, phi_raw, speed_raw], axis=-1)
 
-    def _inverse_stereo3d(self, action, max_speed):
+    def _inverse_stereo3d(self, action, max_speed, speed_bound):
         """Transform (x, y, z) -> (plane_x, plane_y, speed_raw)."""
         x = action[..., 0]
         y = action[..., 1]
@@ -266,7 +310,9 @@ class _DirectionSpeedBijector(tfb.Bijector):
         plane_x = direction_x / denom
         plane_y = direction_y / denom
 
-        speed_frac = jnp.clip(speed / max_speed, eps, 1.0 - eps)
+        direction = jnp.stack([direction_x, direction_y, direction_z], axis=-1)
+        radial_bound = _speed_bound(direction, max_speed, speed_bound).squeeze(-1)
+        speed_frac = jnp.clip(speed / radial_bound, eps, 1.0 - eps)
         speed_raw = jnp.log(speed_frac / (1.0 - speed_frac))
 
         return jnp.stack([plane_x, plane_y, speed_raw], axis=-1)
