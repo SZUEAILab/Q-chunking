@@ -347,7 +347,7 @@ class LiberoLowdimWrapper(gym.Env):
         self.t = 0
         self.n_episodes += 1
         if seed is not None:
-            self.seed(seed)
+            np.random.seed(seed)
         raw_obs = self.env.reset()
         return _extract_lowdim_obs(raw_obs), {}
 

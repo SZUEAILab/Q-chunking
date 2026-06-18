@@ -151,7 +151,7 @@ def main():
         print(f"\nRecording {NUM_VIDEO} rollout videos...")
         for ep in range(NUM_VIDEO):
             frames = []
-            obs = eval_env.reset()
+            obs = eval_env.reset(seed=seed + ep)
             step, done = 0, False
             while not done and step < 500:
                 if is_libero:
