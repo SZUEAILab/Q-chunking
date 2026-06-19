@@ -132,10 +132,9 @@ def make_env_and_datasets(env_name, frame_stack=None, action_clip_eps=1e-5):
     """
 
     if 'singletask' in env_name:
-        # OGBench.
-        env, train_dataset, val_dataset = ogbench.make_env_and_datasets(env_name)
-        eval_env = ogbench.make_env_and_datasets(env_name, env_only=True)
-        env = SafeMujocoStep(env)
+        # OGBench — 用我们自己的 wrapper 处理 visual 命名差异
+        from envs.ogbench_utils import make_ogbench_env_and_datasets as _make_ogbench
+        env, eval_env, train_dataset, val_dataset = _make_ogbench(env_name)
         env = EpisodeMonitor(env, filter_regexes=['.*privileged.*', '.*proprio.*'])
         eval_env = SafeMujocoStep(eval_env)
         eval_env = EpisodeMonitor(eval_env, filter_regexes=['.*privileged.*', '.*proprio.*'])

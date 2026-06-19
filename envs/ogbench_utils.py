@@ -141,11 +141,18 @@ def make_ogbench_env_and_datasets(
     if 'singletask' in splits:
         # Single-task environment.
         pos = splits.index('singletask')
-        env_name = '-'.join(splits[: pos - 1] + splits[pos:])  # Remove the dataset type.
+        # visual envs: visual-cube-triple-singletask-task2-v0
+        # env 用原名创建，dataset 用对应的 state-based 数据集（cube-triple-play-v0）
+        if 'visual' in splits[:pos]:
+            env_name = '-'.join(splits[:pos] + splits[pos:])
+            # reconstruct: cube-triple-play-v0 (visual singletask uses play dataset)
+            dataset_name = '-'.join(splits[1:pos] + ['play'] + splits[-1:])
+        else:
+            env_name = '-'.join(splits[: pos - 1] + splits[pos:])  # Remove the dataset type.
+            dataset_name = '-'.join(splits[:pos] + splits[-1:])  # Remove 'singletask' and 'task\d'.
         if not dataset_only:
             env = gymnasium.make(env_name, **env_kwargs)
             eval_env = gymnasium.make(env_name, **env_kwargs)
-        dataset_name = '-'.join(splits[:pos] + splits[-1:])  # Remove the words 'singletask' and 'task\d' (if exists).
         dataset_add_info = True
     elif 'oraclerep' in splits:
         # Environment with oracle goal representations.

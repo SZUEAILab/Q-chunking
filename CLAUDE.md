@@ -61,8 +61,8 @@ export MUJOCO_GL=egl XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_F
 | `ds_mode`                            | `none` / `posthoc` / `stereographic` / `spherical`                                             |
 | `action_chunking`                    | bool，覆写 agent 默认值                                                                                |
 | `offline_steps`                      | int，仅 `main.py` 需要                                                                               |
-| `save_interval` | int，ckpt 保存间隔（步数） |
-| `run_group` | wandb run group，默认由入口脚本设定 |
+| `save_interval`                      | int，ckpt 保存间隔（步数）                                                                             |
+| `run_group`                          | wandb run group，默认由入口脚本设定                                                                    |
 | `allow_posthoc_direction_speed_rlpd` | bool，`ds_mode=posthoc` 且 `entry=main_online.py` 时 **必须设为 `true`**，否则代码主动拒绝 |
 
 其他可透传 flag：`sparse`, `discount`, `utd_ratio`, `buffer_size`, `save_interval`, `dataset_proportion` 等，完整列表见 `schedule.py` 中 `FIELD_TO_FLAG`。
@@ -74,9 +74,11 @@ export MUJOCO_GL=egl XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_F
 | 来源                | 格式                             | 示例                                                                                                               |
 | ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **OGBench**   | `{env}-singletask{ -taskN}-v0` | `cube-triple-play-singletask-task2-v0`, `cube-double-play-singletask-v0`                                       |
+| **OGBench** (视觉)   | `{env}-visual-singletask{ -taskN}-v0` | `cube-triple-play-visual-singletask-task2-v0`                                                                      |
 | **RoboMimic** | `{task}-{type}-low_dim`        | `lift-ph-low_dim`, `can-mh-low_dim`, `square-ph-low_dim`, `transport-ph-low_dim`, `tool_hang-ph-low_dim` |
 | **LIBERO**   | `libero_{suite}/{index}`       | `libero_spatial/0`, `libero_object/2`, `libero_goal/0`                                                        |
 
+视觉环境需在 agent 配置中指定 `encoder`（`impala`、`impala_small` 等），并通过 `--agent.encoder=impala_small` 传递。
 RoboMimic `{type}`: `ph` = proficient human, `mh` = multi human。
 
 > 数据集安装详见 [docs/datasets.md](docs/datasets.md)。

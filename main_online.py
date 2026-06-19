@@ -228,10 +228,20 @@ def main(_):
     example_batch = train_dataset.sample(())
 
     agent_class = agents[config['agent_name']]
+    # 视觉环境用 env 观测初始化（图像），非视觉用 dataset 观测（状态向量）
+    ex_observations = example_batch['observations']
+    if config.get('encoder', 'none') != 'none':
+        ob, _ = env.reset()
+        ex_observations = ob[np.newaxis]
+    ex_actions = np.asarray(example_batch['actions'])
+    # 视觉环境：obs 和 act 都需要 batch dim
+    if config.get('encoder', 'none') != 'none':
+        if ex_actions.ndim == 1:
+            ex_actions = ex_actions[np.newaxis]  # (5,) → (1, 5)
     agent = agent_class.create(
         FLAGS.seed,
-        example_batch['observations'],
-        example_batch['actions'],
+        ex_observations,
+        ex_actions,
         config,
     )
 
@@ -247,16 +257,63 @@ def main(_):
     )
 
     # transition from offline to online
-    # Replay buffer stores raw actions (D), not decomposed (D+1).
-    if use_posthoc_ds:
+    if config.get('encoder', 'none') != 'none':
+        ob0 = env.reset()[0]
+        # 提高探索
+        if config.get('target_entropy_multiplier', 0.5) < 1.0:
+            config['target_entropy_multiplier'] = 1.0
+            config['target_entropy'] = None
+        # BC loss
+        config['bc_alpha'] = 0.01
+
+        # 混合 BC 渲染数据 + 随机探索数据
+        bc_file = 'visual_bc_data.npz'
+        if os.path.exists(bc_file):
+            bc = np.load(bc_file)
+            n_bc = len(bc['observations'])
+            n_rand = max(5000 - n_bc, 1000)
+            print(f'[visual] Loading {n_bc} BC frames + {n_rand} random transitions')
+            obs_arr = np.concatenate([bc['observations'], np.zeros((n_rand, 64, 64, 3), dtype=np.uint8)])
+            act_arr = np.concatenate([bc['actions'][:n_bc], np.zeros((n_rand, 5), dtype=np.float32)])
+            for i in range(n_rand):
+                action = env.action_space.sample()
+                ob = env.reset()[0] if i % 200 == 0 else ob0
+                next_ob, _, _, _, _ = env.step(action)
+                obs_arr[n_bc + i] = ob
+                act_arr[n_bc + i] = action
+                ob0 = next_ob
+        else:
+            n_total = 5000
+            obs_arr = np.zeros((n_total, 64, 64, 3), dtype=np.uint8)
+            act_arr = np.zeros((n_total, 5), dtype=np.float32)
+            for i in range(n_total):
+                action = env.action_space.sample()
+                ob = env.reset()[0] if i % 500 == 0 else ob0
+                next_ob, _, _, _, _ = env.step(action)
+                obs_arr[i] = ob; act_arr[i] = action; ob0 = next_ob
+
+        init_dataset = {
+            'observations': obs_arr, 'actions': act_arr,
+            'next_observations': obs_arr, 'rewards': np.zeros(len(obs_arr), dtype=np.float32),
+            'terminals': np.zeros(len(obs_arr), dtype=np.float32),
+            'masks': np.ones(len(obs_arr), dtype=np.float32),
+        }
+        replay_buffer = ReplayBuffer.create_from_initial_dataset(init_dataset, size=FLAGS.buffer_size)
+    elif use_posthoc_ds:
         _raw_ex = dict(example_batch)
         _raw_ex['actions'] = compose(example_batch['actions'][np.newaxis])[0]
         replay_buffer = ReplayBuffer.create(_raw_ex, size=FLAGS.buffer_size)
     else:
         replay_buffer = ReplayBuffer.create(example_batch, size=FLAGS.buffer_size)
-        
+
+    # 视觉环境：加载 BC 数据，每个训练 batch 强制注入
+    _bc_frames = None
+    if config.get('encoder', 'none') != 'none' and os.path.exists('visual_bc_full.npz'):
+        _bc_frames = dict(np.load('visual_bc_full.npz'))
+        print(f"[visual] Loaded {len(_bc_frames['observations'])} BC frames for batch injection")
+
     ob, _ = env.reset()
-    
+
     action_queue = []
 
     from collections import defaultdict
@@ -336,23 +393,57 @@ def main(_):
             ob = next_ob
 
         if i >= FLAGS.start_training:
-            dataset_batch = train_dataset.sample_sequence(config['batch_size'] // 2 * FLAGS.utd_ratio,
-                        sequence_length=FLAGS.horizon_length, discount=discount)
-            replay_batch = replay_buffer.sample_sequence(FLAGS.utd_ratio * config['batch_size'] // 2,
-                sequence_length=FLAGS.horizon_length, discount=discount)
+            # 视觉环境：只用 replay buffer，修正 horizon 维度位置
+            if config.get('encoder', 'none') != 'none':
+                replay_batch = replay_buffer.sample_sequence(
+                    FLAGS.utd_ratio * config['batch_size'],
+                    sequence_length=FLAGS.horizon_length, discount=discount)
+                replay_batch = replay_buffer.sample_sequence(
+                    FLAGS.utd_ratio * config['batch_size'],
+                    sequence_length=FLAGS.horizon_length, discount=discount)
+                batch = {k: replay_batch[k].reshape(
+                    (FLAGS.utd_ratio, config['batch_size']) + replay_batch[k].shape[1:]
+                ) for k in replay_batch}
+                # 注入完整 BC transitions (s, a, r, s') 到每个 batch
+                if _bc_frames is not None and len(_bc_frames['observations']) > 0:
+                    n_bc = 128
+                    _bc_idx = np.random.randint(0, len(_bc_frames['observations']), n_bc)
+                    # observations: (B, 64, 64, 3)
+                    batch['observations'][:, :n_bc] = _bc_frames['observations'][_bc_idx].reshape(1, n_bc, 64, 64, 3)
+                    # actions: (B, 1, 5)
+                    batch['actions'][:, :n_bc] = _bc_frames['actions'][_bc_idx].reshape(1, n_bc, 1, 5)
+                    # next_observations: Dataset.sample_sequence 把 horizon 放在 -2 位置
+                    batch['next_observations'][:, :n_bc] = _bc_frames['next_observations'][_bc_idx].reshape(1, n_bc, 64, 64, 1, 3)
+                    # rewards + masks + terminals
+                    batch['rewards'][:, :n_bc] = _bc_frames['rewards'][_bc_idx].reshape(1, n_bc, 1)
+                    batch['masks'][:, :n_bc] = 1.0  # BC transitions are valid steps
+                    batch['terminals'][:, :n_bc] = 0.0
+                # Dataset.sample_sequence 把 horizon 放在 -2 位置；移到 axis=1
+                for k in ('next_observations', 'next_actions', 'full_observations'):
+                    if k in batch and batch[k].ndim >= 5:
+                        batch[k] = np.moveaxis(batch[k], -2, 1)
+            else:
+                dataset_batch = train_dataset.sample_sequence(config['batch_size'] // 2 * FLAGS.utd_ratio,
+                            sequence_length=FLAGS.horizon_length, discount=discount)
+                replay_batch = replay_buffer.sample_sequence(FLAGS.utd_ratio * config['batch_size'] // 2,
+                    sequence_length=FLAGS.horizon_length, discount=discount)
+                batch = {k: np.concatenate([
+                    dataset_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + dataset_batch[k].shape[1:]),
+                    replay_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + replay_batch[k].shape[1:])], axis=1) for k in dataset_batch}
 
-            if use_posthoc_ds:
-                replay_batch = dict(replay_batch)
-                for k in ('actions', 'next_actions'):
-                    if k in replay_batch:
-                        replay_batch[k] = decompose_chunked(
-                            replay_batch[k], FLAGS.horizon_length
-                        ).reshape(replay_batch[k].shape[0], FLAGS.horizon_length, -1)
-                replay_batch = jax.tree_util.tree_map(lambda x: x, replay_batch)
+            if config.get('encoder', 'none') == 'none':
+                if use_posthoc_ds:
+                    replay_batch = dict(replay_batch)
+                    for k in ('actions', 'next_actions'):
+                        if k in replay_batch:
+                            replay_batch[k] = decompose_chunked(
+                                replay_batch[k], FLAGS.horizon_length
+                            ).reshape(replay_batch[k].shape[0], FLAGS.horizon_length, -1)
+                    replay_batch = jax.tree_util.tree_map(lambda x: x, replay_batch)
 
-            batch = {k: np.concatenate([
-                dataset_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + dataset_batch[k].shape[1:]),
-                replay_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + replay_batch[k].shape[1:])], axis=1) for k in dataset_batch}
+                batch = {k: np.concatenate([
+                    dataset_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + dataset_batch[k].shape[1:]),
+                    replay_batch[k].reshape((FLAGS.utd_ratio, config["batch_size"] // 2) + replay_batch[k].shape[1:])], axis=1) for k in dataset_batch}
 
             agent, update_info["online_agent"] = agent.batch_update(batch)
             

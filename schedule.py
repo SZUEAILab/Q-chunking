@@ -62,6 +62,7 @@ FIELD_TO_FLAG = {
     'video_episodes':        '--video_episodes',
     'run_group':             '--run_group',
     'action_chunking':       '--agent.action_chunking',
+    'encoder':               '--agent.encoder',
     'agent':                 '--agent',
     'discount':              '--discount',
     'utd_ratio':             '--utd_ratio',

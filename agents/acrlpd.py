@@ -8,6 +8,7 @@ import ml_collections
 import optax
 from flax import linen as nn
 
+from utils.encoders import encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from rlpd_networks import Ensemble, StateActionValue, MLP
 from rlpd_distributions import DirectionSpeedNormal, TanhNormal
@@ -18,6 +19,7 @@ from functools import partial
 
 class Temperature(nn.Module):
     initial_temperature: float = 1.0
+    min_temperature: float = 0.1  # 防止 alpha 坍缩到零
 
     @nn.compact
     def __call__(self) -> jnp.ndarray:
@@ -25,7 +27,7 @@ class Temperature(nn.Module):
             "log_temp",
             init_fn=lambda key: jnp.full((), jnp.log(self.initial_temperature)),
         )
-        return jnp.exp(log_temp)
+        return jnp.maximum(jnp.exp(log_temp), self.min_temperature)
 
 
 def _uses_ds_bijector(config):
@@ -77,6 +79,22 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
     rng: Any
     network: Any
     config: Any = nonpytree_field()
+    _encoder: Any = nonpytree_field()  # 独立于 ModuleDict 的视觉编码器
+
+    def _encoder_apply(self, observations):
+        """Run visual encoder. Handles (H,W,C), (B,H,W,C), (B,T,H,W,C)."""
+        if self._encoder is not None:
+            apply_fn, variables = self._encoder
+            squeeze = observations.ndim == 3  # single image, no batch dim
+            if squeeze:
+                observations = observations[jnp.newaxis]
+            if observations.ndim >= 5:
+                result = jax.vmap(lambda t: apply_fn(variables, t),
+                                  in_axes=1, out_axes=1)(observations)
+            else:
+                result = apply_fn(variables, observations)
+            return result[0] if squeeze else result
+        return observations
 
     def critic_loss(self, batch, grad_params, rng):
         """Compute the SAC critic loss."""
@@ -90,18 +108,20 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
 
         rng, sample_rng = jax.random.split(rng)
 
-        next_dist = self.network.select('actor')(batch['next_observations'][..., -1, :])
+        # 取最后一个 timestep 的观测（时间维在 axis=1）
+        last_obs = batch['next_observations'][:, -1]  # (B, *obs_shape)
+        next_dist = self.network.select('actor')(self._encoder_apply(last_obs))
         next_actions = next_dist.sample(seed=sample_rng)
 
-        next_qs = self.network.select('target_critic')(batch['next_observations'][..., -1, :], next_actions)
+        next_qs = self.network.select('target_critic')(self._encoder_apply(last_obs), next_actions)
         if self.config['q_agg'] == 'min':
             next_q = next_qs.min(axis=0)
         else:
             next_q = next_qs.mean(axis=0)
 
         target_q = batch['rewards'][..., -1] + (self.config['discount'] ** self.config["horizon_length"]) * batch['masks'][..., -1] * next_q
-        
-        q = self.network.select('critic')(batch['observations'], batch_actions, params=grad_params)
+
+        q = self.network.select('critic')(self._encoder_apply(batch['observations']), batch_actions, params=grad_params)
         critic_loss = (jnp.square(q - target_q) * batch['valid'][..., -1]).mean()
 
         return critic_loss, {
@@ -120,12 +140,12 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
         else:
             batch_actions = batch["actions"][..., 0, :]
 
-        dist = self.network.select('actor')(batch['observations'], params=grad_params)
+        dist = self.network.select('actor')(self._encoder_apply(batch['observations']), params=grad_params)
         actions = dist.sample(seed=rng)
         log_probs = dist.log_prob(actions)
 
         # Actor loss.
-        qs = self.network.select('critic')(batch['observations'], actions)
+        qs = self.network.select('critic')(self._encoder_apply(batch['observations']), actions)
         q = jnp.mean(qs, axis=0)
 
         actor_loss = (log_probs * self.network.select('alpha')() - q).mean()
@@ -209,7 +229,7 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
         rng=None,
     ):
         """Sample actions from the actor."""
-        dist = self.network.select('actor')(observations)
+        dist = self.network.select('actor')(self._encoder_apply(observations))
         actions = dist.sample(seed=rng)
         actions = jnp.clip(actions, -1, 1)
         return actions
@@ -231,7 +251,7 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
             config: Configuration dictionary.
         """
         rng = jax.random.PRNGKey(seed)
-        rng, init_rng = jax.random.split(rng, 2)
+        rng, init_rng, encoder_rng = jax.random.split(rng, 3)
 
         action_dim = ex_actions.shape[-1]
         if config["action_chunking"]:
@@ -270,12 +290,38 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
         # Define the dual alpha variable.
         alpha_def = Temperature(config["init_temp"])
 
+        # Encoder: 独立初始化，作为 (apply_fn, vars) 存非 pytree 字段
+        encoder = None
+        if config.get('encoder', 'none') != 'none':
+            enc_name = config['encoder']
+            encoder_def = encoder_modules[enc_name]()
+            encoder_vars = encoder_def.init(encoder_rng, ex_observations)
+            # 预训练权重注入
+            if enc_name == 'resnet10_pretrained':
+                pretrained = encoder_def.load_pretrained_weights()
+                if pretrained is not None:
+                    for k, v in pretrained.items():
+                        if k in encoder_vars['params']:
+                            pt = encoder_vars['params'][k]
+                            # 只覆盖 kernel，跳过 None bias（ResNet-18 无 bias）
+                            for sub_k, sub_v in v.items():
+                                if sub_k in pt and sub_v is not None:
+                                    pt[sub_k] = sub_v
+                    n_params = sum(x.size for x in jax.tree.leaves(pretrained) if x is not None and hasattr(x, 'size'))
+                    print(f'[ResNet10] Loaded {n_params/1e6:.1f}M pretrained conv params from ImageNet')
+            encoder = (encoder_def.apply, encoder_vars)
+            # CNN→flat→MLP(512)→512
+            obs_for_net = jnp.zeros((ex_observations.shape[0], 512))
+        else:
+            obs_for_net = ex_observations
+
         network_info = dict(
-            critic=(critic_def, (ex_observations, full_actions)),
-            target_critic=(copy.deepcopy(critic_def), (ex_observations, full_actions)),
-            actor=(actor_def, (ex_observations,)),
+            critic=(critic_def, (obs_for_net, full_actions)),
+            target_critic=(copy.deepcopy(critic_def), (obs_for_net, full_actions)),
+            actor=(actor_def, (obs_for_net,)),
             alpha=(alpha_def, ()),
         )
+
         networks = {k: v[0] for k, v in network_info.items()}
         network_args = {k: v[1] for k, v in network_info.items()}
 
@@ -287,7 +333,8 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
         params = network.params
         params['modules_target_critic'] = params['modules_critic']
 
-        return cls(rng, network=network, config=flax.core.FrozenDict(**config))
+        return cls(rng, network=network, config=flax.core.FrozenDict(**config),
+                   _encoder=encoder)
     
 def get_config():
     config = ml_collections.ConfigDict(
@@ -314,6 +361,7 @@ def get_config():
             use_direction_speed=False,  # Backward-compatible alias for use_ds_bijector.
             ds_max_speed=1.0,
             ds_bijector_type="spherical",  # "spherical" or "stereographic"/"cartesian".
+            encoder='none',  # Visual encoder: 'none' (state), 'impala', 'impala_small', etc.
             init_temp=1.0,
         )
     )
