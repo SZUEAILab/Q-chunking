@@ -14,6 +14,9 @@ logs/
 
 *.json
 !tasks.example.json
+!docs/ds-visualizer/package.json
+!docs/ds-visualizer/package-lock.json
+!docs/ds-visualizer/components.json
 *.compiled.json
 
 *.log

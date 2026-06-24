@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction-Speed 方法与动作流水线</title>
+<!-- Independent Vite project for the Direction-Speed visualization. -->
+
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-background text-foreground antialiased">
+<div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
+<div class="site-controls" aria-label="Display controls">
+  <div class="language-switch" role="group" aria-label="Language">
+    <button class="control-button" data-lang-option="zh" type="button" aria-pressed="true">中文</button>
+    <button class="control-button" data-lang-option="en" type="button" aria-pressed="false">EN</button>
+  </div>
+  <button class="control-button theme-toggle" id="themeToggle" type="button">日间</button>
+</div>
+<button class="back-to-top" id="backToTop" type="button" aria-label="返回顶部">↑</button>
+<main class="page mx-auto flex max-w-[1480px] flex-col gap-6 px-4 py-10 md:px-6 lg:gap-8 lg:py-12">
+  <section id="overview" class="hero scroll-mt-8" aria-labelledby="title">
+    <div class="hero-copy shadcn-card rounded-2xl p-6 backdrop-blur-xl md:p-8">
+      <div class="eyebrow">Direction-Speed Architecture（方向速度架构）</div>
+      <h1 id="title">Direction-Speed Policy Parameterization（方向速度策略参数化）</h1>
+      <section class="academic-abstract" aria-label="Abstract">
+        <div>
+          <span class="abstract-kicker">Abstract（摘要）</span>
+          <p>
+            本页按“问题动机 → 方法定义 → 概率参数化 → 执行流水线”的顺序组织：先交代 action space（动作空间）、
+            SAC actor/critic（策略网络 / 价值网络）和 explore/exploit（探索 / 利用），再说明 Cartesian Gaussian（笛卡尔高斯）
+            为什么会诱导不稳定的 direction cone（方向视锥），随后引出 direction × speed（方向 × 速度）分层，
+            最后对比 Integrated DS（分布内集成）与 Adapter DS（动作适配器）的训练变量、执行变量和 log_prob（对数概率）边界。
+          </p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <nav class="shadcn-nav sticky top-3 z-20 rounded-xl p-2 backdrop-blur-xl" aria-label="页面章节导航">
+    <div class="shadcn-nav-header">
+      <div class="shadcn-nav-title">Contents（目录）</div>
+      <p>按方法论顺序阅读：问题 → 方法 → 实现 → 总结</p>
+    </div>
+    <ol class="shadcn-nav-list">
+      <li><a class="rounded-md px-3 py-2 transition" href="#overview"><span class="nav-index">00</span><span class="nav-label">摘要</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#background"><span class="nav-index">01</span><span class="nav-label">背景与动机</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#cone"><span class="nav-index">02</span><span class="nav-label">方向视锥</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#method"><span class="nav-index">03</span><span class="nav-label">方法定义</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#probability"><span class="nav-index">04</span><span class="nav-label">概率参数化</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#speed-bound"><span class="nav-index">05</span><span class="nav-label">速度边界</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#pipeline"><span class="nav-index">06</span><span class="nav-label">模块流水线</span></a></li>
+      <li><a class="rounded-md px-3 py-2 transition" href="#summary"><span class="nav-index">07</span><span class="nav-label">总结边界</span></a></li>
+    </ol>
+    <div class="shadcn-nav-footer" aria-live="polite">
+      <span>当前章节</span>
+      <strong id="activeNavLabel">摘要</strong>
+    </div>
+  </nav>
+
+  <section id="background" class="section-grid scroll-mt-24 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]" aria-labelledby="xyzTitle">
+    <article class="analysis-panel shadcn-card rounded-2xl p-6 backdrop-blur-xl">
+      <div class="panel-title">
+        <h2 id="xyzTitle">1. 背景：Action Space（动作空间）与 SAC</h2>
+        <span class="pill" style="--accent: var(--red)">先看随机策略在什么坐标里探索</span>
+        <p>OGBench 5D 动作里，前三维是末端位置增量 <code>dx, dy, dz</code>，通常是 expressed in world frame 的 EE position delta；后两维是 yaw 和 gripper。SAC 在这个动作空间上学习随机策略。</p>
+      </div>
+      <div class="reason-stack">
+        <div class="reason-item">
+          <div class="reason-mark">1</div>
+          <div>
+            <strong>Action Space（动作空间）先决定方向语义</strong>
+            <span>Delta World 的方向是全局坐标方向；Delta EE 的方向是末端局部方向。本文讨论的是前三维位移向量上的方向与速度。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">2</div>
+          <div>
+            <strong>Critic（价值网络）拟合 TD Target（时序差分目标）</strong>
+            <span><code>Q(s,aπ)</code> 评估训练用 policy action（策略动作），训练目标是 Bellman backup（贝尔曼备份）形成的一步 TD target；采样的下一步动作来自当前 actor（策略网络）。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">3</div>
+          <div>
+            <strong>Actor（策略网络）输出 μ 和 σ</strong>
+            <span><code>μ</code> 表示动作分布中心，偏 exploit（利用）；<code>σ</code> 表示采样尺度，偏 explore（探索）。问题在于 σ 的坐标语义是否可解释。</span>
+          </div>
+        </div>
+        <div class="reason-item">
+          <div class="reason-mark">4</div>
+          <div>
+            <strong>Explore / Exploit（探索 / 利用）要能被解释</strong>
+            <span>如果 σ 只是在 XYZ 坐标轴上变大，就很难说它增加的是方向探索、速度探索，还是二者的混合。</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="analysis-panel shadcn-card rounded-2xl p-6 backdrop-blur-xl">
+      <div class="panel-title">
+        <h2>2. 动机：XYZ 表示不等于任务语义</h2>
+        <span class="pill" style="--accent: var(--green)">问题不是维度，而是坐标系</span>
+        <p>直接用 TanhNormal 在 <code>dx,dy,dz</code> 上采样可以运行，但三维 Cartesian 坐标不是任务真正关心的语义坐标。位移动作同时包含方向和速度。</p>
+      </div>
+      <div class="optimize-grid">
+        <div class="optimize-item">
+          <strong>1. 方向和速度纠缠</strong>
+          <span><code>(dx,dy,dz)</code> 同时决定方向 <code>v/||v||</code> 和速度 <code>||v||</code>，一次噪声会同时改变两个语义。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>2. σ 先形成动作置信椭球</strong>
+          <span>Cartesian 高斯的 <code>σx,σy,σz</code> 定义的是固定置信水平下的动作采样椭球，而不是直接定义方向探索。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>3. μ 的长度会改变方向探索</strong>
+          <span>同样置信水平、同样体积的蓝色椭球，离原点越近，从原点看过去张开的方向视锥越大。</span>
+        </div>
+        <div class="optimize-item">
+          <strong>4. chunk 会重复这个问题</strong>
+          <span><code>H=5</code> 时每一步都有一组三维位移；方向、速度和标量动作的边界更需要清楚。</span>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section id="cone" class="scene-section shadcn-subtle scroll-mt-24 rounded-2xl p-3 md:p-4" aria-labelledby="coneSectionTitle">
+    <div class="section-heading">
+      <h2 id="coneSectionTitle">3. 可视化：固定 σ 如何变成不同方向视锥</h2>
+      <span class="pill" style="--accent: var(--red)">Three.js（3D 可视化）交互视锥</span>
+      <p>
+        蓝色球/椭球表示 Cartesian 高斯在 <code>[dx,dy,dz]</code> 空间里的固定置信水平采样区域，例如 95%
+        概率质量对应的一层等概率置信椭球；红色锥体表示从原点看过去，这个局部采样区域诱导出的方向探索范围。
+        保持 <code>σ</code> 不变时，只有 <code>l=||μ||</code> 变小，方向角也会被放大。
+      </p>
+      <p class="caveat">
+        <small>这里的"95% 置信椭球"指<strong>联合置信区域</strong>（Mahalanobis 距离 ≤ χ²_D(p)，保证总概率质量 = 95%），不是"每维 95% 区间拼成的长方体"——后者只包含 0.95³ ≈ 85.7% 的联合质量。两者形状、含义都不同，不能混用。</small>
+      </p>
+    </div>
+
+    <div class="cone-stage grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <aside class="scene-card cone-card" aria-label="Three.js direction cone explorer">
+        <div id="coneScene"></div>
+        <div class="scene-fallback" id="coneFallback">
+          Three.js 未加载时无法显示交互视锥。
+        </div>
+        <div class="scene-label">
+          <strong>蓝色 = 固定置信水平的采样椭球；红色 = 方向探索视锥</strong>
+          <span>当蓝色 95% 置信椭球靠近原点时，同样的体积会张开更大的方向视锥，所以小动作更容易出现方向抖动。</span>
+        </div>
+        <div class="scene-tools" aria-label="视锥场景控制">
+          <button class="scene-tool" id="coneReset" type="button">重置视角</button>
+          <button class="scene-tool active" id="coneAuto" type="button" aria-pressed="true">自动旋转</button>
+        </div>
+      </aside>
+
+      <section class="analysis-panel cone-controls shadcn-card rounded-2xl p-6 backdrop-blur-xl" aria-label="Cone controls">
+        <div class="panel-title">
+          <h3>视锥参数</h3>
+          <span class="pill" style="--accent: var(--blue)">θ ≈ asin(σ / l)</span>
+          <p>这里把均值方向固定在 x 轴，只改变均值长度和探索半径，用来隔离说明方向噪声为何会随动作幅度变化。</p>
+        </div>
+
+        <div class="range-row">
+          <label for="coneMu">
+            <span>均值长度 l = ||μ||</span>
+            <output id="coneMuValue" for="coneMu">1.60</output>
+          </label>
+          <input id="coneMu" type="range" min="0.35" max="2.60" step="0.01" value="1.60">
+          <small>l 越小，蓝色置信椭球越接近原点，红色方向视锥越容易张开。</small>
+        </div>
+
+        <div class="range-row">
+          <label for="coneSigma">
+            <span>固定探索半径 σ</span>
+            <output id="coneSigmaValue" for="coneSigma">0.32</output>
+          </label>
+          <input id="coneSigma" type="range" min="0.08" max="0.70" step="0.01" value="0.32">
+          <small>σ 表示 Cartesian 三维高斯的局部采样尺度；在 DS 中，方向 σ 和速度 σ 会被分开解释。</small>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <strong id="coneThetaValue">11.5°</strong>
+            <span>方向半角 θ。越大表示同样采样噪声会造成更剧烈的方向变化。</span>
+          </div>
+          <div class="metric-card">
+            <strong id="coneRatioValue">0.20</strong>
+            <span>σ / l。这个比值越高，Cartesian 探索越不像“沿原方向微调”。</span>
+          </div>
+        </div>
+
+        <p class="cone-note">
+          这正是 direction-speed 分层的动机：让方向维度的 σ 直接控制方向探索视锥，让速度维度的 σ 只影响速度探索，
+          不再让 <code>||μ||</code> 隐式改变方向探索强度。
+        </p>
+      </section>
+    </div>
+  </section>
+
+  <section id="method" class="scene-section shadcn-subtle scroll-mt-24 rounded-2xl p-3 md:p-4" aria-labelledby="sceneSectionTitle">
+    <div class="scene-stage grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
+      <aside class="scene-card" aria-label="Three.js 3D action flow">
+        <div id="threeScene"></div>
+        <div class="scene-fallback" id="sceneFallback">
+          正在切换内置 Canvas 动画。
+        </div>
+        <div class="scene-label">
+          <strong id="sceneTitle">把上一节的问题拆开：方向由 u 控制，速度由 m 控制</strong>
+          <span id="sceneText">红色锥形空间表示方向探索 <code>σu</code>，蓝色锥台壳段表示 normalized speed ratio 的探索区间。</span>
+        </div>
+        <div class="scene-tools" aria-label="方向速度场景控制">
+          <button class="scene-tool" id="dsReset" type="button">重置视角</button>
+          <button class="scene-tool active" id="dsAuto" type="button" aria-pressed="true">自动旋转</button>
+        </div>
+        <div class="ds-scene-hint">拖拽旋转 3D 视角</div>
+      </aside>
+
+      <section class="animation-panel shadcn-card rounded-2xl p-6 backdrop-blur-xl" aria-labelledby="sceneSectionTitle">
+        <div class="panel-title">
+          <h2 id="sceneSectionTitle">4. 方法定义：把 XYZ 探索改写成 Direction × Speed（方向 × 速度）</h2>
+          <span class="pill" style="--accent: var(--violet)">v = ρ R(u) u, ρ ∈ [0,1]</span>
+          <p>环境仍执行 <code>v=(dx,dy,dz)</code>；策略内部把它拆成方向 <code>u</code> 和 normalized speed ratio <code>ρ</code>，再 compose 回 3D 位移。</p>
+        </div>
+        <p class="interaction-note">
+          拖 <code>yaw/pitch</code> 看方向变；拖 <code>m</code> 看半径变；拖 <code>σu</code> 看红色方向锥变宽，拖 <code>σm</code> 看蓝色球壳锥台展开。
+        </p>
+
+        <div class="ds-control-grid">
+          <div class="range-row">
+            <label for="dsYaw">
+              <span>方向 yaw</span>
+              <output id="dsYawValue" for="dsYaw">34°</output>
+            </label>
+            <input id="dsYaw" type="range" min="-140" max="140" step="1" value="34">
+            <small>改变单位方向 <code>u</code>。</small>
+          </div>
+          <div class="range-row">
+            <label for="dsPitch">
+              <span>方向 pitch</span>
+              <output id="dsPitchValue" for="dsPitch">20°</output>
+            </label>
+            <input id="dsPitch" type="range" min="-55" max="55" step="1" value="20">
+            <small>和 yaw 一起定义 <code>u</code>。</small>
+          </div>
+          <div class="range-row">
+            <label for="dsSpeed">
+              <span>normalized speed ρ</span>
+              <output id="dsSpeedValue" for="dsSpeed">0.62</output>
+            </label>
+            <input id="dsSpeed" type="range" min="0.05" max="0.95" step="0.01" value="0.62">
+            <small>表示沿当前方向走到 cube 边界的比例。</small>
+          </div>
+          <div class="range-row">
+            <label for="dsDirSigma">
+              <span>方向探索 σu</span>
+              <output id="dsDirSigmaValue" for="dsDirSigma">0.18</output>
+            </label>
+            <input id="dsDirSigma" type="range" min="0.02" max="0.42" step="0.01" value="0.18">
+            <small>控制红色方向锥角。</small>
+          </div>
+          <div class="range-row">
+            <label for="dsSpeedSigma">
+              <span>速度 raw 探索 σm</span>
+              <output id="dsSpeedSigmaValue" for="dsSpeedSigma">0.16</output>
+            </label>
+            <input id="dsSpeedSigma" type="range" min="0.02" max="0.40" step="0.01" value="0.16">
+            <small>经 sigmoid 后变成蓝色球壳锥台。</small>
+          </div>
+        </div>
+
+        <div class="ds-readout">
+          <div class="metric-card">
+            <strong id="dsUValue">(0.78, 0.34, 0.52)</strong>
+            <span>方向 <code>u</code>，始终在单位球面上。</span>
+          </div>
+          <div class="metric-card">
+            <strong id="dsVValue">(1.09, 0.48, 0.73)</strong>
+            <span>环境动作 <code>v=m u</code>。</span>
+          </div>
+        </div>
+
+        <div class="ds-legend-summary">
+          <div class="legend-row" aria-label="3D legend">
+            <span class="legend-chip"><span class="legend-dot amber"></span>raw / composed v</span>
+            <span class="legend-chip"><span class="legend-dot green"></span>direction u</span>
+            <span class="legend-chip"><span class="legend-dot red"></span>direction σu</span>
+            <span class="legend-chip"><span class="legend-dot blue"></span>speed σm</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section id="probability" class="implementation-panel shadcn-card scroll-mt-24 rounded-2xl p-6 backdrop-blur-xl" aria-labelledby="implTitle">
+    <div class="panel-title">
+      <h2 id="implTitle">5. 概率参数化：Action（动作）层级与方向分布</h2>
+      <span class="pill" style="--accent: var(--cyan)">Integrated（分布内集成） · Adapter（动作适配器）</span>
+      <p>spherical（球坐标）、stereographic（立体投影）和 tangent（切空间）是 Integrated DS（分布内集成）的三种方向分布；Adapter DS（动作适配器）来自 <code>direction_speed/adapter.py</code>，负责 policy/env action（策略动作 / 环境动作）坐标转换。</p>
+    </div>
+
+    <div class="action-primer" aria-label="三种 action 层级">
+      <div class="action-primer-title">
+        <h3>5.1 三种 Action（动作）变量</h3>
+        <span class="pill" style="--accent: var(--amber)">从 Actor（策略网络）采样到 env.step</span>
+        <p>
+          下面的差别只回答一个问题：SAC 训练看到的 policy action（策略动作）和环境原生 env action（环境动作）是不是同一个变量。
+          Baseline（基线）中二者相同；Integrated DS（分布内集成）中通常也相同；但 Integrated DS 仍然可以和 Adapter DS（动作适配器）组合，此时还要看后面的执行层 <code>g</code>。
+        </p>
+      </div>
+
+      <div class="action-flow" aria-label="Action pipeline">
+        <div class="action-token">
+          <span class="action-symbol">z / ξ</span>
+          <strong>latent value（潜在变量）</strong>
+          <span>Actor（策略网络）从 Gaussian（高斯分布）采样出的未 squash（压缩）值。Baseline（基线）常写 <code>z</code>，Integrated DS（分布内集成）常写 <code>ξ</code>。</span>
+        </div>
+        <div class="action-token">
+          <span class="action-symbol">aπ</span>
+          <strong>policy action（策略动作）</strong>
+          <span>Actor（策略网络）暴露给 SAC loss（损失函数）、log_prob（对数概率）和 Critic（价值网络）的动作。Baseline（基线）中是 <code>tanh(z)</code>，Integrated DS（分布内集成）中是 <code>f(ξ)</code>；Adapter DS（动作适配器）中是 compose（合成）前的 <code>â</code>。</span>
+        </div>
+        <div class="action-token">
+          <span class="action-symbol">a_env</span>
+          <strong>env action（环境动作）</strong>
+          <span>环境原生动作，也就是 dataset（数据集）/ replay buffer（回放缓冲区）/ <code>env.step</code> 真正使用的 5D 动作。</span>
+        </div>
+      </div>
+
+      <div class="action-compare" aria-label="Action equations">
+        <div class="action-path">
+          <b>Baseline（基线）</b>
+          <code>aπ = a_env = tanh(z)</code>
+        </div>
+        <div class="action-path">
+          <b>Integrated DS（分布内集成）</b>
+          <code>aπ = f(ξ); 仅当 g = identity 时 a_env = aπ</code>
+        </div>
+        <div class="action-path adapter">
+          <b>Adapter DS（动作适配器）</b>
+          <code>aπ = DS coordinates, a_env = compose(aπ)</code>
+        </div>
+        <div class="action-path">
+          <b>Integrated DS + Adapter DS（分布内集成 + 动作适配器）</b>
+          <code>aπ = f(ξ), a_env = compose(aπ)</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-primer-title">
+      <h3>5.2 方法卡片：Baseline（基线）、Adapter（动作适配器）与 Integrated（分布内集成）</h3>
+      <span class="pill" style="--accent: var(--cyan)">选择 tab（标签页）查看对应实现</span>
+      <p>这一组卡片只比较变量边界和数据流：Baseline（基线）直接使用 XYZ，Adapter（动作适配器）在执行前 compose（合成），Integrated（分布内集成）在概率分布内部完成几何变换。</p>
+    </div>
+
+    <div class="mode-tabs" role="tablist" aria-label="DS implementation modes">
+      <button class="mode-tab active" id="tab-none" data-mode="none" role="tab" aria-selected="true" aria-controls="panel-none" type="button">Baseline（基线）/ XYZ</button>
+      <button class="mode-tab" id="tab-adapter" data-mode="adapter" role="tab" aria-selected="false" aria-controls="panel-adapter" type="button">Adapter（动作适配器）</button>
+      <button class="mode-tab" id="tab-spherical" data-mode="spherical" role="tab" aria-selected="false" aria-controls="panel-spherical" type="button">Spherical（球坐标）</button>
+      <button class="mode-tab" id="tab-stereo" data-mode="stereo" role="tab" aria-selected="false" aria-controls="panel-stereo" type="button">Stereographic（立体投影）</button>
+      <button class="mode-tab" id="tab-tangent" data-mode="tangent" role="tab" aria-selected="false" aria-controls="panel-tangent" type="button">Tangent（切空间）</button>
+    </div>
+
+    <div class="mode-panel active" id="panel-none" role="tabpanel" aria-labelledby="tab-none">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h4>Baseline（基线）实现</h4>
+          <ul class="formula-list">
+            <li>actor 输出 <code>D</code> 维 TanhNormal；OGBench 是 <code>[dx,dy,dz,dyaw,grip]</code>。</li>
+            <li>critic、dataset、env 都使用同一个 raw 5D action。</li>
+            <li>每个维度独立建模，三维位移的方向和速度没有显式结构。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">严格 log_prob</span>
+            <span class="mini-badge warn">XYZ 轴向探索</span>
+            <span class="mini-badge">baseline</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h4>Baseline（基线）数据流</h4>
+          <pre>Normal(μ, σ)
+  -> raw sample z
+  -> tanh
+  -> aπ = [dx, dy, dz, dyaw, grip]
+  -> a_env = aπ
+
+Q(s,aπ) 和 log π(aπ|s)
+都对应 tanh 后的 policy action。
+此时也可写成 Q(s,a_env)。</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-adapter" role="tabpanel" aria-labelledby="tab-adapter">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h4>Adapter DS（动作适配器）实现</h4>
+          <ul class="formula-list">
+            <li><code>decompose</code>: <code>xyz -> unit_direction + speed_coord</code>，其余维度原样保留。</li>
+            <li><code>speed_coord = 2 * (||xyz|| / R(u)) - 1</code>，其中 <code>R(u)=1/max(|u_i|)</code>。</li>
+            <li><code>compose</code>: 先 normalize direction，再用 <code>ρ=(speed_coord+1)/2</code> 还原 <code>xyz=ρR(u)u</code>。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge warn">D+1 表示</span>
+            <span class="mini-badge bad">非可逆</span>
+            <span class="mini-badge good">FQL 可用</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h4>Adapter（动作适配器）核心映射</h4>
+          <pre>r = ||xyz||
+u = xyz / max(r, eps)
+R(u) = 1 / max(abs(u))
+speed_coord = 2 * (r / R(u)) - 1
+
+ρ = (speed_coord + 1) / 2
+xyz = normalize(u) * R(u) * ρ
+
+a_env = clip([xyz, other], -1, 1)
+
+Q(s,aπ) 和 log π(aπ|s)
+内部都用 decomposed action a_hat。</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-spherical" role="tabpanel" aria-labelledby="tab-spherical">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h4>Spherical（球坐标）实现</h4>
+          <ul class="formula-list">
+            <li>actor base distribution 仍是 <code>D</code> 维 Gaussian，但前三维 latent 解释为 <code>theta_raw, phi_raw, speed_raw</code>。</li>
+            <li>bounded sigmoid 将 <code>theta</code> 映射到 <code>(0,π)</code>，<code>phi</code> 映射到 <code>(0,2π)</code>，speed 映射成沿 cube radial bound <code>R(u)</code> 的归一化比例。</li>
+            <li>log-det 包含球坐标体积项 <code>r² sin(theta)</code> 和三条 sigmoid 的导数。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">可逆 bijector</span>
+            <span class="mini-badge good">Jacobian-corrected</span>
+            <span class="mini-badge warn">极点附近更敏感</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h4>Spherical（球坐标）核心映射</h4>
+          <pre>ξ = [theta_raw, phi_raw, speed_raw, ...]
+theta = π * sigmoid(theta_raw)
+phi = 2π * sigmoid(phi_raw)
+direction = [sin(theta)cos(phi), sin(theta)sin(phi), cos(theta)]
+R = 1 / max(abs(direction))
+r = R * sigmoid(speed_raw)
+
+x = r sin(theta) cos(phi)
+y = r sin(theta) sin(phi)
+z = r cos(theta)
+
+aπ = bijector.forward(ξ)
+a_env = g(aπ)  # Integrated DS: g = identity</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-stereo" role="tabpanel" aria-labelledby="tab-stereo">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h4>Stereographic（立体投影）实现</h4>
+          <ul class="formula-list">
+            <li>前三维 latent 是 <code>plane_x, plane_y, speed_raw</code>，先在平面采样，再 inverse stereographic 到单位球。</li>
+            <li>方向映射没有球坐标角度极点，实验中作为 RLPD/SAC 的 DS 主线。</li>
+            <li>log-det 使用球极投影面积项 <code>4 / (1 + rho²)²</code>，再乘上 <code>r²</code>、<code>R(u)</code> 和 speed sigmoid 导数。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">推荐主线</span>
+            <span class="mini-badge good">可逆 bijector</span>
+            <span class="mini-badge good">方差更稳</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h4>Stereographic（立体投影）核心映射</h4>
+          <pre>ξ = [px, py, speed_raw, ...]
+rho2 = px² + py²
+direction = [
+  2px / (1 + rho2),
+  2py / (1 + rho2),
+  (1 - rho2) / (1 + rho2)
+]
+
+speed = R(direction) * sigmoid(speed_raw)
+action_xyz = speed * direction
+aπ = bijector.forward(ξ)
+a_env = g(aπ)  # Integrated DS: g = identity</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="panel-tangent" role="tabpanel" aria-labelledby="tab-tangent">
+      <div class="mode-layout">
+        <div class="formula-box">
+          <h4>Tangent（切空间）实现</h4>
+          <ul class="formula-list">
+            <li>actor 学习平均方向 <code>μ(s)</code>，方向噪声不再使用固定的全局角度或平面坐标。</li>
+            <li>在 <code>μ</code> 的二维切平面采样各向同性 Gaussian，再通过 sphere exponential map 返回单位球面。</li>
+            <li>角距离只由切向噪声长度决定，与 <code>μ</code> 位于北极、赤道或南极无关。</li>
+          </ul>
+          <div class="badge-row">
+            <span class="mini-badge good">旋转不变探索</span>
+            <span class="mini-badge good">Jacobian-corrected</span>
+            <span class="mini-badge warn">对跖点 cut locus</span>
+          </div>
+        </div>
+        <div class="code-box">
+          <h4>Tangent（切空间）核心映射</h4>
+          <pre>ε ~ Normal(0, σ² I₂)
+q = ||ε||
+r = (π-δ) tanh(q / (π-δ))
+v = B_μ (r / q) ε
+
+direction = Exp_μ(v)
+          = cos(r) μ + sinc(r) v
+
+log|J_dir| = log(sin(r) / q · dr/dq)
+speed = R(direction) * sigmoid(speed_raw)
+aπ = a_env = [speed * direction, ...]</pre>
+        </div>
+      </div>
+    </div>
+
+    <section class="bijector-lab" aria-labelledby="bijectorLabTitle">
+      <div class="bijector-lab-header">
+        <h3 id="bijectorLabTitle">5.3 Direction Distribution Lab（方向分布实验台）</h3>
+        <span class="pill" style="--accent: var(--violet)">相同均值 · 相同 σ · 三种坐标</span>
+        <p>彩色点是 240 个单位方向样本。拖动均值方向和方向 σ，切换方法后比较 sphere angular distance（球面角距离）统计；speed（速度）不参与本实验。</p>
+      </div>
+
+      <div class="bijector-methods" role="group" aria-label="Bijector implementation">
+        <button class="bijector-method active" type="button" data-bijector-method="spherical">spherical</button>
+        <button class="bijector-method" type="button" data-bijector-method="stereographic">stereographic</button>
+        <button class="bijector-method" type="button" data-bijector-method="tangent">tangent</button>
+      </div>
+
+      <div class="bijector-lab-grid">
+        <div class="bijector-plot">
+          <canvas id="bijectorCanvas" width="900" height="520" aria-label="三种 bijector 的球面方向采样可视化"></canvas>
+          <div class="bijector-plot-label">
+            <strong id="bijectorPlotTitle">spherical · fixed global angles</strong>
+            <span id="bijectorPlotSubtitle">样本分布受 θ、φ 和 sigmoid 局部尺度共同影响。</span>
+          </div>
+        </div>
+
+        <div class="bijector-controls">
+          <div class="bijector-control-group">
+            <strong>均值方向预设</strong>
+            <div class="bijector-presets" role="group" aria-label="Mean direction presets">
+              <button class="bijector-preset" type="button" data-yaw="90" data-pitch="0">北极</button>
+              <button class="bijector-preset active" type="button" data-yaw="0" data-pitch="0">赤道</button>
+              <button class="bijector-preset" type="button" data-yaw="-90" data-pitch="0">南极</button>
+              <button class="bijector-preset" type="button" data-yaw="40" data-pitch="28">斜方向</button>
+            </div>
+          </div>
+
+          <div class="bijector-control-group">
+            <div class="range-row">
+              <label for="bijectorYaw"><span>mean yaw</span><output id="bijectorYawValue" for="bijectorYaw">0°</output></label>
+              <input id="bijectorYaw" type="range" min="-179" max="179" step="1" value="0">
+            </div>
+            <div class="range-row">
+              <label for="bijectorPitch"><span>mean pitch</span><output id="bijectorPitchValue" for="bijectorPitch">0°</output></label>
+              <input id="bijectorPitch" type="range" min="-85" max="85" step="1" value="0">
+            </div>
+            <div class="range-row">
+              <label for="bijectorDirSigma"><span>direction σ</span><output id="bijectorDirSigmaValue" for="bijectorDirSigma">0.35</output></label>
+              <input id="bijectorDirSigma" type="range" min="0.03" max="1.20" step="0.01" value="0.35">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="bijector-metrics" aria-live="polite">
+        <div class="bijector-metric"><strong id="bijectorAngleMean">0.00°</strong><span>角距离 mean</span></div>
+        <div class="bijector-metric"><strong id="bijectorAngleStd">0.00°</strong><span>角距离 std</span></div>
+        <div class="bijector-metric"><strong id="bijectorAngleP95">0.00°</strong><span>角距离 P95</span></div>
+      </div>
+      <div class="bijector-formula-live" id="bijectorFormulaLive">θ=πσ(θraw), φ=2πσ(φraw)；相同 raw σ 不等于相同角 σ。</div>
+    </section>
+  </section>
+
+  <section id="speed-bound" class="implementation-panel shadcn-card scroll-mt-24 rounded-2xl p-6 backdrop-blur-xl" aria-labelledby="speedBoundTitle">
+    <div class="panel-title">
+      <h2 id="speedBoundTitle">6. Speed Bound（速度边界）：Sphere（球）与 Cube（立方体）</h2>
+      <span class="pill" style="--accent: var(--blue)">相同方向 u · 相同速度比例 ρ</span>
+      <p>速度比例 <code>ρ</code> 独立于方向分布。Sphere 使用固定半径 <code>R(u)=1</code>；Cube 使用 <code>R(u)=1/max|uᵢ|</code>，因此沿斜方向能够覆盖单位球之外、cube 之内的合法动作。</p>
+    </div>
+
+    <section class="bijector-lab" aria-label="Sphere and cube speed bound explorer">
+      <div class="bijector-lab-grid">
+        <div class="bijector-plot">
+          <canvas class="speed-bound-canvas" id="speedBoundCanvas" width="900" height="520" aria-label="Sphere 与 cube 径向速度边界对比"></canvas>
+          <div class="bijector-plot-label">
+            <strong>黄色 = sphere action · 蓝色 = cube action</strong>
+            <span>虚线表示同一单位方向；拖动方向可观察 cube 径向边界随 u 改变。</span>
+          </div>
+        </div>
+
+        <div class="bijector-controls">
+          <div class="bijector-control-group">
+            <div class="range-row">
+              <label for="speedBoundYaw"><span>direction yaw</span><output id="speedBoundYawValue" for="speedBoundYaw">35°</output></label>
+              <input id="speedBoundYaw" type="range" min="-179" max="179" step="1" value="35">
+            </div>
+            <div class="range-row">
+              <label for="speedBoundPitch"><span>direction pitch</span><output id="speedBoundPitchValue" for="speedBoundPitch">28°</output></label>
+              <input id="speedBoundPitch" type="range" min="-85" max="85" step="1" value="28">
+            </div>
+            <div class="range-row">
+              <label for="speedBoundRho"><span>normalized speed ρ</span><output id="speedBoundRhoValue" for="speedBoundRho">0.70</output></label>
+              <input id="speedBoundRho" type="range" min="0" max="1" step="0.01" value="0.70">
+            </div>
+          </div>
+          <div class="bijector-formula-live" id="speedBoundFormula">Rcube(u) = 1 / max(|ux|, |uy|, |uz|)</div>
+        </div>
+      </div>
+
+      <div class="speed-bound-readout" aria-live="polite">
+        <div class="bijector-metric"><strong id="speedSphereReadout">R=1.000 · ‖v‖=0.700</strong><span>Sphere bound：只能覆盖单位球。</span></div>
+        <div class="bijector-metric"><strong id="speedCubeReadout">R=1.000 · ‖v‖=0.700</strong><span>Cube bound：沿方向缩放到 cube 表面。</span></div>
+        <div class="bijector-metric"><strong id="speedSphereVector">v=(0, 0, 0)</strong><span>Sphere 环境动作。</span></div>
+        <div class="bijector-metric"><strong id="speedCubeVector">v=(0, 0, 0)</strong><span>Cube 环境动作；每一维仍在 [-1,1]。</span></div>
+      </div>
+    </section>
+  </section>
+
+  <section id="pipeline" class="main-grid scroll-mt-24 grid gap-6 lg:grid-cols-2" aria-labelledby="pipelineTitle">
+    <div class="section-heading">
+      <h2 id="pipelineTitle">7. Modular Pipeline（模块化流水线）：从 action_raw 到 action_env</h2>
+      <span class="pill" style="--accent: var(--blue)">先看数据流，再看实现层级</span>
+      <p>Adapter DS（动作适配器）在 policy/env action（策略动作 / 环境动作）之间转换；Integrated DS（分布内集成）在 Actor（策略网络）概率分布内部改变采样坐标并计算 Jacobian（雅可比）。Integrated DS 可以直接输出 env action，也可以继续接 Adapter（适配器）。</p>
+      <div class="flow-controls" aria-label="Action-adapter DS and Integrated DS flow controls">
+        <div class="flow-buttons">
+          <button class="flow-button active" data-flow-step="overview" data-flow-index="0" type="button">总览</button>
+          <button class="flow-button" data-flow-step="data" data-flow-index="1" type="button">Dataset（数据集）</button>
+          <button class="flow-button" data-flow-step="actor" data-flow-index="2" type="button">Actor / Critic（策略 / 价值网络）</button>
+          <button class="flow-button" data-flow-step="env" data-flow-index="3" type="button">Execution（环境执行）</button>
+          <button class="flow-button" data-flow-step="density" data-flow-index="4" type="button">log_prob（对数概率）</button>
+        </div>
+        <button class="flow-play" id="flowPlayButton" type="button">播放流程</button>
+        <span class="flow-stage" id="flowStage">Overview（总览）</span>
+        <p class="flow-narration" id="flowNarration">总览两个层级：Adapter DS（动作适配器）决定 aπ 如何变成 a_env；Integrated DS（分布内集成）决定 latent ξ（潜在变量）如何变成可计算 log_prob（对数概率）的 aπ。</p>
+      </div>
+    </div>
+
+    <article class="pipeline-shell shadcn-card rounded-2xl backdrop-blur-xl" id="unifiedPipeline" data-pipeline-mode="integrated">
+      <div class="pipeline-header">
+        <div>
+          <div class="eyebrow">Modular Action Pipeline（模块化动作流水线）</div>
+          <h3>同一条 Pipeline（流水线），不同方法只替换模块</h3>
+        </div>
+        <div class="pipeline-mode-switch" role="group" aria-label="选择流水线方法">
+          <button class="pipeline-mode-button active" data-pipeline-mode="integrated" type="button">Integrated（分布内集成）</button>
+          <button class="pipeline-mode-button" data-pipeline-mode="adapter" type="button">Adapter（动作适配器）</button>
+        </div>
+      </div>
+
+      <p class="pipeline-summary" id="pipelineSummary">
+        Integrated（分布内集成）使用 DS Bijector（方向速度可逆变换器）产生 action_pi（策略动作），Postprocessor（后处理器）为 identity（恒等映射）。
+      </p>
+
+      <div class="pipeline-key-idea">
+        <span class="pipeline-key-label">一句话理解</span>
+        <strong id="pipelineKeyIdea">Integrated（分布内集成）改变“如何采样策略动作”，但环境与 SAC（软演员评论家算法）看到的是同一个动作。</strong>
+      </div>
+
+      <div class="dataset-strip" data-flow="data" id="pipelineDatasetStrip">
+        <div class="dataset-strip-label">
+          <small>Offline path（离线数据路径）</small>
+          <strong>Dataset（数据集）</strong>
+        </div>
+        <span class="dataset-action-token">a<sub>env</sub></span>
+        <span class="dataset-arrow" aria-hidden="true">→</span>
+        <span class="dataset-operation" id="pipelineDatasetOperation">Identity（恒等映射）</span>
+        <span class="dataset-arrow" aria-hidden="true">→</span>
+        <span class="dataset-action-token policy">a<sub>π</sub></span>
+        <span class="dataset-explanation" id="pipelineDatasetText">环境动作直接作为 action_pi（策略动作）进入 Critic（价值网络），不执行 decompose（分解）。</span>
+      </div>
+
+      <div class="pipeline-viewport" aria-label="统一动作流水线动画">
+        <div class="pipeline-zone pipeline-policy-zone">
+          <div class="pipeline-zone-heading">
+            <span>01</span>
+            <div>
+              <strong>Policy Distribution（策略分布内部）</strong>
+              <small>从 observation（观测）产生可训练的策略动作</small>
+            </div>
+          </div>
+
+          <div class="pipeline-policy-track">
+            <div class="pipeline-module compact" data-flow="actor">
+              <small>Observation（观测）</small>
+              <strong>Actor Backbone（策略主干）</strong>
+              <span>把状态编码为 feature（特征）h(s)。</span>
+            </div>
+            <div class="pipeline-connector plain" aria-hidden="true"></div>
+            <div class="pipeline-module compact" data-flow="actor">
+              <small>Parameter Heads（参数输出头）</small>
+              <strong>μ / log σ</strong>
+              <span id="pipelineHeadsText">输出 location（位置参数）与 log-scale（对数尺度参数）。</span>
+            </div>
+            <div class="pipeline-connector plain" aria-hidden="true"></div>
+            <div class="pipeline-module compact" data-flow="actor">
+              <small>Gaussian Sampler（高斯采样器）</small>
+              <strong>ε → action_raw</strong>
+              <span id="pipelineSamplerText">Diagonal Gaussian（对角高斯）采样 latent coordinates（潜在坐标）。</span>
+            </div>
+            <div class="pipeline-connector raw-flow" data-action-entity="raw">
+              <div class="action-entity raw"><span>raw</span></div>
+            </div>
+            <div class="pipeline-module transform" data-flow="actor" id="pipelineTransformModule">
+              <small>Policy Transform（策略变换）</small>
+              <strong id="pipelineTransformName">DS Bijector（方向速度可逆变换器）</strong>
+              <span id="pipelineTransformText">执行 spherical / stereographic / tangent（球坐标 / 立体投影 / 切空间）变换并计算 Jacobian（雅可比）。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-handoff">
+          <div class="action-state raw-state">
+            <small>内部样本</small>
+            <strong>action_raw</strong>
+            <span id="pipelineRawShape">Gaussian latent（高斯潜在坐标）</span>
+          </div>
+          <div class="handoff-arrow" aria-hidden="true">→</div>
+          <div class="action-state policy-state">
+            <small>SAC boundary（SAC 训练边界）</small>
+            <strong>action_pi</strong>
+            <span id="pipelinePiShape">Environment shape（环境动作维度）</span>
+          </div>
+          <div class="handoff-arrow" aria-hidden="true">→</div>
+          <div class="action-state env-state">
+            <small>Execution output（执行输出）</small>
+            <strong>action_env</strong>
+            <span id="pipelineEnvShape">与 action_pi 相同</span>
+          </div>
+        </div>
+
+        <div class="pipeline-lower-grid">
+          <div class="pipeline-zone pipeline-training-zone" data-flow="actor">
+            <div class="pipeline-zone-heading">
+              <span>02</span>
+              <div>
+                <strong>SAC Training Boundary（SAC 训练边界）</strong>
+                <small>两个训练目标都读取 action_pi（策略动作）</small>
+              </div>
+            </div>
+            <div class="policy-checkpoint">
+              <div class="policy-checkpoint-core">
+                <span>a<sub>π</sub></span>
+                <small>唯一训练动作</small>
+              </div>
+              <div class="policy-consumers">
+                <div class="policy-consumer" data-flow="actor"><strong>Critic（价值网络）</strong><code>Q(s, action_pi)</code></div>
+                <div class="policy-consumer" data-flow="density"><strong>Density（概率密度）</strong><code>log π(action_pi|s)</code></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-zone pipeline-execution-zone" data-flow="env">
+            <div class="pipeline-zone-heading">
+              <span>03</span>
+              <div>
+                <strong>Execution Boundary（环境执行边界）</strong>
+                <small>这里只负责把训练动作交给环境</small>
+              </div>
+            </div>
+            <div class="execution-track">
+              <div class="execution-token policy-token">a<sub>π</sub></div>
+              <div class="pipeline-connector pi-flow" data-action-entity="pi">
+                <div class="action-entity pi"><span>aπ</span></div>
+              </div>
+              <div class="pipeline-module execution-module" id="pipelinePostModule">
+                <small>Postprocessor（后处理器）</small>
+                <strong id="pipelinePostName">Identity（恒等映射）</strong>
+                <span id="pipelinePostText">action_pi（策略动作）不再改变。</span>
+              </div>
+              <div class="pipeline-connector env-flow" data-action-entity="env">
+                <div class="action-entity env"><span>env</span></div>
+              </div>
+              <div class="execution-token env-token">a<sub>env</sub></div>
+            </div>
+            <p class="execution-equation" id="pipelineEnvText">action_env = action_pi；环境收到 Bijector（可逆变换器）的输出。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-legend">
+        <span class="legend-chip"><span class="legend-dot amber"></span><code>action_raw</code>（原始采样动作）</span>
+        <span class="legend-chip"><span class="legend-dot blue"></span><code>action_pi</code>（策略训练动作）</span>
+        <span class="legend-chip"><span class="legend-dot green"></span><code>action_env</code>（环境执行动作）</span>
+        <div class="pipeline-entity-controls">
+          <button class="pipeline-entity-button" id="pipelineEntityToggle" type="button">暂停实体动画</button>
+          <button class="pipeline-entity-button" id="pipelineEntityReplay" type="button">重新流动</button>
+        </div>
+      </div>
+
+      <p class="pipeline-detail" id="pipelineDetail">
+        action_raw（原始动作）只存在于策略分布内部；action_pi（策略动作）同时交给 Critic（价值网络）与 log_prob（对数概率）；Environment（环境）只接收 action_env（环境动作）。
+      </p>
+    </article>
+  </section>
+
+  <section id="summary" class="matrix shadcn-card scroll-mt-24 rounded-2xl backdrop-blur-xl" aria-labelledby="matrixTitle">
+    <div class="matrix-header">
+      <h2 id="matrixTitle">8. 总结：三类实现边界</h2>
+      <span class="pill">建议实验汇报中按此口径描述</span>
+    </div>
+    <div class="matrix-grid">
+      <div class="cell head">问题</div>
+      <div class="cell head">Action-adapter DS</div>
+      <div class="cell head">Integrated DS</div>
+
+      <div class="cell">数据集动作如何进入模型？</div>
+      <div class="cell">5D 先 <code>decompose</code> 成 6D。</div>
+      <div class="cell">Integrated DS 通常保持 5D；若与 Action-adapter DS 组合，则以组合后的 <code>aπ</code> 空间为准。</div>
+
+      <div class="cell">Actor / critic 看到几维？</div>
+      <div class="cell">6D decomposed action。</div>
+      <div class="cell">都看到 <code>aπ</code>；Integrated DS 中通常是 5D，组合方案中不一定等于 env 维度。</div>
+
+      <div class="cell">Critic 里的 <code>Q(s,aπ)</code>，<code>aπ</code> 是什么？</div>
+      <div class="cell"><code>a</code> 是 6D decomposed action；对应的 env action 是 <code>compose(a)</code> 后的 5D 动作。</div>
+      <div class="cell"><code>a</code> 是 <code>aπ</code>，也就是 bijector forward 后 actor 暴露给 SAC 的动作。</div>
+
+      <div class="cell">Actor 输出能否直接给 env？</div>
+      <div class="cell">不能，必须先 <code>compose</code> 成 5D。</div>
+      <div class="cell">Integrated DS 可以；与 Action-adapter DS 组合时仍需 <code>g(aπ)</code>，例如 <code>compose</code>。</div>
+
+      <div class="cell">是否是严格 bijection？</div>
+      <div class="cell">不是。<code>D+1 → D</code> 多对一。</div>
+      <div class="cell">bijector 层本身是。若后面再接不可逆 adapter，整体链路不再是严格 bijection。</div>
+
+      <div class="cell">适合什么实验定位？</div>
+      <div class="cell">FQL 或 D+1 表示消融；RLPD 中只能算近似 ablation。</div>
+      <div class="cell">SAC/RLPD 的分布层概率模型；若再接不可逆 adapter，需要说明 log_prob 只严格对应 <code>aπ</code>。</div>
+    </div>
+  </section>
+
+  <p class="footnote">
+    说明：本页优先使用 Three.js 做 3D 动作语义演示；如果 CDN 不可用，会自动切换到内置 Canvas 动画。
+    当前页面由 Vite（前端构建工具）独立管理，源码位于 <code>docs/ds-visualizer</code>。
+  </p>
+</main>
+
+
+
+
+
+
+
+
+</body>
+</html>
