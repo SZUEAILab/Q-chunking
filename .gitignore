@@ -11,6 +11,7 @@ exp/
 exp_logs/
 logs/
 .venv/
+.worktrees/
 
 *.json
 !tasks.example.json
