@@ -5,6 +5,37 @@
 一批实验（代码中叫 `cohort`）共同回答一个问题。先冻结设计，再启动训练。
 本文件是日常实验规则；旧协议中的“推荐”“待做”不是新实验的启动指令。
 
+## Action-adapter 冻结筛选
+
+批次为 `action_adapter_validation_20261019`，配置、源码摘要、工程尝试与平台记录放在
+数据盘 `control/action_adapter_validation_20261019/`。用户授权 8×4090 不限时长；使用已有
+兼容镜像、持久化挂载与独立源码发布目录，不覆盖其他批次。
+
+| 方法 | 速度/支持 | Critic |
+|---|---|---|
+| Cartesian native | 原 TanhNormal cube | 真实环境动作 |
+| Cartesian projection | TanhNormal 后 L2 投影 | 投影后的环境动作 |
+| Legacy latent / env / canonical | Cartesian D+1、tanh/log、参考半径 1、逐轴 clip | 三种接口分别运行 |
+| Direct latent / env / canonical | Cartesian D+1、sigmoid/direct、cube 径向边界 | 三种接口分别运行 |
+| Legacy common entropy | 同 legacy latent，target entropy 固定 −2.5 | latent |
+
+两个 adapter 版本是完整配方对比，同时改变速度映射和执行支持，不能写成纯坐标消融。
+同一版本的 critic 对照保持 actor、熵目标、网络宽度、初始化、数据、预算与评估一致。
+Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编码；环境动作相同的
+潜动作必须给出相同 critic 特征。普通 legacy/direct target entropy 为 −3，native 为 −2.5；
+共同熵目标对照显式检验这项差异。
+
+主指标为真实 step 0–1M、每 100k 固定评估网格的 success AUC；50 episodes，固定独立
+`eval_seed=20261019`，另报最终值、末三次均值和右删失的 time-to-50%。训练 seeds 10–13，
+不参与确认阶段；四 seed 区间仅作描述，首批两个开发任务不能当作跨域通用性证明。
+所有失败、零成功率和缺失运行保留，预注册主比较为 legacy−native、canonical−latent
+（分别在两个速度配方内），其他比较为机制诊断，不在看到结果后挑选显著性 family。
+
+新增 `--eval_at_start=True` 用于该批次，旧配置默认保持关闭；运行额外保存初始化后解析的
+`effective_agent_config.json`。调度状态 `done` 不能替代验收：必须核对真实 returncode、
+完整评估轴、有限损失、精确最终预算、必需 checkpoint 与源码/数据身份。失联进程的退出码
+记为未知，不纳入成功统计。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |

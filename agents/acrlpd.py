@@ -170,12 +170,17 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
     config: Any = nonpytree_field()
 
     def _critic_action(self, action_pi):
-        """Map latent policy actions to actions actually executed by the env."""
-        if (
-            self.config.get("adapter_representation", "none") != "none"
-            and self.config.get("adapter_critic_space", "latent") == "env"
-        ):
-            return _adapter_policy_to_env(action_pi, self.config)
+        """Use the declared representation for actor and target Q queries."""
+        if self.config.get("adapter_representation", "none") != "none":
+            space = self.config.get("adapter_critic_space", "latent")
+            if space in ("env", "canonical"):
+                env_action = _adapter_policy_to_env(action_pi, self.config)
+                if space == "canonical":
+                    # Replay already uses decompose(env_action). Apply that
+                    # same embedding to sampled actions, including clipping,
+                    # while retaining the declared policy-space entropy.
+                    return _adapter_env_to_policy(env_action, self.config)
+                return env_action
         if not self.config.get("use_cartesian_l2_projection", False):
             return action_pi
         original_shape = action_pi.shape

@@ -50,6 +50,7 @@ flags.DEFINE_integer("online_steps", 1000000, "Number of online steps.")
 flags.DEFINE_integer("buffer_size", 1000000, "Replay buffer size.")
 flags.DEFINE_integer("log_interval", 5000, "Logging interval.")
 flags.DEFINE_integer("eval_interval", 100000, "Evaluation interval.")
+flags.DEFINE_bool("eval_at_start", False, "Evaluate the initialized policy at step zero.")
 flags.DEFINE_integer("save_interval", -1, "Save interval.")
 flags.DEFINE_integer("start_training", 5000, "when does training start")
 
@@ -149,8 +150,8 @@ flags.DEFINE_enum(
 flags.DEFINE_enum(
     "ds_adapter_critic_space",
     "latent",
-    ["latent", "env"],
-    "Whether an adapter critic reads latent policy actions or executed env actions.",
+    ["latent", "env", "canonical"],
+    "Adapter critic input: latent, executed environment action, or canonical embedding.",
 )
 flags.DEFINE_enum(
     "ds_regularizer",
@@ -221,6 +222,8 @@ class LoggingHelper:
 
 
 def main(_):
+    if FLAGS.eval_at_start and FLAGS.eval_seed is None:
+        raise ValueError("Step-zero evaluation requires an independent fixed eval_seed.")
     exp_name = get_exp_name(FLAGS.seed)
     run = setup_wandb(project="qc", group=FLAGS.run_group, name=exp_name)
 
@@ -465,6 +468,8 @@ def main(_):
         example_batch["actions"],
         config,
     )
+    with open(os.path.join(FLAGS.save_dir, "effective_agent_config.json"), "w") as f:
+        json.dump(config.to_dict(), f, indent=2, sort_keys=True)
 
     # Setup logging.
     prefixes = ["eval", "env"]
@@ -480,6 +485,21 @@ def main(_):
         },
         wandb_logger=wandb,
     )
+
+    def evaluate_and_log(step):
+        eval_info, _, _ = evaluate(
+            agent=make_eval_agent(agent),
+            env=eval_env,
+            action_dim=raw_action_dim,
+            num_eval_episodes=FLAGS.eval_episodes,
+            num_video_episodes=FLAGS.video_episodes,
+            video_frame_skip=FLAGS.video_frame_skip,
+            eval_seed=FLAGS.eval_seed,
+        )
+        logger.log(eval_info, "eval", step=step)
+
+    if FLAGS.eval_at_start:
+        evaluate_and_log(0)
 
     # transition from offline to online
     # Replay buffer stores raw actions (D), not decomposed (D+1).
@@ -543,6 +563,9 @@ def main(_):
                 env_info[key] = value
         xyz_norm = float(np.linalg.norm(np.asarray(action)[:3]))
         env_info["action_xyz_norm"] = xyz_norm
+        env_info["action_xyz_linf"] = float(np.max(np.abs(np.asarray(action)[:3])))
+        for action_index, action_value in enumerate(np.asarray(action).reshape(-1)):
+            env_info[f"action_{action_index}"] = float(action_value)
         env_info["action_xyz_at_unit_bound"] = float(xyz_norm >= 1.0 - 1e-6)
         env_info["stage_reward"] = float(stage_reward)
         env_info["next_stage_reward"] = next_stage_reward
@@ -702,18 +725,7 @@ def main(_):
             update_info = {}
 
         if FLAGS.eval_interval != 0 and i % FLAGS.eval_interval == 0:
-            _eval_agent = make_eval_agent(agent)
-
-            eval_info, _, _ = evaluate(
-                agent=_eval_agent,
-                env=eval_env,
-                action_dim=raw_action_dim,
-                num_eval_episodes=FLAGS.eval_episodes,
-                num_video_episodes=FLAGS.video_episodes,
-                video_frame_skip=FLAGS.video_frame_skip,
-                eval_seed=FLAGS.eval_seed,
-            )
-            logger.log(eval_info, "eval", step=log_step)
+            evaluate_and_log(log_step)
 
         # saving
         if FLAGS.save_interval > 0 and i % FLAGS.save_interval == 0:

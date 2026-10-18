@@ -106,8 +106,8 @@ flags.DEFINE_enum(
 flags.DEFINE_enum(
     "ds_adapter_critic_space",
     "latent",
-    ["latent", "env"],
-    "Whether an adapter critic reads latent policy actions or executed env actions.",
+    ["latent", "env", "canonical"],
+    "Adapter critic input: latent, executed environment action, or canonical embedding.",
 )
 flags.DEFINE_enum(
     "ds_regularizer",

@@ -6,6 +6,29 @@
 RLPD 是首个研究算法；FQL 用于跨算法检验，RoboMimic 用于跨域检验。已有 pilot 不等于迁移结论成立。
 环境中的“speed”通常是归一化动作幅值，不一定是真实物理速度。
 
+## Action-adapter 当前验证主线（2026-10-19）
+
+本分支优先检验已有正向任务结果的完整 action-adapter，保留六月 tanh/log-speed 原版，
+并与后来的 sigmoid/direct/cube 版本分开登记。首先回答完整方法能否复现、能否迁移，
+再解释方向–幅值表示、critic 接口与熵目标各自的贡献。
+
+当前机制筛选固定 Cube-Triple task2 与 Cube Double task2，四个配对训练 seed（10–13）、
+每运行 1M 步。比较 native、Cartesian L2 projection、两个 adapter 版本各自的
+latent/env/canonical critic，以及原版的共同熵目标对照，共九方法、72 运行。
+该四 seed 批次属于筛选，不足以单独支撑顶会性能结论；不根据中途结果追加 seed。
+
+Canonical critic 仍读取 D+1 维特征，但所有策略样本先经过实际执行 compose/clipping，
+再按与 replay 相同的 decompose 编码。它与 latent critic 同宽同初始化，检验冗余方向范数
+能否影响 actor/target Q；保留原策略的 log-prob 和温度，不宣称已经消除了冗余熵自由度。
+Env critic 与 canonical critic 的对照进一步检验环境动作的非线性表示作用。
+
+若筛选支持完整方法，后续用预先冻结的十个 fresh seed 做确认，扩展开发批次以外的
+OGBench 任务，再做 FQL 与 RoboMimic。原生算法配方和几何强基线需分别实现与标记，
+不能将本项目的 RLPD fork 直接当作原论文完整复现。
+相关工作已包含 [GAC（ICLR 2026）](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html)
+与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
+因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。
+
 ## 三个问题分别验证
 
 | 问题 | 干预 | 必须保留的对照 |

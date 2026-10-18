@@ -148,8 +148,10 @@ def configure_direction_speed(
             if ds_adapter_critic_space == "config"
             else ds_adapter_critic_space
         )
-        if critic_space not in ("latent", "env"):
-            raise ValueError("adapter critic space must be 'latent' or 'env'.")
+        if critic_space not in ("latent", "env", "canonical"):
+            raise ValueError("adapter critic space must be 'latent', 'env', or 'canonical'.")
+        if critic_space == "canonical" and agent_name != "acrlpd":
+            raise ValueError("Canonical adapter critic is only implemented for ACRLPD.")
         config["adapter_critic_space"] = critic_space
     else:
         config["adapter_representation"] = "none"

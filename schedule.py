@@ -122,6 +122,7 @@ FIELD_TO_FLAG = {
     "buffer_size": "--buffer_size",
     "log_interval": "--log_interval",
     "eval_interval": "--eval_interval",
+    "eval_at_start": "--eval_at_start",
     "start_training": "--start_training",
     "save_dir": "--save_dir",
     "dataset_proportion": "--dataset_proportion",
@@ -446,6 +447,9 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                         if not _pid_alive(c.get("pid")):
                             fh.close()
                             c["status"] = "done"
+                            # A disconnected process has no observable exit
+                            # code. Scientific validation must treat it as unknown.
+                            c["returncode"] = None
                             done_ok += 1
                             save_compiled(compiled, compiled_path)
                             print(
@@ -467,6 +471,7 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                             done_fail += 1
                             status = f"FAIL({ret})"
                         c["status"] = "done"
+                        c["returncode"] = ret
                         save_compiled(compiled, compiled_path)
                         print(
                             f'[{time.strftime("%T")}] ✓ GPU={gpu_id}  {c["name"]}  '
