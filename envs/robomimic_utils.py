@@ -7,12 +7,6 @@ from gymnasium.spaces import Box
 import imageio
 import h5py
 
-import robomimic.utils.env_utils as EnvUtils
-import robomimic.utils.file_utils as FileUtils
-import robomimic.utils.env_utils as EnvUtils
-import robomimic.utils.obs_utils as ObsUtils
-from robomimic import DATASET_REGISTRY
-
 from utils.datasets import Dataset
 
 
@@ -24,11 +18,23 @@ def is_robomimic_env(env_name):
     return task in ("lift", "can", "square", "transport", "tool_hang") and dataset_type in ("mh", "ph")
 
 
-low_dim_keys = {"low_dim": ('robot0_eef_pos',
-    'robot0_eef_quat',
-    'robot0_gripper_qpos',
-    'object')}
-ObsUtils.initialize_obs_modality_mapping_from_dict(low_dim_keys)
+# ── robomimic imports (lazy — may fail if robomimic not installed) ───
+try:
+    import robomimic.utils.env_utils as EnvUtils
+    import robomimic.utils.file_utils as FileUtils
+    import robomimic.utils.env_utils as EnvUtils
+    import robomimic.utils.obs_utils as ObsUtils
+    from robomimic import DATASET_REGISTRY
+
+    low_dim_keys = {"low_dim": ('robot0_eef_pos',
+        'robot0_eef_quat',
+        'robot0_gripper_qpos',
+        'object')}
+    ObsUtils.initialize_obs_modality_mapping_from_dict(low_dim_keys)
+    _ROBOMIMIC_AVAILABLE = True
+except ImportError:
+    _ROBOMIMIC_AVAILABLE = False
+    low_dim_keys = {}
 
 
 def _get_max_episode_length(env_name):

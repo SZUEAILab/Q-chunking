@@ -17,25 +17,36 @@ import h5py
 
 from utils.datasets import Dataset
 
-# ── robosuite 1.5 compatibility monkey-patches ───────────────────
-import robosuite
-from robosuite import load_composite_controller_config
-from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
 
-# 1. Add old `load_controller_config` entry point
-robosuite.load_controller_config = (
-    lambda default_controller="BASIC", **kw: load_composite_controller_config(
-        controller="BASIC"
+def is_libero_env(env_name: str) -> bool:
+    """Determine if an env name refers to a LIBERO task."""
+    return env_name.startswith("libero_")
+
+
+# ── robosuite 1.5 compatibility monkey-patches (lazy) ───────────
+try:
+    import robosuite
+    from robosuite import load_composite_controller_config
+    from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
+
+    # 1. Add old `load_controller_config` entry point
+    robosuite.load_controller_config = (
+        lambda default_controller="BASIC", **kw: load_composite_controller_config(
+            controller="BASIC"
+        )
     )
-)
 
-# 2. Register LIBERO's custom robot models so Robot.__init__ can find them
-from libero.libero.envs.robots import MountedPanda, OnTheGroundPanda  # noqa: E402
+    # 2. Register LIBERO's custom robot models so Robot.__init__ can find them
+    from libero.libero.envs.robots import MountedPanda, OnTheGroundPanda  # noqa: E402
 
-MountedPanda.arms = ["right"]
-OnTheGroundPanda.arms = ["right"]
-REGISTERED_ROBOTS["MountedPanda"] = MountedPanda
-REGISTERED_ROBOTS["OnTheGroundPanda"] = OnTheGroundPanda
+    MountedPanda.arms = ["right"]
+    OnTheGroundPanda.arms = ["right"]
+    REGISTERED_ROBOTS["MountedPanda"] = MountedPanda
+    REGISTERED_ROBOTS["OnTheGroundPanda"] = OnTheGroundPanda
+    _LIBERO_AVAILABLE = True
+except ImportError:
+    _LIBERO_AVAILABLE = False
+
 
 # ── Observation: proprio-state(50) + object-state(70) = 120 ──────
 OBS_DIM = 50 + 70  # 120
@@ -49,11 +60,6 @@ def _extract_lowdim_obs(env_obs: dict) -> np.ndarray:
     proprio = env_obs["robot0_proprio-state"].astype(np.float32)
     obj_state = env_obs["object-state"].astype(np.float32)
     return np.concatenate([proprio, obj_state])
-
-
-def is_libero_env(env_name: str) -> bool:
-    """Determine if an env name refers to a LIBERO task."""
-    return env_name.startswith("libero_")
 
 
 # ── Task name to HDF5 path mapping ───────────────────────────────
@@ -96,10 +102,12 @@ _SUITE_TASK_MAP = {
     ],
 }
 
-# datasets path from LIBERO config
-from libero.libero import get_libero_path  # noqa: E402
-
-LIBERO_DATASET_DIR = get_libero_path("datasets")
+# datasets path from LIBERO config (only if LIBERO is installed)
+if _LIBERO_AVAILABLE:
+    from libero.libero import get_libero_path  # noqa: E402
+    LIBERO_DATASET_DIR = get_libero_path("datasets")
+else:
+    LIBERO_DATASET_DIR = None
 
 
 def _get_max_episode_length(task_name: str) -> int:

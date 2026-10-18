@@ -12,6 +12,7 @@ import flax.linen as nn
 import jax.numpy as jnp
 
 from rlpd_networks import default_init
+from rlpd_distributions.parameter_heads import DistributionParameterHeads
 
 
 class Normal(nn.Module):
@@ -26,19 +27,24 @@ class Normal(nn.Module):
     def __call__(self, inputs, *args, **kwargs) -> tfd.Distribution:
         x = self.base_cls()(inputs, *args, **kwargs)
 
-        means = nn.Dense(
-            self.action_dim, kernel_init=default_init(), name="OutputDenseMean"
-        )(x)
         if self.state_dependent_std:
-            log_stds = nn.Dense(
-                self.action_dim, kernel_init=default_init(), name="OutputDenseLogStd"
+            means, log_stds = DistributionParameterHeads(
+                location_size=self.action_dim,
+                log_scale_size=self.action_dim,
+                log_scale_min=self.log_std_min,
+                log_scale_max=self.log_std_max,
+                name="ParameterHeads",
             )(x)
         else:
+            means = nn.Dense(
+                self.action_dim,
+                kernel_init=default_init(),
+                name="LocationParameters",
+            )(x)
             log_stds = self.param(
                 "OutpuLogStd", nn.initializers.zeros, (self.action_dim,), jnp.float32
             )
-
-        log_stds = jnp.clip(log_stds, self.log_std_min, self.log_std_max)
+            log_stds = jnp.clip(log_stds, self.log_std_min, self.log_std_max)
 
         distribution = tfd.MultivariateNormalDiag(
             loc=means, scale_diag=jnp.exp(log_stds)

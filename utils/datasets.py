@@ -54,6 +54,7 @@ class Dataset(FrozenDict):
         self.frame_stack = None  # Number of frames to stack; set outside the class.
         self.p_aug = None  # Image augmentation probability; set outside the class.
         self.return_next_actions = False  # Whether to additionally return next actions; set outside the class.
+        self._balance_cache = {}
 
         # Compute terminal and initial locations.
         self.terminal_locs = np.nonzero(self['terminals'] > 0)[0]
@@ -89,8 +90,51 @@ class Dataset(FrozenDict):
                 self.augment(batch, ['observations', 'next_observations'])
         return batch
 
-    def sample_sequence(self, batch_size, sequence_length, discount):
-        idxs = np.random.randint(self.size - sequence_length + 1, size=batch_size)
+    def sample_sequence(
+        self,
+        batch_size,
+        sequence_length,
+        discount,
+        balance_key=None,
+    ):
+        max_start = self.size - sequence_length + 1
+        if balance_key is None:
+            idxs = np.random.randint(max_start, size=batch_size)
+        else:
+            if balance_key not in self:
+                raise KeyError(f"Missing balance key: {balance_key}")
+            cache_key = (balance_key, sequence_length)
+            cache = self._balance_cache.get(cache_key)
+            if cache is None or max_start < cache["max_start"]:
+                cache = {"max_start": 0, "indices": {}}
+            if max_start > cache["max_start"]:
+                start = cache["max_start"]
+                new_labels = np.asarray(self[balance_key][start:max_start])
+                for offset, label in enumerate(new_labels):
+                    cache["indices"].setdefault(float(label), []).append(
+                        start + offset
+                    )
+                cache["max_start"] = max_start
+                self._balance_cache[cache_key] = cache
+            unique = sorted(cache["indices"])
+            base, remainder = divmod(batch_size, len(unique))
+            sampled = []
+            for index, label in enumerate(unique):
+                count = base + int(index < remainder)
+                candidates = cache["indices"][label]
+                # Sample positions instead of passing the entire Python list to
+                # np.random.choice.  The latter materializes a potentially
+                # million-element NumPy array on every gradient step.
+                positions = np.random.randint(len(candidates), size=count)
+                sampled.append(
+                    np.fromiter(
+                        (candidates[position] for position in positions),
+                        dtype=np.int64,
+                        count=count,
+                    )
+                )
+            idxs = np.concatenate(sampled)
+            np.random.shuffle(idxs)
         
         data = {k: v[idxs] for k, v in self.items()}
 
@@ -141,7 +185,7 @@ class Dataset(FrozenDict):
         actions = batch_actions  # (batch_size, sequence_length, action_dim)
         next_actions = batch_next_actions  # (batch_size, sequence_length, action_dim)
         
-        return dict(
+        batch = dict(
             observations=data['observations'].copy(),
             full_observations=observations,
             actions=actions,
@@ -152,6 +196,11 @@ class Dataset(FrozenDict):
             next_observations=next_observations,
             next_actions=next_actions,
         )
+        if 'stage_rewards' in data:
+            # This label describes the actor's current observation at ``idxs``,
+            # not a later transition in the action-chunk sequence.
+            batch['stage_rewards'] = data['stage_rewards'].copy()
+        return batch
 
     def get_subset(self, idxs):
         """Return a subset of the dataset given the indices."""
@@ -225,6 +274,17 @@ class ReplayBuffer(Dataset):
     def add_transition(self, transition):
         """Add a transition to the replay buffer."""
 
+        for (balance_key, _), cache in self._balance_cache.items():
+            if balance_key not in transition or self.pointer >= cache["max_start"]:
+                continue
+            old_label = float(self._dict[balance_key][self.pointer])
+            new_label = float(transition[balance_key])
+            if old_label != new_label:
+                cache["indices"][old_label].remove(self.pointer)
+                if not cache["indices"][old_label]:
+                    del cache["indices"][old_label]
+                cache["indices"].setdefault(new_label, []).append(self.pointer)
+
         def set_idx(buffer, new_element):
             buffer[self.pointer] = new_element
 
@@ -235,6 +295,7 @@ class ReplayBuffer(Dataset):
     def clear(self):
         """Clear the replay buffer."""
         self.size = self.pointer = 0
+        self._balance_cache.clear()
 
 def add_history(dataset, history_length):
 
@@ -262,5 +323,3 @@ def add_history(dataset, history_length):
         action_history=action_history)))
     
     return dataset
-
-

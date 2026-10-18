@@ -45,6 +45,7 @@ def evaluate(
     action_shape=None,
     observation_shape=None,
     action_dim=None,
+    eval_seed=None,
 ):
     """Evaluate the agent in the environment.
 
@@ -56,11 +57,17 @@ def evaluate(
         video_frame_skip: Number of frames to skip between renders.
         eval_temperature: Action sampling temperature.
         eval_gaussian: Standard deviation of the Gaussian noise to add to the actions.
+        eval_seed: Optional fixed base seed for both policy sampling and episode
+            resets.  Episode ``i`` uses ``eval_seed + i``.  ``None`` preserves
+            the historical behavior for backward compatibility.
 
     Returns:
         A tuple containing the statistics, trajectories, and rendered videos.
     """
-    actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
+    actor_seed = (
+        np.random.randint(0, 2**32) if eval_seed is None else int(eval_seed)
+    )
+    actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(actor_seed))
     trajs = []
     stats = defaultdict(list)
 
@@ -69,7 +76,10 @@ def evaluate(
         traj = defaultdict(list)
         should_render = i >= num_eval_episodes
 
-        observation, info = env.reset()
+        if eval_seed is None:
+            observation, info = env.reset()
+        else:
+            observation, info = env.reset(seed=int(eval_seed) + i)
             
         observation_history = []
         action_history = []
@@ -155,7 +165,6 @@ def evaluate(
             renders.append(np.array(render))
 
     for k, v in stats.items():
-        stats[k] = np.mean(v)
+        stats[k] = np.mean([x for x in v if x is not None])
 
     return stats, trajs, renders
-
