@@ -95,7 +95,7 @@ $$
 a_{\text{env}}=g(a_\pi).
 $$
 
-baseline 和 Integrated DS 中 $g$ 是恒等映射，所以 $a_\pi=a_{\text{env}}$，此时 $Q$ 和 $\log\pi$ 里的动作变量可以写成 $a_\pi$，也可以写成 $a_{\text{env}}$。Action-adapter DS 或 Integrated DS + Action-adapter DS 中 $g$ 可以是 compose，因此 $a_\pi$ 和 $a_{\text{env}}$ 不必相等；这时 SAC 内部必须写 $Q(s,a_\pi)$ 和 $\log\pi(a_\pi\mid s)$。
+baseline 和 Integrated DS 中 $g$ 是恒等映射，所以 $a_\pi=a_{\text{env}}$。有外部 adapter 时，两者不必相等。此时需要分别声明策略密度的变量和 critic 的输入特征：密度仍可在 $a_\pi$ 上定义，而 critic 可读取 $a_\pi$、$g(a_\pi)$，或执行动作的固定编码。不能直接把 $g(a_\pi)$ 代入原来的 policy-coordinate `log_prob`，也不能因 critic 读取 env action 就认定接口错误。三种已实现接口及对应 replay 处理见第 5.1 节；本节简写的 $Q_\phi(s,a_\pi)$ 可理解为已包含相应特征映射的复合函数。
 
 ### 1.3 Critic 的输出与 loss
 
@@ -106,21 +106,21 @@ Q_\phi(s,a_\pi)
 = [Q_{\phi_1}(s,a_\pi), \ldots, Q_{\phi_N}(s,a_\pi)].
 $$
 
-critic 的训练目标是最小化时序差分误差（TD error）。一步 TD target 由 Bellman backup 给出：
+critic 的训练目标是最小化时序差分误差（TD error）。[标准 SAC](https://arxiv.org/abs/1801.01290) 的 soft Bellman target 包含下一动作的熵项，单样本形式为：
 
 $$
-y
+y_{\mathrm{soft}}
 =
-r+\gamma\,
+r+\gamma m\left[
 \operatorname{Agg}
 \left(
 Q_{\bar{\phi}}(s',a'_\pi)
-\right),
+\right)-\alpha\log\pi_\theta(a'_\pi\mid s')\right],
 \qquad
 a'_\pi\sim\pi_\theta(\cdot \mid s').
 $$
 
-其中 $\bar{\phi}$ 是 target critic 参数，$\operatorname{Agg}$ 可以是保守的最小值或平均值。critic loss 为
+其中 $m$ 是 bootstrap mask，$\bar{\phi}$ 是 target critic 参数，$\operatorname{Agg}$ 由具体配方声明。本项目冻结筛选的 ACRLPD 使用均值聚合，且省略该熵备份项，实际为 $y_{\mathrm{project}}=r+\gamma m\operatorname{Agg}Q_{\bar\phi}(s',a'_\pi)$；不能把两个 target 当作同一算法配方。下式中的 $y$ 应使用该实验实际声明的目标，critic loss 为
 
 $$
 \mathcal{L}_{\text{critic}}
@@ -136,7 +136,9 @@ flowchart LR
     B["样本 (s,aπ,r,s')"] --> Q["当前 critic<br/>Qφ(s,aπ)"]
     B --> AP["actor 在 s' 采样<br/>a'π ~ πθ(.|s')"]
     AP --> TQ["target critic<br/>Qφbar(s',a'π)"]
+    AP --> H["若启用 entropy backup<br/>−α logπ(a'π|s')"]
     TQ --> Y["TD target y"]
+    H --> Y
     Q --> MSE["TD error MSE"]
     Y --> MSE
 ```
@@ -814,7 +816,7 @@ s, & \texttt{ds\_adapter\_speed\_interpretation=direct}.
 \end{cases}
 $$
 
-`direct`（直接速度）路径中 Adapter 不做指数或裁剪变换。推荐主对照是 `tanh+log`（原始对数速度）与 `sigmoid+direct`（0 到 1 直接速度）。另外两种交叉组合保留给机制消融：`tanh+direct` 会产生有符号径向值，`sigmoid+log` 的速度比例位于 $[1,e]$。径向上界也独立配置：
+`direct`（直接速度）解释器不做指数或速度裁剪；最终完整 env action 仍会逐轴裁剪。当前分别登记 `tanh+log`（原始对数速度）与 `sigmoid+direct`（0 到 1 直接速度），两者不能视为同一方法。交叉组合 `tanh+direct` 会产生有符号径向值，`sigmoid+log` 的速度比例位于 $(1,e)$。径向参考边界独立配置：
 
 $$
 R(u)=
@@ -826,14 +828,21 @@ R(u)=
 v=\rho R(u)u.
 $$
 
-最终 env action 会裁剪到 $[-1,1]^D$；因此 log-speed 在 $\rho>1$ 时可能饱和，而 `sigmoid+direct` 与 radial bound 一一对应。
+最终 env action 会裁剪到 $[-1,1]^D$。Legacy `tanh+log` 的 $\rho\in(e^{-1},e)$，因此 `sphere` 只是参考半径 1，不能把它描述为单位球约束；$\rho>1$ 时可以产生范数大于 1 的动作并触发逐轴裁剪。`sigmoid+direct` 的径向比例位于 $(0,1)$，才按该参考边界限制执行范围。
 
-在所有 action-adapter 实现中，actor 和 critic 训练时使用同一个 compose 前 policy action $a_\pi$：
+策略仍在 compose 前的变量 $a_\pi$ 上定义密度，但当前 ACRLPD 的 critic 可采用三种特征：
+
+| `ds_adapter_critic_space` | sampled actor/target 查询特征 $\chi(a_\pi)$ | replay 输入 |
+|---|---|---|
+| `latent` | $a_\pi$ | 真实执行动作经过 `decompose` 的编码 |
+| `env` | $g(a_\pi)$，包含实际执行裁剪 | 真实执行动作 |
+| `canonical` | $h(g(a_\pi))$，其中 $h=\operatorname{decompose}$ | 同一个 $h$ 编码真实执行动作 |
+
+actor 的价值项是 $Q_\phi(s,\chi(a_\pi))$，target 的 sampled action 也使用同一接口。对应 actor 目标写作：
 
 $$
-\pi_\theta(a_\pi \mid s),
-\qquad
-Q_\phi(s,a_\pi).
+\mathcal L_{\mathrm{actor}}=
+\mathbb E\left[\alpha\log\pi_\theta(a_\pi\mid s)-Q_\phi(s,\chi(a_\pi))\right].
 $$
 
 环境实际执行的是
@@ -844,13 +853,17 @@ a_{\text{env}}
 \operatorname{compose}(a_\pi).
 $$
 
-因此 action-adapter 内部的 actor、critic 和 `log_prob` 对齐在 policy 坐标上，而不是把 compose 后的动作错误地代回策略密度。可以把 critic 的语义写成
+三种接口都保留原 policy-coordinate `log_prob` 和温度；仅改变 critic 特征不要求为原密度添加执行映射的 Jacobian。若奖励和转移只通过 $g(a_\pi)$ 依赖动作，且后续策略只依赖环境状态，则从 Bellman 定义可推出行为等效潜动作的真实价值相同，可写为
 
 $$
-Q_{\text{adapter}}(s,a_\pi)
+Q^{\pi}_{\text{adapter}}(s,a_\pi)
 =
-Q_{\text{env}}(s,\operatorname{compose}(a_\pi)).
+\bar Q^{\pi}(s,g(a_\pi)).
 $$
+
+这是给定策略及其声明的熵正则下的价值分解，不是无约束 latent 神经网络必然满足的等式，也不声称三种接口会学出同一策略。`env` 和 `canonical` 按构造不能区分执行相同的潜动作；`canonical` 保留 D+1 输入宽度，检验这项约束时不缩减 critic 输入维数。近零归一化与编码边界仍须单独检查。
+
+Canonical 不消除潜方向范数对熵的贡献，不能因此声称已经提高环境动作熵或状态熵。动作冗余与状态探索并不等价，已有[相关研究](https://proceedings.mlr.press/v161/baram21a.html)。另外，本分支冻结筛选中的 project ACRLPD **没有**在 Bellman target 中加入下一动作的熵项；本节的标准 SAC 背景不能替代该具体配方，原论文 RLPD 移植与 FQL 作者实现的区别见[基线参考](rlpd_baselines.md)。
 
 对应统一 Pipeline（流水线）的组件选择是：
 
@@ -866,7 +879,7 @@ a_\pi
 a_{\text{env}}.
 $$
 
-Cartesian action-adapter 的关键限制是归一化会丢弃 $\tilde u$ 的径向长度。对于任意正数 $\lambda$，
+Cartesian action-adapter 的归一化会丢弃 $\tilde u$ 的径向长度。在原向量与缩放向量都高于数值归一化下限时，对于正数 $\lambda$，
 
 $$
 \operatorname{norm}(\lambda\tilde u)
@@ -884,15 +897,15 @@ $$
 [100\tilde u,s,c]
 $$
 
-都会映射到同一个 env action。这是多对一映射，而不是 bijection。
+都会映射到同一个 env action；比较合法策略样本时，还须保证缩放后仍在声明的策略支持内。这是多对一映射，而不是 bijection。
 
 这带来三个理论影响：
 
 1. **没有普通 change-of-variables log-prob。** 映射是 $D+1\rightarrow D$，Jacobian 不是方阵，也没有唯一 inverse。
 2. **方向向量长度是不可观测自由度。** 模型可能把容量用在执行端会被丢弃的径向自由度上。
-3. **训练坐标和执行动作存在近似错位。** 分解空间中的密度不等于 env action 空间中的严格密度。
+3. **熵目标取决于声明的动作变量。** policy-coordinate 熵与 env-action 熵通常不同；前者可以是一个明确定义的优化目标，不能仅因映射不可逆就断言算法在数学上不成立。
 
-Spherical 与 stereographic 的 $D\to D$ codec 几乎处处可逆，不包含 Cartesian 的冗余方向长度；但其 `log_prob` 按实验定义仍是 compose 前 policy-coordinate density。Integrated DS 则把几何 Jacobian 纳入分布，并直接输出 env action。两者应作为不同的熵坐标消融，不应混称为同一个 env-action density。
+Spherical 与 stereographic 的 $D\to D$ 方向 codec 在避开图奇点且未触发执行裁剪的有效域内可逆，不包含 Cartesian 的冗余方向长度；执行裁剪仍可使整体映射多对一。其 `log_prob` 按实验定义仍是 compose 前 policy-coordinate density。Integrated DS 则把几何 Jacobian 纳入分布，并直接输出 env action。两者应作为不同的熵坐标消融，不应混称为同一个 env-action density。
 
 ### 5.2 Distribution-integrated DS：actor 分布内部的语义变换
 
@@ -948,15 +961,15 @@ a_{\text{env}}
 g(a_\pi).
 $$
 
-如果是 Integrated DS，$g$ 是恒等映射，因此 $a_\pi=a_{\text{env}}$，这时可以把 $\log\pi_\theta(a_\pi\mid s)$ 和 $Q_\phi(s,a_\pi)$ 等价写成 $\log\pi_\theta(a_{\text{env}}\mid s)$ 和 $Q_\phi(s,a_{\text{env}})$。如果 Integrated DS 后还接 action-adapter compose 或其他 adapter，则 $a_\pi$ 和 $a_{\text{env}}$ 不必相等；SAC 内部仍优化
+如果是 Integrated DS，$g$ 是恒等映射，因此 $a_\pi=a_{\text{env}}$。如果后接额外 adapter，两者不必相等；保留 policy-coordinate 熵时，密度项与价值项分别写作
 
 $$
 \log\pi_\theta(a_\pi \mid s),
 \qquad
-Q_\phi(s,a_\pi),
+Q_\phi(s,\chi(a_\pi)),
 $$
 
-而不是自动变成 $\log\pi_\theta(a_{\text{env}} \mid s)$。除非把 $g$ 也纳入一个整体可逆 bijector，否则经过不可逆 compose 后就不能声称有严格的 env-action density。
+而不是自动变成 $\log\pi_\theta(a_{\text{env}} \mid s)$。现有 policy-coordinate `log_prob` 不能直接充当 env-action density。若要求执行动作的分布，须计算整个映射的 pushforward；多对一映射不能直接使用普通可逆换元的方阵行列式，执行裁剪产生的边界概率也须另行处理。这里并非断言所有多对一映射都不存在可计算的执行密度。
 
 ### 5.3 对比
 
@@ -964,9 +977,9 @@ $$
 | --- | --- | --- |
 | 变换位置 | 模型外部 | actor 分布内部 |
 | 模型视角 | 分解动作空间 | bijector 输出的 policy action 空间 |
-| 可逆性 | Cartesian 为多对一；spherical/stereographic 几乎处处可逆 | bijector 层有 forward + inverse；若后接不可逆 adapter，整体链路不再严格可逆 |
+| 可逆性 | Cartesian 为多对一；spherical/stereographic codec 在有效域内可逆，整体仍受执行裁剪影响 | bijector 层有 forward + inverse；若后接不可逆 adapter，整体链路不再严格可逆 |
 | `log_prob` | compose 前 $a_\pi$ 的严格 policy-coordinate density | $a_\pi$ 上含几何 Jacobian 的密度；Integrated DS 中也是 env-action density |
-| 理论定位 | 表示消融 / 近似方案 | 概率自洽的最大熵策略 |
+| 理论定位 | 声明潜动作熵和 critic 接口的策略；价值接口与探索收益须实证检验 | 在声明参考测度下包含几何 Jacobian 的策略；性能同样须实证检验 |
 
 ## 6. 总结
 
@@ -978,6 +991,6 @@ $$
 - 速度上的 $\sigma_s$ 控制速度或步长探索。
 - 二者互不干扰，策略不确定性更可解释。
 - stereographic / spherical bijector 给出概率自洽的分布层实现。
-- action-adapter 表示保留了直觉上的方向-速度分解，但由于非可逆，更适合作为近似或消融。
+- action-adapter 保留方向–幅值分解；不可逆性要求区分潜动作熵、执行动作与 critic 特征，不自动决定它的实验地位或性能。
 
 因此，方向-速度分层不是额外探索噪声，而是对 actor 随机策略坐标系的重新选择：让分布参数对应控制任务中真正有意义的探索维度。

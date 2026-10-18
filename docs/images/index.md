@@ -8,6 +8,7 @@
 
 ## 基础复现与原始 DS 比较
 
+- [action_adapter_legacy_paired_auc_20261019.png](action_adapter_legacy_paired_auc_20261019.png)：全部五任务、H1/H5、十配对 seed；统一 endpoint 与实际观测 AUC，包含全零结果。
 - [cross-task_H1_bar.png](cross-task_H1_bar.png)
 - [cross-task_H5_bar.png](cross-task_H5_bar.png)
 - [cube-triple-task1_DS_Curves_4seed.png](cube-triple-task1_DS_Curves_4seed.png)

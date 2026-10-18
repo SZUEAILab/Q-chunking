@@ -1,16 +1,39 @@
-# 沿流形而非沿切线：连续控制中的方向–速度探索几何
+# Action-adapter：实验依据与论文工作稿
 
 > 按需参考 · [文档入口](../index.md)。本文保留详细说明或工作稿；当前执行和结果分别见 [日常实验](../current/experiments.md) 与 [当前结果](../current/results.md)。
 
-> 英文候选题目：**Beyond Local Covariance: Manifold-Matched Exploration for Continuous Control**
+> 历史英文候选题目：**Beyond Local Covariance: Manifold-Matched Exploration for Continuous Control**
 >
-> 方法暂名：**MME-DS**（Manifold-Matched Exploration with a Direction–Speed Instantiation）；DS-FER 保留为语义正则化扩展名。
+> 历史方法暂名：**MME-DS**（Manifold-Matched Exploration with a Direction–Speed Instantiation）；DS-FER 保留为语义正则化扩展名，尚非本轮 action-adapter 已确定的论文方法。
 >
-> 文档状态：研究与论文初稿，更新于 2026-09-26。受控实验已包含预注册的 32-seed 正式确认；机器人结果仍属于先导/负结果。文中明确区分“已有证据”和“待验证主张”，不可直接作为投稿终稿。
+> 历史初稿状态：原正文更新于 2026-09-26，当前 action-adapter 证据边界修订于 2026-10-19。旧受控实验包含 32-seed 确认，不能替代本轮机器人方法的确认；不可直接作为投稿终稿。
 
 > 2026-10-10 编辑说明：下方旧版正文与历史实验叙述予以保留，不能与正在执行的新一轮实验混为一谈。当前研究同时考察动作支持、噪声几何与分量时间尺度，主要平台为 OGBench，稳定后才开展 Robomimic 和其他算法迁移。新增时间分层研究的可证伪问题、真实实现和已注册实验见下一节。新一轮成功率尚未解封；技术完整性检查不是算法性能结果。
 
-## 当前研究分支：方向慢、幅度快的选择性持续控制
+## 2026-10-19：当前主线与证据边界
+
+当前优先验证完整 action-adapter。历史 posthoc 的正向结果与后来的 direct-speed critic
+消融属于不同配方；不能用后者直接解释或否定前者。已从当前固定 HF revision 的 200 次
+原版运行重新读取 400 个文件并核对旧索引哈希，统一计算 1M endpoint、末三次均值，以及
+实际观测的 100k–1M AUC，包含 task5 的全零结果。回顾性结果和完整图表见[当前结果](../current/results.md)。
+这些文件不能独立认证旧进程退出码、执行源码或评估 RNG，不能当作新确认实验。
+
+| 证据 | 对应配置与范围 | 当前能支持什么 |
+|---|---|---|
+| 原 posthoc | Cube-Triple task1–5，H1/H5，各十配对 seed | task1–4 的八组平均 observed-AUC 差均为正，task5 两组为零；完整方法值得优先复现 |
+| 2026-09-25 critic 消融 | sigmoid/direct，cube/sphere，task2 H1，各四 seed、500k | 该 direct 配方对 critic 接口敏感；不能转用于六月 tanh/log 配方的因果解释 |
+| 本分支冻结筛选 | 两任务、四 seed、九方法、1M，共 72 运行 | 比较完整 legacy/direct 配方、等宽 canonical、env critic、投影与熵目标；长程结果尚缺 |
+| 外部 RLPD 配方 | 独立的 16 运行、UTD=1/20 | learner 数值对照与短测已通过，正式性能尚缺；不是纯动作表示干预 |
+
+论文须先回答完整方法能否在统一协议下复现及迁移，再解释 critic、熵目标与动作支持的贡献。
+Canonical 只约束价值接口，保留潜动作熵；不得写成已经消除冗余探索或证明样本效率提高。
+后续仍需独立 seed 确认、开发任务之外的任务、强基线与跨算法/跨域证据，不能把工程通过
+写成顶会投稿准备度已经成立。原版数值没有填入尚未执行的新批次，执行设计见[当前实验](../current/experiments.md)。
+
+以下选择性持续控制、MME、DS-FER 的正文保留为历史工作稿。标题中的“当前”、数值与执行
+状态均相对于原段落日期，不代表本分支正在执行那些实验，也不是本轮论文的已定结论。
+
+## 历史研究分支：方向慢、幅度快的选择性持续控制
 
 ### 研究问题与候选贡献
 
@@ -143,9 +166,9 @@ a_t=[v_t,c_t],\qquad v_t=\rho_t u_t,
 
 另行核对[官方FQL当前源码](https://raw.githubusercontent.com/seohongpark/fql/master/agents/fql.py)，其Q归一化开关确实参与actor loss，而本地fork的同名开关未被该loss使用；官方实现为一步目标，本地则随horizon构造序列目标。[官方复现说明](https://github.com/seohongpark/fql)列出的Cube Double／Scene task2配方使用alpha300，不等于源码默认10或本地默认100，且明确区分后续推荐的Q归一化与原论文设置。这些核对要求跨算法比较分别标明原配方与匹配配方适配，不构成自动改参、FQL部署或新实验结果；引用当前master也不等于冻结的执行源码。
 
-## 投稿判断（不属于论文正文）
+## 历史投稿判断（按本轮配方边界修订）
 
-当前项目已经形成了一个有价值但需要重新解释的先导发现：在 OGBench cube-triple 的 task1–4、H=1/H=5 共 8 个设置上，旧版 direction–speed adapter 的末段成功率 IQM 为 50.3%，而 Cartesian TanhNormal 基线为 15.6%；按当前文件进行分层 bootstrap，IQM 差值约为 +34.7 个百分点，95% 区间约为 [20.1, 51.3]。新的 critic-space 反事实表明，这个优势很大一部分依赖 D+1 冗余 latent critic：在 task2 的四种子实验中，把 critic 改为只读取真实 5 维环境动作后，cube 与 sphere adapter 的 500k 成功率分别从 49.5% 降至 6.5%、从 66.5% 降至 27.5%。因此现有 adapter 结果不能作为“语义探索有效”的主证据。
+原版 posthoc 在 Cube-Triple task1–4、H1/H5 中保留了值得复现的正向信号，不能因后续方法失败而放弃。2026-09-25 的 critic-space 反事实使用的是 sigmoid/direct 配方：task2 四 seed 的 cube/sphere 终点分别从 49.5%/66.5% 变为 6.5%/27.5%。该结果说明这两项 direct 配方依赖具体 critic 接口，不能推出六月 tanh/log 原版的优势主要由冗余 critic 造成。原始[投影协议](../data/summaries/2026-10-19/protocols/projection_counterfactual_protocol.md)与[critic 协议](../data/summaries/2026-10-19/protocols/envq_counterfactual_protocol.md)须按配方分别引用；新的等宽 canonical 对照还要区分冗余坐标约束和 critic 输入维数变化。
 
 因此，不建议把论文核心写成“把 Cartesian action 改写成方向+速度”。这个表述会同时遇到三类审稿质疑：
 
@@ -157,17 +180,17 @@ a_t=[v_t,c_t],\qquad v_t=\rho_t u_t,
 
 新的 flow 反事实进一步改变了主线：**关键不是把动作变量命名为 direction 和 speed，而是让有限幅度探索的支持贴合动作流形。局部协方差只描述无限小邻域；在窄半径约束下，切向直线与沿壳层曲线具有相同的一阶协方差，却产生完全不同的发现概率。** Direction–speed 是这一原则的紧凑实现，而不是唯一实现。GAC 已建立“球面几何动作生成可以有效”这一算法事实；本文可区分的增量是解释何时一阶协方差不足、用同支持 flow 否定坐标专属解释，并给出跨学习接口的等效反事实。语义参考测度和分量温度仍是可检验扩展，但现有机器人数据尚未证明它们带来回报优势。
 
-以当前日期计算，[ICLR 2027](https://www.iclr.cc/Conferences/2027/CallForPapers) 摘要截止日为 2026-09-18，全文截止日为 2026-09-25；若此前没有登记真实摘要，已经不能新投。即使已经登记，也不建议用现有证据仓促投稿。合理目标是完成方法修正和跨域实验后投下一轮 ICML/NeurIPS，或先以 CoRL 强化机器人验证。
+投稿会议与时间窗口在证据形成后按当届官方 CFP 核验；不沿用历史文稿中的截止日期，也不为赶日期跳过完整方法复现、独立确认和适用边界验证。
 
 ---
 
-## 摘要
+## 历史摘要草稿
 
 连续控制策略通常在笛卡尔动作坐标中使用逐维高斯分布。对于机器人末端位移，这一表示把“往哪里移动”的方向与“移动多远”的速度编码在同一个向量中，使固定的 Cartesian 方差产生依赖于动作均值模长的方向扰动：当均值接近零时，微小噪声即可引起大角度变化；当均值较大时，同样噪声主要改变动作幅值。我们指出，这一问题不仅是策略参数化问题，更来自连续最大熵强化学习中被忽略的参考测度选择。对可逆动作变换使用完整 Jacobian 只会恢复原动作测度下的目标，而在冗余潜变量上直接最大化熵又可能奖励不改变环境行为的随机性。
 
 本文提出流形匹配探索（MME）的观点，并以方向–速度分解作为紧凑实例。对于位移向量，我们把角向搜索与径向精度分开，使有限幅度样本沿速度壳层移动，而不是沿均值处的切平面直走。策略样本始终组合成原始环境动作后交给 critic，从而避免冗余潜动作价值外推。作为坐标无关的强反事实，我们还构造具有完整 change-of-variables 密度的 Cartesian projected-tangent flow：它从切向 Gaussian 出发，但在执行前投影回半径壳。语义参考测度和独立方向/速度温度被保留为扩展，而不是当前性能结论的必要组成。
 
-在固定局部协方差体积的受控两阶段球壳诊断中，方向–速度策略可把随机性从径向重分配到切向搜索，并在精细阶段显式收窄：相对每个场景单独调优的 Cartesian 上界，端到端发现率从 17.54% 提高到 93.06%。在进一步的稀疏奖励两步 MDP 中，32-seed REINFORCE 实验显示 DS-stage 相对参数更多、获得目标对齐协方差初始化的 Cartesian full-cov oracle 提高 6.43 AUC 点（bootstrap [6.32,6.53]，32/32 配对为正），达到 50% 成功所需交互减少 26.65%；去阶段尺度和径向解耦分别损失 2.34 和 4.83 AUC 点。预注册的 axis-aligned 反例中二者 AUC 差仅 +0.045 点，区间完全落在 ±1 点等效界内，说明优势来自紧凑的旋转对齐归纳偏置而非普遍更强的容量。新的 32-seed off-policy twin-Q 桥接进一步使用环境动作 critic、replay 和无反事实标签的 AWR actor；DS-stage 相对 full-cov oracle 提高 2.63 AUC 点（95% CI [2.28,2.98]，32/32 为正），达到 50% 所需交互减少 12.12%，但固定终点成功率低 12.54 点。因此正结论是早期样本效率而非更高渐近性能。在固定均值的 contextual rotation 检验中，DS 在 12 个未见中间角上的成功率为 12.10%，9 参数 Fourier full-cov 为 6.62%（差 +5.48 点，95% CI [5.38,5.58]，32/32），并达到知道正确旋转基底的 Cartesian oracle 的 11.36%。进一步的预注册联合学习实验把 context 编码成 32 维状态，并让所有方法用同一 MLP 同时学习动作均值。32 个全新 seeds 上，DS-global 在 36 个未见中间角达到 63.03% 成功率，参数更多的 state-conditioned Cartesian full-cov 为 46.13%，配对差 +16.90 点（95% CI [14.46,19.33]，32/32 为正）；AUC 提高 14.43 点，并在 36/36 个测试角度上领先。DS 与知道正确旋转基底的 oracle 相差仅 +0.49 点，所有 13 项冻结判据通过。该结果把证据从固定均值扩展到高维状态下均值–协方差联合学习，但仍是无 critic 的受控 contextual bandit。OGBench cube-triple 的审计则给出更谨慎的结论：旧 adapter 的高 IQM 很大一部分依赖冗余 latent critic；semantic reference、方向图和奖励阶段正则均没有形成跨 seed 稳定收益。进一步的显式阶段 speed cap 在 4/4 fresh-seed 配对上准确降低后期动作范数，却使固定复评成功率平均变化 -1.75 点，说明正确的动作尺度并不足以修复状态访问与价值学习。把合成实验中有效的 replay-supported AWR 与阶段均衡 replay 带回 OGBench 后，预注册的 2-seed、100k discovery pilot 也否定了直接迁移：三个 AWR 温度的归一化回报 AUC 和阶段推进均为零，相对 DS-SAC/均匀的配对 AUC 变化为 -0.00565/-0.00427，三个确认门槛全部失败；阶段均衡 SAC 虽把平均在线阶段推进从 1.72% 提到 2.67%，却没有形成最终成功。本文因此把“表示能够表达有用探索”“训练算法在受控 MDP 中学到该分配”和“机器人回报可复现提高”明确分开。当前证据支持方向–速度几何机制、受控样本效率和一套无混杂审计方法，但尚不支持把现有 DS-FER 实例宣称为机器人性能改进方法。
+在固定局部协方差体积的受控两阶段球壳诊断中，方向–速度策略可把随机性从径向重分配到切向搜索，并在精细阶段显式收窄：相对每个场景单独调优的 Cartesian 上界，端到端发现率从 17.54% 提高到 93.06%。在进一步的稀疏奖励两步 MDP 中，32-seed REINFORCE 实验显示 DS-stage 相对参数更多、获得目标对齐协方差初始化的 Cartesian full-cov oracle 提高 6.43 AUC 点（bootstrap [6.32,6.53]，32/32 配对为正），达到 50% 成功所需交互减少 26.65%；去阶段尺度和径向解耦分别损失 2.34 和 4.83 AUC 点。预注册的 axis-aligned 反例中二者 AUC 差仅 +0.045 点，区间完全落在 ±1 点等效界内，说明优势来自紧凑的旋转对齐归纳偏置而非普遍更强的容量。新的 32-seed off-policy twin-Q 桥接进一步使用环境动作 critic、replay 和无反事实标签的 AWR actor；DS-stage 相对 full-cov oracle 提高 2.63 AUC 点（95% CI [2.28,2.98]，32/32 为正），达到 50% 所需交互减少 12.12%，但固定终点成功率低 12.54 点。因此正结论是早期样本效率而非更高渐近性能。在固定均值的 contextual rotation 检验中，DS 在 12 个未见中间角上的成功率为 12.10%，9 参数 Fourier full-cov 为 6.62%（差 +5.48 点，95% CI [5.38,5.58]，32/32），并达到知道正确旋转基底的 Cartesian oracle 的 11.36%。进一步的预注册联合学习实验把 context 编码成 32 维状态，并让所有方法用同一 MLP 同时学习动作均值。32 个全新 seeds 上，DS-global 在 36 个未见中间角达到 63.03% 成功率，参数更多的 state-conditioned Cartesian full-cov 为 46.13%，配对差 +16.90 点（95% CI [14.46,19.33]，32/32 为正）；AUC 提高 14.43 点，并在 36/36 个测试角度上领先。DS 与知道正确旋转基底的 oracle 相差仅 +0.49 点，所有 13 项冻结判据通过。该结果把证据从固定均值扩展到高维状态下均值–协方差联合学习，但仍是无 critic 的受控 contextual bandit。OGBench cube-triple 的审计则给出更谨慎的结论：后来的 sigmoid/direct 配方在 task2 上对 critic 接口敏感，这不能解释六月 tanh/log 原版的正向汇总；semantic reference、方向图和奖励阶段正则均没有形成跨 seed 稳定收益。进一步的显式阶段 speed cap 在 4/4 fresh-seed 配对上准确降低后期动作范数，却使固定复评成功率平均变化 -1.75 点，说明正确的动作尺度并不足以修复状态访问与价值学习。把合成实验中有效的 replay-supported AWR 与阶段均衡 replay 带回 OGBench 后，预注册的 2-seed、100k discovery pilot 也否定了直接迁移：三个 AWR 温度的归一化回报 AUC 和阶段推进均为零，相对 DS-SAC/均匀的配对 AUC 变化为 -0.00565/-0.00427，三个确认门槛全部失败；阶段均衡 SAC 虽把平均在线阶段推进从 1.72% 提到 2.67%，却没有形成最终成功。本文因此把“表示能够表达有用探索”“训练算法在受控 MDP 中学到该分配”和“机器人回报可复现提高”明确分开。当前证据支持方向–速度几何机制、受控样本效率和一套无混杂审计方法，但尚不支持把现有 DS-FER 实例宣称为机器人性能改进方法。
 
 最新的 state-conditioned matched-support pilot 进一步直接比较 Cartesian L2 projection、sphere exponential tangent 和 normalized projected tangent：在 task1/task2、fresh seeds 50/51 的 12 条 100k 训练中，两种球面方法相对 Cartesian 的四配对归一化回报 AUC 均值只变化 +0.177/-0.111 点，远低于预注册 +2 点门槛；二者彼此仅差 -0.288 点并通过实用等价规则。共同 100 回合复评成功率均值仅为 0.25%/0.50%/0%，不能建立机器人收益。
 
@@ -209,7 +232,7 @@ r=\|v\|_2.
 
 1. **方向–速度耦合诊断。** 我们给出 Cartesian 高斯局部角方差随均值模长平方反比变化的近似，说明固定标准差并不对应固定方向探索。
 2. **显式语义参考测度。** 我们不把潜变量熵冒充环境动作熵，而是明确优化方向、速度和其他控制量相对于各自参考分布的 KL，并分别学习温度。
-3. **无冗余价值学习。** critic 只接收环境真正执行的动作；策略坐标的冗余自由度不会进入 Q 函数，也不能通过“无行为变化的熵”获得奖励。
+3. **价值接口对照。** 分别检验 latent、env 与等宽 canonical critic。价值对执行等效动作保持不变，不等于潜坐标熵已不再奖励冗余方向范数；这两项干预必须分开。
 4. **系统性实证。** 我们先在局部协方差体积匹配的两阶段球壳任务中做方向分配、阶段切换和径向解耦消融，再比较 Cartesian、adapter、球坐标、立体投影、局部切空间和内禀球面分布，并在单步动作与动作块上测量成功率、AUC、方向覆盖、速度覆盖和 critic 外推误差。
 
 我们的目标不是证明方向–速度表示对所有任务都更优。相反，我们研究它何时有效、收益究竟来自策略族还是正则测度，以及如何在不破坏 actor–critic 一致性的情况下获得可控的语义探索。
@@ -519,6 +542,11 @@ u_t=\operatorname{Exp}_{\bar u}(\delta_t).
 
 ### 6.3 OGBench cube-triple 先导结果
 
+下表保留历史稿的 tail3（800k/900k/1M 均值）口径，不是 endpoint。后面的旧 IQM 汇总
+只包括 task1–4 的八个设置，不包含 task5；它不是完整五任务汇总。本轮 200 运行复核覆盖
+baseline/posthoc 两列和 task5，未重新核验整套 stereographic/spherical 运行及旧 IQM 区间；
+统一 endpoint、tail3、observed-AUC 和全部零结果以[当前结果](../current/results.md)为准。
+
 | 任务 | H | Cartesian | Adapter | Stereographic | Spherical |
 |---|---:|---:|---:|---:|---:|
 | task1 | 1 | 89.4 | **99.7** | 83.4 | 58.3 |
@@ -539,7 +567,7 @@ u_t=\operatorname{Exp}_{\bar u}(\delta_t).
 | Stereographic | 36.6 | 21.2 | 27.2 |
 | Spherical | 26.9 | 10.7 | 16.2 |
 
-对当前结果做配对、按 task 分层的非正式 bootstrap 后：adapter 相对 Cartesian 的 IQM 差值约为 +34.7 个百分点，95% 区间约 [20.1, 51.3]；80 个 task×horizon×seed 单元中，adapter 的经验 improvement probability 约为 0.90。正式论文应使用 [RLiable 推荐的统计协议](https://proceedings.neurips.cc/paper/2021/hash/f514cec81cb148559cf475e7426eed5e-Abstract.html) 重新生成 IQM、optimality gap、performance profile 与分层 bootstrap CI。
+历史稿对这八个设置做过非正式配对 bootstrap，记录 IQM 差值约 +34.7 点、区间约 [20.1,51.3]，经验 improvement probability 约 0.90。这些数字保留历史来源，不作为本轮重新验收的统计量。正式跨任务分析应预先固定任务集合、指标和 seed 层级，包含 task5，再按 [RLiable 统计协议](https://proceedings.neurips.cc/paper/2021/hash/f514cec81cb148559cf475e7426eed5e-Abstract.html) 生成 IQM、performance profile 与分层区间。
 
 ### 6.4 Tangent 结果
 
@@ -913,9 +941,9 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 
 ## 7. 当前证据与剩余混杂因素
 
-1. **Critic 空间不一致已被证实为重要因素。** 旧 adapter 让 critic 读取 D+1 policy action，而环境只执行 D 维 compose 结果。四种子反事实中，改用 env-action critic 后 cube/sphere 终点分别下降 43.0/39.0 点；旧强结果不能再作为无混杂证据。
+1. **Direct 配方对 critic 接口敏感。** 2026-09-25 的 sigmoid/direct 四种子反事实中，env critic 相对 latent critic 的 cube/sphere 终点分别下降 43.0/39.0 点。该干预同时改变 critic 特征和输入维数，不能据此认定算法接口不合法，也不能解释六月 tanh/log 的旧强结果。
 2. **动作冗余。** Cartesian adapter 的方向向量长度在 normalize 后被丢弃；不同 policy action 可产生同一环境动作。增加其熵可能不增加行为多样性。
-3. **动作范数约束不同。** sphere-bound actor 将 XYZ 范数限制为 1，而 cube-bound actor 可达 \(\sqrt3\)。简单投影把终点成功率从 6% 提高到 30%；在 env-Q 下 sphere adapter 为 27.5%，当前数据更符合“球约束贡献主要可复现收益”的解释。
+3. **动作范数约束不同。** sigmoid/direct 的 sphere-bound actor 将 XYZ 范数限制为 1，cube-bound actor 可达 \(\sqrt3\)；tanh/log 的 `sphere` 仅指参考半径，不能推断同一单位球约束。历史 direct 筛选中 projection 为 30%、env-Q sphere 为 27.5%，只能在该配方和任务内讨论范数约束贡献。
 4. **目标熵不同。** 当前 target entropy 与 policy action dimension 成正比。Adapter 比 baseline 多一维，温度调节目标随之改变。
 5. **算法并非完整 SAC。** TD target 不含 entropy backup，理论描述必须与实现对齐。
 6. **旧新配置不可直接等同。** 旧 adapter 主要对应 legacy `tanh + log speed`；当前 `sigmoid + direct speed` 已有 task2 四种子筛选，但尚无跨任务、10-seed canonical 结果。
@@ -1028,17 +1056,17 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 
 ### 10.1 实验设置
 
-我们在具有 Cartesian delta-control 的机器人操作任务上评估 DS-FER。主要环境来自 OGBench manipulation，并使用 RLPD-style online learning with prior data：每次更新从固定先验数据和在线 replay 各采样一半样本。除动作策略和探索正则外，所有方法共享网络宽度、Q ensemble、UTD ratio、数据比例、优化器和评估协议。每个主结果使用 10 个训练种子；评估 episode 使用独立固定种子。对于动作块，策略一次预测 H 个动作，环境按顺序执行，并采用与基线相同的 H-step target。
+当前 action-adapter 筛选使用 OGBench Cube-Triple task2 与 Cube Double task2、四个配对训练 seed、每项 1M 步和每点 50 个评估 episodes，保留真实 step 0。Project ACRLPD 每次更新混合一半固定先验与一半在线 replay；同配方 critic 消融保持 actor、数据、预算与熵目标。另有独立外部 RLPD 配方比较，网络和 UTD 不同，须单列计算量。当前尚无这些长程运行的新性能结果。十个 fresh seed 属于后续确认设计，不得写成首批已完成的重复数；历史原版常用 100 episodes，其指标与评估协议另列。
 
 我们报告 success-rate AUC、末段成功率和达到预设成功率所需的环境交互数。跨任务结果使用 IQM 和 95% 分层 bootstrap 置信区间，并报告 performance profile 与 probability of improvement。所有超参数、原始 CSV、环境版本和数据哈希将公开。
 
 ### 10.2 先导结果
 
-在 cube-triple task1–4 上，旧版 direction–speed adapter 在 8 个 task×horizon 设置中的 7 个取得最高或次高末段成功率。其跨设置 IQM 为 50.3%，相比 Cartesian baseline 的 15.6% 提高 34.7 个百分点。提升在 task2 H=1（37.3%→91.0%）、task3 H=5（0.6%→27.5%）和 task4 H=5（1.1%→14.6%）上最明显。这说明把方向与速度作为独立 policy factors 具有潜在样本效率优势。
+原版 posthoc 的统一重算保留了正向信号。以 task2 H1 为例，1M endpoint 为 baseline 49.60%、posthoc 94.90%；末三次均值则为 37.30%/90.97%，两种指标不能混写。其实际观测的 100k–1M success AUC 配对差为 +32.28 点，十对均为正。task1–4、H1/H5 的八组平均 observed-AUC 差均为正；task5 两组全零仍纳入报告。这是同一任务族的回顾性结果，不能代替当前冻结批次或跨域确认，见[完整重算](../current/results.md)。
 
 然而，坐标图选择本身不能解释全部结果。带完整 change-of-variables 的 stereographic integrated policy 的 IQM 为 27.2%，明显低于 adapter；spherical policy 的 IQM 为 16.2%，与 baseline 接近。新加入的 state-centered tangent policy 也没有稳定改善结果，并在 task2 H=5 上退化。最新的 matched-semantic discovery 虽在 seeds 0--3 得到 stereographic 相对 spherical 的 +18.5 点终点差，但 fresh seeds 4--7 的差值为 -0.5 点，固定复评也为 -0.5 点，未通过预注册确认规则。后续奖励阶段正则筛选也只在四个 seed 中的一个得到 12% 终点成功，其余三对持平为零；固定复评的 +3.25 点均值仍主要由同一 seed 驱动。这些负结果把研究问题从“哪种球面坐标最好”进一步收窄为“如何先在可控任务中识别状态相关探索预算的因果需求”。
 
-新的 task2 受控筛选又进一步收窄了假设。四种子 Cartesian L2-ball 反事实显示，在 500k 步终点，baseline、projection、latent-Q cube 和 latent-Q sphere 分别达到 6.0%、30.0%、49.5% 和 66.5%；对应 AUC 为 0.7、5.9、8.8 和 13.7。随后只改变 critic 接口的反事实却发现，env-Q cube/sphere 分别降至 6.5%/27.5%，AUC 降至 0.7/5.4。也就是说，去掉冗余 latent critic 后，cube 与 baseline、sphere 与 projection 的性能分别接近。最终 matched-forward 消融中，action-volume/semantic-product/separate-alpha 的终点成功率又只有 9.5%/5.5%/0.0%。当前可复现的正信号主要来自单位球径向约束；匹配 forward action 后，显式 semantic reference 与分量化温度尚无性能正证据。
+后来的 sigmoid/direct task2 筛选检验了另一组配方。四种子 Cartesian L2-ball 反事实显示，在 500k 步终点，baseline、projection、latent-Q cube 和 latent-Q sphere 分别达到 6.0%、30.0%、49.5% 和 66.5%；对应 AUC 为 0.7、5.9、8.8 和 13.7。随后只改变 critic 接口的反事实却发现，env-Q cube/sphere 分别降至 6.5%/27.5%，AUC 降至 0.7/5.4。也就是说，去掉冗余 latent critic 后，cube 与 baseline、sphere 与 projection 的性能分别接近。最终 matched-forward 消融中，action-volume/semantic-product/separate-alpha 的终点成功率又只有 9.5%/5.5%/0.0%。这些 direct/matched-forward 实验不支持显式 semantic reference 或分量化温度带来稳定收益；它们没有检验六月 tanh/log 原版的同配方 critic 反事实，不能将原版正信号归结为单位球约束。
 
 ### 10.3 机制分析
 
@@ -1064,7 +1092,7 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 
 ## 12. 结论
 
-本文研究连续控制中一个常被坐标表示掩盖的问题：动作随机性究竟对应哪一种行为探索。Cartesian 高斯把方向和速度耦合在一起，而单纯的球面换元又不能自动产生新的探索原则。匹配局部协方差体积的球壳实验给出了正因果证据，32-seed 稀疏奖励 MDP 又表明该结构能穿过 on-policy 学习接口：相对参数更多的 full-covariance oracle，DS 提高 6.43 AUC 点并减少 26.65% 达阈值交互。新的 32-seed off-policy twin-Q 桥接把结论扩展到 replay/critic 接口：AUC 提高 2.63 点、到 50% 少 12.12% 交互，且 32/32 配对同向；同时终值低 12.54 点，明确限定为早期效率而非渐近支配。固定均值的 held-out rotation 显示两个 DS 尺度参数可匹配旋转 Cartesian oracle，并比 9 参数 Fourier full-cov 高 5.48 点；随后高维联合学习确认把均值也交给共享神经网络，DS 在 36 个未见角上以 63.03% 对 46.13% 超过 state-conditioned Cartesian full-cov，配对差 +16.90 点 [14.46,19.33]，32/32 seeds 为正，且匹配旋转 oracle。Axis-aligned 等效反例、state/coupled 消融和 contextual bandit 限制把结论限定为“紧凑、旋转对齐的均值局部协方差归纳偏置”，而非普遍更强的策略族。但 cube-triple 仍没有验证机器人性能优势：旧 adapter 的大部分收益依赖冗余 latent Q，semantic reference、方向图和简单阶段 loss 调度也没有跨 seed 稳定改善；显式 speed cap 虽在 4/4 配对上准确缩小后期动作，固定复评成功率反而平均下降 1.75 点。进一步的 OGBench discovery pilot 显示，纯 replay AWR 在 Cartesian 与 DS 上都把阶段推进压到零，三个 DS 温度均未通过确认门槛；阶段均衡 SAC 只改善了训练访问分布。方向专属 replay-support 在共享 trunk 和参数隔离 trunk 下都未通过预注册速度保留条件；后者证明即使直接梯度严格隔离，critic 与状态分布仍会产生闭环行为耦合。本文因而把“表示能力”“受控任务的可学习性”和“复杂机器人上的可复现回报”分成三个证据层级。下一阶段应转向带时序 credit assignment 的状态条件探索或新的机器人任务，而不是启动已被门槛否决的 AWR 500k confirmation。
+本文研究连续控制中一个常被坐标表示掩盖的问题：动作随机性究竟对应哪一种行为探索。Cartesian 高斯把方向和速度耦合在一起，而单纯的球面换元又不能自动产生新的探索原则。匹配局部协方差体积的球壳实验给出了正因果证据，32-seed 稀疏奖励 MDP 又表明该结构能穿过 on-policy 学习接口：相对参数更多的 full-covariance oracle，DS 提高 6.43 AUC 点并减少 26.65% 达阈值交互。新的 32-seed off-policy twin-Q 桥接把结论扩展到 replay/critic 接口：AUC 提高 2.63 点、到 50% 少 12.12% 交互，且 32/32 配对同向；同时终值低 12.54 点，明确限定为早期效率而非渐近支配。固定均值的 held-out rotation 显示两个 DS 尺度参数可匹配旋转 Cartesian oracle，并比 9 参数 Fourier full-cov 高 5.48 点；随后高维联合学习确认把均值也交给共享神经网络，DS 在 36 个未见角上以 63.03% 对 46.13% 超过 state-conditioned Cartesian full-cov，配对差 +16.90 点 [14.46,19.33]，32/32 seeds 为正，且匹配旋转 oracle。Axis-aligned 等效反例、state/coupled 消融和 contextual bandit 限制把结论限定为“紧凑、旋转对齐的均值局部协方差归纳偏置”，而非普遍更强的策略族。但 cube-triple 仍没有验证机器人性能优势：后来的 direct 配方对 critic 接口敏感，原版 tanh/log 完整方法的收益仍须独立复核，semantic reference、方向图和简单阶段 loss 调度也没有跨 seed 稳定改善；显式 speed cap 虽在 4/4 配对上准确缩小后期动作，固定复评成功率反而平均下降 1.75 点。进一步的 OGBench discovery pilot 显示，纯 replay AWR 在 Cartesian 与 DS 上都把阶段推进压到零，三个 DS 温度均未通过确认门槛；阶段均衡 SAC 只改善了训练访问分布。方向专属 replay-support 在共享 trunk 和参数隔离 trunk 下都未通过预注册速度保留条件；后者证明即使直接梯度严格隔离，critic 与状态分布仍会产生闭环行为耦合。本文因而把“表示能力”“受控任务的可学习性”和“复杂机器人上的可复现回报”分成三个证据层级。下一阶段优先复现完整 action-adapter、完成受控 critic 消融和扩展任务确认；已被门槛否决的 AWR 500k confirmation 不因本次主线修订而重启。
 
 真实状态条件的 matched-support pilot 已完成这一接口接入，但没有得到机器人样本效率正收益：100k 的指数/投影切线相对 Cartesian 四配对 AUC 均值为 +0.177/-0.111 点，均未通过 +2 点门槛。随后在历史曲线已证明 300k 内可学习的 task1 上使用四个全新 seeds，二者的 AUC 反而变化 -2.67/-3.10 点且都只有 1/4 配对为正；两种 retraction 彼此仍实用相似。Exp 的固定终点成功率虽以 39.5% 高于 Cartesian 的 21.75%，但提升集中在部分种子的 250--300k，不能覆盖完整学习曲线上的效率损失。固定状态诊断又确认流形策略确实显著扩大角向与径向随机性，故下一步应匹配执行空间探索方差或引入状态/阶段条件预算，而不是延长、筛选或事后调节当前 seeds。
 
@@ -1074,11 +1102,11 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 
 最新的固定温度、条件扰动匹配实验把机器人结论推进了一步但没有消除限制：task1 独立 confirmation 的 normalized-return AUC 平均提高 2.07 点、中位数提高 2.56 点且 3/4 配对为正，所有操纵与容量门均通过；然而 success AUC 和 300k 成功率都低于 Cartesian。因而当前机器人主张只能是“单任务稠密回报 AUC 的可复现改善”，不能外推为任务完成率、渐近性能或多任务优势。
 
-## 13. 最短可执行路线
+## 13. 历史执行路线与本轮接续状态
 
-1. 修正并冻结实验协议：锁版本、统一 100 eval episodes、统一 AUC/末段指标、确定 canonical 数据。
+1. 以当前冻结协议为准：锁版本，首批 50 eval episodes、真实 step 0–1M AUC；历史 100-episode 结果单列，并区分 endpoint、tail3 和实际观测窗口。
 2. **已完成：** `TanhNormal + XYZ L2-ball projection`、sphere-direct adapter、cube-direct adapter，各 4 seeds；projection 单独提供 +24.0 点终点增益。
-3. **已完成：** env-action critic 反事实，各 bound 4 seeds；cube/sphere 相对 latent-Q 分别下降 43.0/39.0 点，旧 adapter 不再适合作为主方法。
+3. **历史 direct 配方已完成：** env-action critic 反事实，各 bound 4 seeds；cube/sphere 相对 latent-Q 分别下降 43.0/39.0 点。该结论不排除原版 posthoc 作为完整方法，新的 legacy/canonical 验证仍待完成。
 4. **已完成：** matched-forward env-Q 的 V1/S1/S3 共 12 个正式运行；semantic reference 改变了动作半径但没有提高性能，separate-alpha 为全零成功。
 5. **已完成（探索性）：** KL=5.3187 的 V5/S5 为 9.0%/2.5%，固定复评 7.5%/1.75%；KL 预算失配不足以解释 semantic reference 的失败。
 6. **已完成且未确认：** matched-semantic stereographic 在 discovery seeds 上为 +18.5 点，但 fresh seeds 上为 -0.5 点，固定复评同样为 -0.5 点；不再把全局方向图筛选作为近期主线。
@@ -1087,7 +1115,7 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 9. **已完成（学习层）：** 32-seed sparse two-stage MDP；DS-stage AUC 73.89%，full-cov oracle 67.46%，32/32 配对为正，达到 50% 少 26.65% 交互；阶段/径向消融均通过。
 10. **已完成（反例）：** axis-aligned seeds 200--231 中 DS 与 full-cov oracle 等效，AUC 差 +0.045 点且区间落在 ±1 点内。
 11. **已完成（学习层，off-policy）：** 32-seed replay/twin-Q 桥接；DS-stage 相对 full-cov oracle 的 AUC +2.63 点、到 50% 少 12.12% 交互，32/32 同向，但固定终值低 12.54 点。直接 Q-gradient 的全线坍缩保留为 critic 外推负消融。
-12. 只有无冗余 OGBench 新 seeds 稳定为正并通过 fresh-seed confirmation 后，才扩展多任务、H=5、RoboMimic/LIBERO 和第二 backbone。
+12. 依据完整 action-adapter 的冻结筛选确定候选配方，再以十个 fresh seed、开发任务之外的任务、H5、跨算法与 RoboMimic 检验收益及边界；不预先要求某种 critic 必须胜出，也不将四 seed 筛选作确认结论。
 13. **已完成且未通过：** 直接 reward-stage speed cap 的 fresh seeds 14--17 确认。固定复评对照 8/0/0/0%、cap 0/1/0/0%，均值差 -1.75 点；阶段 1/2 范数虽在 4/4 配对下降，成功 AUC 与后期状态占比没有改善。不得在这些 seeds 上继续调 cap。
 14. **已完成（协方差泛化层）：** contextual held-out rotations；DS 12.10%、Fourier full-cov 6.62%、rotating oracle 11.36%，全部正式判据通过。该实验固定均值，不冒充完整状态泛化。
 15. **已完成（机器人 discovery，负结果）：** env-action critic、阶段平衡 replay 和 replay-supported AWR 的 2-seed/100k pilot；三个 AWR 温度的回报 AUC 与阶段推进均为零，所有确认门槛失败，因此不启动 500k 纯 AWR confirmation。

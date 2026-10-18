@@ -5,6 +5,49 @@
 更新：2026-10-19。本页汇总已有记录，不作为实时训练监控。性能解释主要来自此前已分析报告，
 新归档中的运行完整性检查不自动升级为科学结论。
 
+## 原版 posthoc 的统一重算（2026-10-19）
+
+从当前固定 HF revision `a16bfe8` 重新读取 200 次 Cube-Triple 原版运行：五任务、H1/H5、
+两个方法、各十个 seed。全部 400 个 flags/eval 文件与此前保存索引的 SHA-256 相同；
+独立重算逐运行指标也与旧索引一致。索引原有 revision `e3785e2` 单独保留，没有改写其来源。
+每个任务内按训练 seed 配对，未混入四 seed 小批次、FQL 或后来的 direct-speed 配方。
+
+表中两个成功率列均为 baseline / posthoc，单位是百分比。Endpoint 固定为 1M 单点；
+tail3 固定为 800k/900k/1M 三点均值。AUC 只使用真实观测的 100k–1M 区间并除以 900k，
+不补造 step 0，不能与新批次的 0–1M AUC 直接混算。区间是十个配对 seed 的回顾性描述
+bootstrap，未作确认性多比较结论。
+
+此处配对指文件中相同的训练 seed 标签；旧文件未证明所有环境与评估随机源都按相同规则
+隔离，因此不把它描述为完整的 common-random-number 控制。
+
+| 任务 | H | Endpoint baseline / posthoc | Tail3 baseline / posthoc | Observed-AUC 配对差及 95% 描述区间（百分点） | AUC 正配对 |
+|---|---:|---:|---:|---:|---:|
+| task1 | 1 | 91.90 / 99.90 | 89.40 / 99.73 | +10.97 [−4.32, +26.67] | 5/10 |
+| task1 | 5 | 54.10 / 84.90 | 49.13 / 81.30 | +29.29 [+4.70, +51.30] | 7/10 |
+| task2 | 1 | 49.60 / 94.90 | 37.30 / 90.97 | +32.28 [+24.84, +39.51] | 10/10 |
+| task2 | 5 | 2.30 / 31.00 | 2.00 / 22.03 | +7.93 [+4.15, +11.95] | 9/10 |
+| task3 | 1 | 1.10 / 28.40 | 1.10 / 22.41 | +8.49 [+4.16, +13.16] | 10/10 |
+| task3 | 5 | 0.70 / 31.70 | 0.60 / 27.49 | +13.65 [+10.70, +16.55] | 10/10 |
+| task4 | 1 | 49.40 / 66.50 | 44.43 / 61.40 | +8.37 [+1.71, +15.34] | 8/10 |
+| task4 | 5 | 1.60 / 17.60 | 1.13 / 14.57 | +6.36 [+4.22, +8.51] | 10/10 |
+| task5 | 1 | 0.00 / 0.00 | 0.00 / 0.00 | +0.00 [+0.00, +0.00] | 0/10 |
+| task5 | 5 | 0.00 / 0.00 | 0.00 / 0.00 | +0.00 [+0.00, +0.00] | 0/10 |
+
+![原版 posthoc 的全部任务、配对 AUC 与统一终点](../images/action_adapter_legacy_paired_auc_20261019.png)
+
+该重算保留了原方法值得优先复现的正向信号，同时保留 task1 H1 的跨零描述区间和 task5 的
+两组全零。旧文件不能认证进程退出码、执行源码身份或独立评估 RNG；100 episodes 是 flags
+中的配置值，尚无逐 episode 原始记录的独立核验。这是同一任务族的历史证据，不是新的确认实验。
+复算工具为 [`research.action_adapter_legacy`](../../research/action_adapter_legacy.py)，10 项测试通过；
+原始曲线、逐 seed 差值及文件身份记录在数据盘
+`reports/action_adapter_validation_20261019/legacy-outcome-reverification.json`。
+
+2026-09-25 的 [critic-space 协议](../data/summaries/2026-10-19/protocols/envq_counterfactual_protocol.md)
+复用 [projection 协议](../data/summaries/2026-10-19/protocols/projection_counterfactual_protocol.md)
+中的 sigmoid/direct latent 运行，属于另一配方。其 env-Q 降幅不能解释六月 tanh/log 原版
+优势的来源，也不构成放弃完整原方法的证据。新筛选因而分别保留 legacy、direct 及各自的
+latent/env/canonical 对照，完整方法复现和机制解释分开判断。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、
@@ -107,7 +150,8 @@ GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-refer
 
 ## 下一步
 
-优先对已完成的状态条件批次做完整验收和配对分析，区分方向、幅值与倒置反事实的作用；
-然后按预先规定的门决定确认或修改机制。先使用已有数据，不因文档整理增加 seed、重跑或启动新队列。
+优先完成本轮完整 action-adapter 的 72 运行复现与消融、critic 等效动作诊断及独立外部
+基线比较；随后按冻结规则确定确认配方，扩展 fresh seed、开发任务之外的任务和算法/领域。
+旧状态条件批次继续保留为边界证据，其分析状态单独记录，不替代完整 adapter 主线。
 
 写论文时从这里追溯来源，工作稿见[论文参考](../reference/paper_draft.md)。
