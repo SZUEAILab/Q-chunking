@@ -32,6 +32,21 @@ EPS = 1e-6
 DEFAULT_DIR_DIMS = 3
 
 
+@jax.custom_jvp
+def _direction_norm(value):
+    """Preserve the L2 norm forward pass and choose a finite zero subgradient."""
+    return jnp.linalg.norm(value, axis=-1, keepdims=True)
+
+
+@_direction_norm.defjvp
+def _direction_norm_jvp(primals, tangents):
+    (value,), (tangent,) = primals, tangents
+    norm = _direction_norm(value)
+    denominator = jnp.where(norm > 0, norm, 1.0)
+    derivative = jnp.sum(value * tangent, axis=-1, keepdims=True) / denominator
+    return norm, derivative
+
+
 def _validate(representation, speed_squash, speed_interpretation, speed_bound):
     return (
         DirectionRepresentation(representation),
@@ -100,7 +115,7 @@ def _np_direction_from_action(actions, representation, eps):
 def _jax_direction_from_action(actions, representation, eps):
     if representation is DirectionRepresentation.CARTESIAN:
         raw = actions[..., :3]
-        norm = jnp.linalg.norm(raw, axis=-1, keepdims=True)
+        norm = _direction_norm(raw)
         return raw / jnp.maximum(norm, eps), 3
     if representation is DirectionRepresentation.SPHERICAL:
         theta = jnp.pi * jnp.clip(actions[..., 0:1], 0.0, 1.0)
@@ -244,7 +259,7 @@ def _decompose_jax(
     speed_pipeline = AdapterSpeedPipeline(speed_squash, speed_interpretation)
     xyz = actions[..., :DEFAULT_DIR_DIMS]
     remainder = actions[..., DEFAULT_DIR_DIMS:]
-    magnitude = jnp.linalg.norm(xyz, axis=-1, keepdims=True)
+    magnitude = _direction_norm(xyz)
     direction = xyz / jnp.maximum(magnitude, eps)
     north = jnp.broadcast_to(
         jnp.array([0.0, 0.0, 1.0], dtype=xyz.dtype), direction.shape

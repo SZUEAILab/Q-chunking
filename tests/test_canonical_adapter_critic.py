@@ -53,6 +53,25 @@ def test_canonical_queries_include_actual_execution_clipping():
     np.testing.assert_allclose(agent._critic_action(action), expected, atol=2e-6)
 
 
+@pytest.mark.parametrize("space", ["env", "canonical"])
+@pytest.mark.parametrize("speed", ["log", "direct"])
+def test_zero_direction_has_finite_critic_gradient(space, speed):
+    agent = make_agent(space, speed=speed)
+    action = jnp.array([0., 0., 0., -0.5 if speed == "log" else 0.5, 0.2, -0.3])
+    gradient = jax.grad(lambda x: jnp.sum(agent._critic_action(x)))(action)
+    assert np.isfinite(gradient).all()
+    np.testing.assert_allclose(gradient[-2:], [1., 1.], atol=1e-6)
+
+
+def test_safe_norm_preserves_nonzero_derivatives_and_forward_values():
+    from direction_speed.adapter import _direction_norm
+    values = jnp.array([[0., 0., 0.], [0.2, -0.3, 0.4], [1e-8, 0., 0.]])
+    np.testing.assert_array_equal(_direction_norm(values), jnp.linalg.norm(values, axis=-1, keepdims=True))
+    x = values[1:2]
+    np.testing.assert_allclose(jax.grad(lambda a: _direction_norm(a).sum())(x),
+                               jax.grad(lambda a: jnp.linalg.norm(a))(x), atol=1e-6)
+
+
 def test_critic_intervention_preserves_actor_initialization():
     agents = [make_agent(space) for space in ("latent", "canonical", "env")]
     reference = jax.tree_util.tree_leaves(agents[0].network.params["modules_actor"])
