@@ -46,6 +46,26 @@ direct-canonical H5 128 步，以及 native 64 步完整运行验收均退出 0�
 `reports/action_adapter_validation_20261019/engineering-critic-invariance-v2.json` 和
 `engineering-invariance-comparison.json`。72 次长程筛选的性能结果仍待平台执行。
 
+### 原论文 RLPD 配方的独立验收
+
+新增原论文 RLPD learner 配方的 H1 OGBench 入口，与首轮冻结筛选分开；
+来源和不同 RLPD 实现的区别见[基线参考](../reference/rlpd_baselines.md)。
+固定上游 commit 的六类数值对照全部通过，参数、优化器状态与 RNG 最大差为 0；
+另外 10 项更新顺序、接口和恢复测试通过。
+
+本地 GPU 0 完成真实 Cube-Triple task2 的 64 步工程运行，使用默认 256×256 网络、
+10-Q 随机 2-Q min target、entropy backup 与 UTD=20，训练退出 0。
+step 0/64 评估和训练日志完整，参数有限，实际执行 660 次 critic、33 次 actor 和 33 次
+温度更新；checkpoint 能通过该 learner API 恢复并产生有限、合法动作。
+验收控制器首次误用系统 Anaconda Python，读取 checkpoint 时触发 JAX/NumPy 兼容错误；
+原记录保留，随后在项目虚拟环境复核同一 checkpoint 通过，未重跑训练。
+
+数值报告为数据盘 `reports/action_adapter_validation_20261019/rlpd-reference-equivalence.json`，
+GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-reference-engineering-revalidation.json`。
+这只验证移植与工程链路；尚无该外部配方的长程 OGBench 性能结果。
+另已编译两个任务 × 四配对 seed × UTD=1/20 的 16 运行草案，放在
+`control/action_adapter_reference_20261019/`，未启动、未加入原 72 运行，也未申请额外实例。
+
 ## 当前可以说什么
 
 | 研究项 | 已有判断 | 边界 |

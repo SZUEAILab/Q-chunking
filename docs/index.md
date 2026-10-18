@@ -13,6 +13,7 @@
 <summary>按需参考与历史记录</summary>
 
 - [方法详解](reference/method.md)：推导、分布与实现细节。
+- [RLPD 基线来源](reference/rlpd_baselines.md)：原论文配方移植、项目 fork 与 FQL 作者实现的区别。
 - [数据集安装](reference/datasets.md)：OGBench、RoboMimic、LIBERO。
 - [论文工作稿](reference/paper_draft.md)：写作时查，不作为日常运行规则。
 - [历史归档](archive/index.md)：已按主题合并的旧协议、结果和运维记录。

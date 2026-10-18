@@ -10,6 +10,7 @@
 | 入口 | 用途 |
 |---|---|
 | `main_online.py` | RLPD，在线交互并混合先验数据 |
+| `main_rlpd_reference.py` | 原论文 RLPD learner 配方的 H1 OGBench 适配；默认 UTD=20 |
 | `main.py` | FQL/QC 离线到在线训练 |
 | `schedule.py` | 编译任务矩阵、分配 GPU 槽位、回填队列 |
 
@@ -18,6 +19,10 @@
 统计与旧数据加载器统一在 `research.metrics`，调用时显式提供批次身份；这些加载器不是
 reward-blind 验证器。根目录不再保留按单个批次命名的分析、训练或绘图入口。
 新批次配置和临时执行工具放数据盘 `control/<批次>/`，只有可复用工具进入 `scripts/`。
+
+独立 RLPD 入口的来源、数值验证与适配边界见[基线参考](../reference/rlpd_baselines.md)。
+它没有接入已冻结的 action-adapter 首轮筛选，使用自己的 TrainState checkpoint 格式；
+旧的 `network.step` 验收器不能直接用于该入口。
 
 数据集安装细节见[数据集参考](../reference/datasets.md)。常用环境变量：
 
