@@ -122,6 +122,19 @@ GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-refer
 不增加评估调用，不改变策略、训练更新或 RNG。已有短测缺少该新字段，明确标为旧工程格式，
 不冒充正式基线已经满足 episode 记录要求；正式运行必须通过严格计数验收。
 
+### 动作与运行时间分析的准备
+
+首轮已登记的动作范数、协方差、边界占比和 wall time 由独立流式分析器补齐，定义与限制见
+[实验说明](experiments.md#已登记的动作与时间次指标)。22 项测试通过，覆盖与 batch covariance
+的一致性、近常数动作数值稳定性、warm-up 分离、三种边界量、缺步/重复/非法动作、缺失 seed、
+错误源码和退出码，以及拒绝从只有 norm 的旧日志伪造坐标协方差。
+
+已有两份 64 步真实工程日志完成双 CPU worker 的 CLI 验收，每份严格识别出 32 条
+post-warmup 动作；其协方差与均值另用直接 batch 计算核对一致。修改 seed 合约的负控被
+冻结配置哈希拒绝，未生成结果，也没有新增训练。工程报告在数据盘
+`reports/action_adapter_validation_20261019/engineering-action-geometry.json`。
+正式 72+16 个运行的几何统计仍待训练完成；这些工程检查不提供新的性能或机制结论。
+
 ## 当前可以说什么
 
 | 研究项 | 已有判断 | 边界 |
