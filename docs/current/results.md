@@ -26,6 +26,10 @@ direct-canonical H5 128 步，以及 native 64 步完整运行验收均退出 0�
 配置、原始工程尝试、源码/数据 SHA-256、等待进程状态及后续验收记录统一放在数据盘
 `control/action_adapter_validation_20261019/`；生成报告放在 `reports/action_adapter_validation_20261019/`。
 
+资源仍在排队时，部署控制包更新至 revision 3：在首次 JAX 导入之前显式关闭 GPU 显存
+预分配，避免 8 卡验收父进程占用子进程需要的显存。旧部署包与控制器摘要保留，平台任务和
+等待进程未重建；训练源码、数据、72 运行矩阵及其冻结哈希保持不变。
+
 ### Critic 等效动作检查
 
 独立离线诊断新增 9 项测试通过。真实 checkpoint 的配对工程检查使用相同训练 seed 9004、
@@ -63,8 +67,17 @@ step 0/64 评估和训练日志完整，参数有限，实际执行 660 次 crit
 数值报告为数据盘 `reports/action_adapter_validation_20261019/rlpd-reference-equivalence.json`，
 GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-reference-engineering-revalidation.json`。
 这只验证移植与工程链路；尚无该外部配方的长程 OGBench 性能结果。
-另已编译两个任务 × 四配对 seed × UTD=1/20 的 16 运行草案，放在
-`control/action_adapter_reference_20261019/`，未启动、未加入原 72 运行，也未申请额外实例。
+两个任务 × 四配对 seed × UTD=1/20 的 16 运行配置及独立执行包已冻结，放在
+`control/action_adapter_reference_20261019/`。接续监控已启动：原 72 运行完整验收、原环境
+仍为 Running 且独立远程工程检查通过后，复用同一 8 卡实例执行；每卡先运行一个任务。
+当前基线长程训练尚未开始，未加入原 72 运行，也未申请额外实例。
+
+独立控制器通过 13 项测试，覆盖真实 episode/success 计数、缺失网格、有效配方、全部动作
+边界、精确 optimizer 更新数、非有限 optimizer 状态、重复输出、失败退出码、禁止自动重跑及
+缺失配对。还读取了已有真实 GPU checkpoint 复核计数，未再次训练。
+新的评估观察器只读取原评估返回的 trajectories，为每个评估点写出实际 episode 数和成功次数；
+不增加评估调用，不改变策略、训练更新或 RNG。已有短测缺少该新字段，明确标为旧工程格式，
+不冒充正式基线已经满足 episode 记录要求；正式运行必须通过严格计数验收。
 
 ## 当前可以说什么
 

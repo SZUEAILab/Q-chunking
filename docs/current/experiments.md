@@ -48,6 +48,14 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 它与项目 fork、FQL 作者的 SAC/RLPD 是不同配方；后续正式比较需单独冻结，报告 UTD、
 网络、目标聚合、熵备份和真实计算量，不能替换首轮方法组或称所有差异都来自动作表示。
 
+独立批次 `action_adapter_reference_20261019` 已冻结两个任务、seed 10–13、UTD=1/20，
+共 16 运行，复用首轮 8 卡实例并等待原 72 运行全部验收后启动；两个批次都保留自己的终态。
+训练源为 `2c2d0c3`，独立运行包有逐文件哈希，50 episodes、真实 step 0–1M 评估网格与
+原批次相同。与 native、legacy/direct latent、legacy/direct canonical 的全部 20 个
+task/UTD/method 对照都作描述性报告，缺失配对显式显示，不用部分 seed 估计完整四配对效应。
+正式基线每个评估点必须记录实际返回的 episode 数与成功次数，并核对聚合 success。
+GPU 预验收、配置、退出码、有限值、精确 critic/actor/温度更新次数和 checkpoint 通过后才纳入。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |
