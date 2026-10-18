@@ -29,6 +29,18 @@ OGBench 任务，再做 FQL 与 RoboMimic。原生算法配方和几何强基线
 与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
 因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。
 
+动作冗余与熵的区别已有 [Action redundancy in reinforcement learning（UAI 2021）](https://proceedings.mlr.press/v161/baram21a.html)
+研究；[PLAS（CoRL）](https://proceedings.mlr.press/v155/zhou21b.html) 已利用潜动作空间限制
+离线策略的分布外动作；[Actor-Critic Alignment（ICML 2023）](https://proceedings.mlr.press/v202/yu23k.html)
+已研究离线到在线过程中的价值/策略对齐。当前候选不应宣称首次发现这些问题。
+本项目当前检验的是固定解析动作映射下的 value-coordinate aliasing，以及它和实际任务收益
+是否相关。Canonical critic 保留原始潜坐标熵，不能据此声称已经消除动作冗余或提高状态熵。
+
+机制检查预先固定两个面板：训练后策略自身的采样，以及与学习参数无关的共同 Gaussian
+经策略 squash 后的动作探针。相同验证状态下将原始方向正向缩放 0.5，核验执行动作相同后，
+比较 Q 差和 `u · ∇u Q`。梯度仅针对 ensemble-mean Q，排除熵和其他 actor loss 项。
+近零方向导致不再等效的样本明确排除并计数；不能把所有零差值都解释为学习成功。
+
 ## 三个问题分别验证
 
 | 问题 | 干预 | 必须保留的对照 |

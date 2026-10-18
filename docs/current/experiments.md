@@ -36,6 +36,14 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 完整评估轴、有限损失、精确最终预算、必需 checkpoint 与源码/数据身份。失联进程的退出码
 记为未知，不纳入成功统计。
 
+训练后的 critic 诊断由 [`research.action_adapter_diagnostics`](../../research/action_adapter_diagnostics.py)
+独立读取冻结源码与 checkpoint。状态来自输入 SHA-256 固定的 validation-prior 非终止观测，
+面板 seed 为 20261020；共同动作探针 seed 为 20261021，128 状态，方向缩放 0.5。
+分别报告策略条件和共同探针下的等效动作 Q 差、特征差、冗余径向 Q 导数及其梯度占比。
+报告绑定源码文件、数据、checkpoint、解析配置和诊断工具哈希；不修改模型参数或 RNG。
+该离线工具与已冻结的训练发布包分开版本化，不修改首轮 72 个运行。
+动作/价值诊断不是任务性能证据，结果缺失或失败不能当作零差值。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |

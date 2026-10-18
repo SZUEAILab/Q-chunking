@@ -26,6 +26,26 @@ direct-canonical H5 128 步，以及 native 64 步完整运行验收均退出 0�
 配置、原始工程尝试、源码/数据 SHA-256、等待进程状态及后续验收记录统一放在数据盘
 `control/action_adapter_validation_20261019/`；生成报告放在 `reports/action_adapter_validation_20261019/`。
 
+### Critic 等效动作检查
+
+独立离线诊断新增 9 项测试通过。真实 checkpoint 的配对工程检查使用相同训练 seed 9004、
+64 个环境步（33 次 optimizer 更新，计数器从 1 变为 34）、相同源码和同一批
+64 个 validation-prior 状态；
+解析配置唯一差异为 latent/canonical critic。共同动作探针不依赖已学 actor，方向缩放 0.5
+后两组的最大实际执行动作差均为 0。
+
+| 工程检查 | Latent critic | Canonical critic |
+|---|---:|---:|
+| 等效动作 Q 绝对差均值 | 0.0072749 | 0 |
+| `u · ∇u Q` 的 RMS | 0.0183553 | 1.04e-9 |
+| 方向坐标 Q 梯度的平均绝对径向投影占比 | 0.524853 | 3.00e-8 |
+
+该结果证明当前诊断能检测到等效动作的价值差异，且 canonical 约束在训练后 checkpoint 上
+按定义工作。它没有证明成功率、样本效率或总 actor 梯度改善；此处不包含熵梯度，64 步结果
+不用于筛选优胜方法。原始报告与配对身份核对保存在数据盘
+`reports/action_adapter_validation_20261019/engineering-critic-invariance-v2.json` 和
+`engineering-invariance-comparison.json`。72 次长程筛选的性能结果仍待平台执行。
+
 ## 当前可以说什么
 
 | 研究项 | 已有判断 | 边界 |
