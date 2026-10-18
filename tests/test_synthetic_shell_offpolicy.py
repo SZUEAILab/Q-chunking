@@ -2,8 +2,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from train_synthetic_shell_offpolicy import Replay, policy_log_prob, stage_targets
-from train_synthetic_shell_rl import CONDITIONS, initial_parameters, sample_policy
+from research.shell_offpolicy import Replay, policy_log_prob, stage_targets
+from research.shell import CONDITIONS, initial_parameters, sample_policy
 
 
 def test_stage_targets_mask_bootstrap_when_discovery_fails():

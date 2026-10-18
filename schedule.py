@@ -6,7 +6,7 @@
   python schedule.py --tasks_config=tasks.json --compile
 
   # 第二步：执行（从编译文件读取，中断后可重跑——自动跳过已完成）
-  python schedule.py --run=tasks.compiled.json --gpus=0,1 --gpu_tasks=4
+  python schedule.py --run=tasks.compiled.json --gpus=0,1 --gpu_tasks=8 --stagger=30
 
   # 预览
   python schedule.py --run=tasks.compiled.json --dry_run
@@ -30,19 +30,24 @@ FLAGS = flags.FLAGS
 # Flags
 # ---------------------------------------------------------------------------
 
-flags.DEFINE_string('tasks_config', 'tasks.json',
-                    '任务配置文件 (JSON)。默认 tasks.json。')
-flags.DEFINE_string('run', None,
-                    '编译后的命令文件路径。未指定时尝试 ./tasks.compiled.json。')
-flags.DEFINE_bool('compile', False,
-                  '仅编译 tasks.json → tasks.compiled.json，不执行。')
-flags.DEFINE_list('gpus', [0],
-                  '使用的 GPU ID 列表，逗号分隔。默认只用 GPU 0。')
-flags.DEFINE_integer('gpu_tasks', 1,
-                     '每张 GPU 同时跑的进程数。A6000 建议 6，4090 建议 4。')
-flags.DEFINE_integer('stagger', 30,
-                     '同一 GPU 上两次启动之间的冷却秒数，等 JIT 编译完成。')
-flags.DEFINE_bool('dry_run', False, '只打印命令，不实际启动。')
+flags.DEFINE_string(
+    "tasks_config", "tasks.json", "任务配置文件 (JSON)。默认 tasks.json。"
+)
+flags.DEFINE_string(
+    "run", None, "编译后的命令文件路径。未指定时尝试 ./tasks.compiled.json。"
+)
+flags.DEFINE_bool("compile", False, "仅编译 tasks.json → tasks.compiled.json，不执行。")
+flags.DEFINE_list("gpus", [0], "使用的 GPU ID 列表，逗号分隔。默认只用 GPU 0。")
+flags.DEFINE_integer(
+    "gpu_tasks",
+    1,
+    "每张 GPU 同时跑的进程数。QC 云端 RTX 4090 队列优先显式传 8；"
+    "其他 GPU 保留默认 1。",
+)
+flags.DEFINE_integer(
+    "stagger", 30, "同一 GPU 上两次启动之间的冷却秒数，等 JIT 编译完成。"
+)
+flags.DEFINE_bool("dry_run", False, "只打印命令，不实际启动。")
 
 
 # ---------------------------------------------------------------------------
@@ -50,49 +55,98 @@ flags.DEFINE_bool('dry_run', False, '只打印命令，不实际启动。')
 # ---------------------------------------------------------------------------
 
 FIELD_TO_FLAG = {
-    'entry':                 None,
-    'env_name':              '--env_name',
-    'horizon_length':        '--horizon_length',
-    'ds_mode':               '--ds_mode',
-    'sparse':                '--sparse',
-    'online_steps':          '--online_steps',
-    'offline_steps':         '--offline_steps',
-    'save_interval':         '--save_interval',
-    'eval_episodes':         '--eval_episodes',
-    'video_episodes':        '--video_episodes',
-    'run_group':             '--run_group',
-    'action_chunking':       '--agent.action_chunking',
-    'agent':                 '--agent',
-    'discount':              '--discount',
-    'utd_ratio':             '--utd_ratio',
-    'buffer_size':           '--buffer_size',
-    'log_interval':          '--log_interval',
-    'eval_interval':         '--eval_interval',
-    'start_training':        '--start_training',
-    'save_dir':              '--save_dir',
-    'dataset_proportion':    '--dataset_proportion',
-    'dataset_replace_interval':          '--dataset_replace_interval',
-    'ogbench_dataset_dir':                '--ogbench_dataset_dir',
-    'allow_posthoc_direction_speed_rlpd': '--allow_posthoc_direction_speed_rlpd',
+    "entry": None,
+    "env_name": "--env_name",
+    "horizon_length": "--horizon_length",
+    "ds_mode": "--ds_mode",
+    "ds_integrated_type": "--ds_integrated_type",
+    "ds_speed_bound": "--ds_speed_bound",
+    "ds_adapter_representation": "--ds_adapter_representation",
+    "ds_adapter_speed_squash": "--ds_adapter_speed_squash",
+    "ds_adapter_speed_interpretation": "--ds_adapter_speed_interpretation",
+    "ds_adapter_critic_space": "--ds_adapter_critic_space",
+    "ds_regularizer": "--ds_regularizer",
+    "ds_separate_alpha": "--ds_separate_alpha",
+    "ds_phase_regularization": "--ds_phase_regularization",
+    "ds_phase_reward_floor": "--ds_phase_reward_floor",
+    "ds_phase_decay": "--ds_phase_decay",
+    "ds_phase_max_progress": "--ds_phase_max_progress",
+    "ds_stage_speed_constraint": "--ds_stage_speed_constraint",
+    "ds_stage_speed_base_cap": "--ds_stage_speed_base_cap",
+    "ds_stage_speed_decay": "--ds_stage_speed_decay",
+    "ds_stage_speed_coefficient": "--ds_stage_speed_coefficient",
+    "actor_update_mode": "--actor_update_mode",
+    "awr_temperature": "--awr_temperature",
+    "awr_max_weight": "--awr_max_weight",
+    "awr_entropy_scale": "--awr_entropy_scale",
+    "direction_awr_coefficient": "--direction_awr_coefficient",
+    "ds_separate_actor_trunks": "--ds_separate_actor_trunks",
+    "stage_balanced_sampling": "--stage_balanced_sampling",
+    "sparse": "--sparse",
+    "online_steps": "--online_steps",
+    "offline_steps": "--offline_steps",
+    "save_interval": "--save_interval",
+    "eval_episodes": "--eval_episodes",
+    "eval_seed": "--eval_seed",
+    "video_episodes": "--video_episodes",
+    "run_group": "--run_group",
+    "action_chunking": "--agent.action_chunking",
+    "agent": "--agent",
+    "target_entropy": "--agent.target_entropy",
+    "fixed_alpha": "--agent.fixed_alpha",
+    "target_entropy_direction": "--agent.target_entropy_direction",
+    "target_entropy_speed": "--agent.target_entropy_speed",
+    "target_entropy_scalar": "--agent.target_entropy_scalar",
+    "ds_tangent_angular_log_std_offset": "--agent.ds_tangent_angular_log_std_offset",
+    "ds_tangent_angular_log_std_max": "--agent.ds_tangent_angular_log_std_max",
+    "ds_tangent_speed_log_std_offset": "--agent.ds_tangent_speed_log_std_offset",
+    "ds_tangent_speed_log_std_max": "--agent.ds_tangent_speed_log_std_max",
+    "ds_tangent_speed_mean_offset": "--agent.ds_tangent_speed_mean_offset",
+    "ds_moment_controlled": "--agent.ds_moment_controlled",
+    "ds_moment_angular_log_std_init": "--agent.ds_moment_angular_log_std_init",
+    "ds_moment_speed_log_std_init": "--agent.ds_moment_speed_log_std_init",
+    "ds_moment_speed_mean_init": "--agent.ds_moment_speed_mean_init",
+    "ds_moment_speed_residual_scale": "--agent.ds_moment_speed_residual_scale",
+    "ds_moment_control_speed_mean": "--agent.ds_moment_control_speed_mean",
+    "ds_moment_control_interval": "--agent.ds_moment_control_interval",
+    "ds_moment_panel_size": "--agent.ds_moment_panel_size",
+    "ds_moment_samples_per_state": "--agent.ds_moment_samples_per_state",
+    "ds_moment_target_radius_mean": "--agent.ds_moment_target_radius_mean",
+    "ds_moment_target_radius_std": "--agent.ds_moment_target_radius_std",
+    "ds_moment_target_angle": "--agent.ds_moment_target_angle",
+    "ds_moment_angular_gain": "--agent.ds_moment_angular_gain",
+    "ds_moment_radial_std_gain": "--agent.ds_moment_radial_std_gain",
+    "ds_moment_radius_mean_gain": "--agent.ds_moment_radius_mean_gain",
+    "discount": "--discount",
+    "utd_ratio": "--utd_ratio",
+    "buffer_size": "--buffer_size",
+    "log_interval": "--log_interval",
+    "eval_interval": "--eval_interval",
+    "start_training": "--start_training",
+    "save_dir": "--save_dir",
+    "dataset_proportion": "--dataset_proportion",
+    "dataset_replace_interval": "--dataset_replace_interval",
+    "ogbench_dataset_dir": "--ogbench_dataset_dir",
 }
 
 
 def _bool_str(v):
     """absl bool flag 格式."""
-    return 'True' if v else 'False'
+    return "True" if v else "False"
 
 
 # ---------------------------------------------------------------------------
 # 编译阶段：tasks.json → 命令列表
 # ---------------------------------------------------------------------------
 
+
 def load_tasks_config(path):
     """读取并校验任务配置文件。"""
     with open(path) as f:
         config = json.load(f)
-    if 'tasks' not in config:
+    if "tasks" not in config:
         sys.exit(f'{path}: missing "tasks" list.')
-    if 'seeds' not in config:
+    if "seeds" not in config:
         sys.exit(f'{path}: missing "seeds" list.')
     return config
 
@@ -106,59 +160,61 @@ def merge_task(common, task):
 
 def build_command(seed, task):
     """task dict → 完整 CLI 命令字符串。"""
-    entry = task.pop('entry', 'main_online.py')
-    name = task.pop('name', 'unnamed')
-    parts = [sys.executable, entry, f'--seed={seed}']
+    entry = task.pop("entry", "main_online.py")
+    name = task.pop("name", "unnamed")
+    parts = [sys.executable, entry, f"--seed={seed}"]
     for field, flag in FIELD_TO_FLAG.items():
-        if field == 'entry' or field not in task:
+        if field == "entry" or field not in task:
             continue
         value = task[field]
         if flag is None:
             continue
         if isinstance(value, bool):
-            parts.append(f'{flag}={_bool_str(value)}')
+            parts.append(f"{flag}={_bool_str(value)}")
         else:
-            parts.append(f'{flag}={value}')
-    return ' '.join(parts), name
+            parts.append(f"{flag}={value}")
+    return " ".join(parts), name
 
 
 def compile_tasks(config_path):
     """编译 tasks.json → 命令列表，返回 compiled dict。"""
     config = load_tasks_config(config_path)
-    common = config.get('common', {})
-    seeds = config['seeds']
+    common = config.get("common", {})
+    seeds = config["seeds"]
 
     commands = []
-    for task_def in config['tasks']:
+    for task_def in config["tasks"]:
         task = merge_task(common, task_def)
         for seed in seeds:
             cmd, name = build_command(seed, dict(task))
-            commands.append({
-                'name': name,
-                'seed': seed,
-                'cmd': cmd,
-                'status': 'pending',
-                'pid': None,
-                'log': None,
-                'gpu': None,
-            })
+            commands.append(
+                {
+                    "name": name,
+                    "seed": seed,
+                    "cmd": cmd,
+                    "status": "pending",
+                    "pid": None,
+                    "log": None,
+                    "gpu": None,
+                }
+            )
 
     compiled = {
-        'meta': {
-            'source': os.path.abspath(config_path),
-            'compiled_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "meta": {
+            "source": os.path.abspath(config_path),
+            "compiled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         },
-        'commands': commands,
+        "commands": commands,
     }
     return compiled
 
 
 def write_compiled(compiled, config_path):
     """写入编译文件，默认路径为 {config_path}.compiled.json。"""
-    out_path = config_path.replace('.json', '.compiled.json')
+    out_path = config_path.replace(".json", ".compiled.json")
     if out_path == config_path:
-        out_path = config_path + '.compiled.json'
-    with open(out_path, 'w') as f:
+        out_path = config_path + ".compiled.json"
+    with open(out_path, "w") as f:
         json.dump(compiled, f, indent=2)
     return out_path
 
@@ -171,14 +227,15 @@ def load_compiled(path):
 
 def save_compiled(compiled, path):
     """更新编译文件（原地修改状态）。"""
-    compiled['meta']['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    with open(path, 'w') as f:
+    compiled["meta"]["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(path, "w") as f:
         json.dump(compiled, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
 # 执行阶段：调度器主循环
 # ---------------------------------------------------------------------------
+
 
 def _pid_alive(pid):
     """检查进程是否存活。"""
@@ -193,19 +250,21 @@ def _pid_alive(pid):
 
 def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
     """从编译文件执行调度。编译文件会被原地更新以记录进度。"""
-    commands = compiled['commands']
+    commands = compiled["commands"]
     total_commands = len(commands)
 
     # ---- 日志目录 ----
-    log_dir = Path('exp_logs')
+    from utils.artifact_paths import data_root
+
+    log_dir = data_root() / "logs" / "scheduler"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- 环境变量 ----
     env = os.environ.copy()
-    env.setdefault('MUJOCO_GL', 'egl')
-    env.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
-    env.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.05')
-    env.setdefault('WANDB_MODE', 'disabled')
+    env.setdefault("MUJOCO_GL", "egl")
+    env.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+    env.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.05")
+    env.setdefault("WANDB_MODE", "disabled")
 
     # ---- 恢复状态：分类命令 ----
     queue = []
@@ -216,40 +275,44 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
     log_index = 0
 
     for c in commands:
-        if c['status'] == 'done':
+        if c["status"] == "done":
             done_ok += 1
             launched += 1
-        elif c['status'] == 'running':
-            if _pid_alive(c.get('pid')):
-                log_path = c.get('log')
-                fh = open(log_path, 'a') if log_path else None
+        elif c["status"] == "running":
+            if _pid_alive(c.get("pid")):
+                log_path = c.get("log")
+                fh = open(log_path, "a") if log_path else None
                 if fh is None:
-                    log_path = str(log_dir / f'{c["name"]}_seed{c["seed"]}_{log_index}.log')
-                    fh = open(log_path, 'w')
-                    c['log'] = log_path
+                    log_path = str(
+                        log_dir / f'{c["name"]}_seed{c["seed"]}_{log_index}.log'
+                    )
+                    fh = open(log_path, "w")
+                    c["log"] = log_path
                 log_index += 1
                 launched += 1
-                gpu = c.get('gpu', gpus[0])
+                gpu = c.get("gpu", gpus[0])
                 if gpu not in running:
                     gpu = gpus[0]
                 running[gpu].append((c, None, fh))
-                print(f'[scheduler] 重连: GPU={gpu} {c["name"]} '
-                      f'seed={c["seed"]} pid={c["pid"]}')
+                print(
+                    f'[scheduler] 重连: GPU={gpu} {c["name"]} '
+                    f'seed={c["seed"]} pid={c["pid"]}'
+                )
             else:
-                c['status'] = 'pending'
-                c['pid'] = None
-                c['log'] = None
-                c['gpu'] = None
+                c["status"] = "pending"
+                c["pid"] = None
+                c["log"] = None
+                c["gpu"] = None
                 queue.append(c)
         else:
             queue.append(c)
 
     if done_ok == total_commands:
-        print(f'[scheduler] 全部 {total_commands} 条命令已完成，无需执行。')
-        print(f'[scheduler] 重跑请先: python schedule.py --compile')
+        print(f"[scheduler] 全部 {total_commands} 条命令已完成，无需执行。")
+        print(f"[scheduler] 重跑请先: python schedule.py --compile")
         return
 
-    if not any(c['status'] in ('done', 'running') for c in commands):
+    if not any(c["status"] in ("done", "running") for c in commands):
         # 首次运行
         queue = list(commands)
         launched = 0
@@ -258,7 +321,11 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
 
     if FLAGS.dry_run:
         for i, c in enumerate(commands):
-            marker = '✓' if c['status'] == 'done' else ('▶' if c['status'] == 'running' else '·')
+            marker = (
+                "✓"
+                if c["status"] == "done"
+                else ("▶" if c["status"] == "running" else "·")
+            )
             print(f'[{i}] [{marker}] {c["name"]} seed={c["seed"]}')
             print(f'    {c["cmd"]}')
         return
@@ -278,25 +345,27 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
         last_heartbeat = now
         done = done_ok + done_fail
         elapsed = now - start_time
-        eta = ''
+        eta = ""
         if done > 0:
             eta_sec = (elapsed / done) * (total_commands - done)
             if eta_sec < 120:
-                eta = f'ETA {eta_sec:.0f}s'
+                eta = f"ETA {eta_sec:.0f}s"
             elif eta_sec < 7200:
-                eta = f'ETA {eta_sec/60:.1f}m'
+                eta = f"ETA {eta_sec/60:.1f}m"
             else:
-                eta = f'ETA {eta_sec/3600:.1f}h'
+                eta = f"ETA {eta_sec/3600:.1f}h"
         # per-GPU slot usage
-        gpu_info = ' '.join(f'G{g}:{len(running[g])}/{gpu_tasks}' for g in gpus)
+        gpu_info = " ".join(f"G{g}:{len(running[g])}/{gpu_tasks}" for g in gpus)
         # ok/fail split
         if done_fail > 0:
-            okfail = f'  ok={done_ok} fail={done_fail}'
+            okfail = f"  ok={done_ok} fail={done_fail}"
         else:
-            okfail = ''
-        print(f'[{time.strftime("%T")}] {gpu_info}  '
-              f'q={len(queue)}  done={done}/{total_commands}{okfail}  '
-              f'{eta}  {elapsed/60:.1f}m')
+            okfail = ""
+        print(
+            f'[{time.strftime("%T")}] {gpu_info}  '
+            f"q={len(queue)}  done={done}/{total_commands}{okfail}  "
+            f"{eta}  {elapsed/60:.1f}m"
+        )
 
     def _try_launch(gpu_id, now):
         nonlocal launched, log_index
@@ -310,50 +379,58 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
         c = queue.pop(0)
         log_path = log_dir / f'{c["name"]}_seed{c["seed"]}_{log_index}.log'
         log_index += 1
-        fh = open(log_path, 'w')
+        fh = open(log_path, "w")
 
         proc_env = env.copy()
-        proc_env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+        proc_env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
         proc = subprocess.Popen(
-            c['cmd'], shell=True, env=proc_env,
-            stdout=fh, stderr=subprocess.STDOUT,
+            c["cmd"],
+            shell=True,
+            env=proc_env,
+            stdout=fh,
+            stderr=subprocess.STDOUT,
         )
-        c['status'] = 'running'
-        c['pid'] = proc.pid
-        c['log'] = str(log_path)
-        c['gpu'] = gpu_id
+        c["status"] = "running"
+        c["pid"] = proc.pid
+        c["log"] = str(log_path)
+        c["gpu"] = gpu_id
         running[gpu_id].append((c, proc, fh))
         cooldown[gpu_id] = now + stagger
         launched += 1
         save_compiled(compiled, compiled_path)
 
-        print(f'[{time.strftime("%T")}] ▶ GPU={gpu_id}  {c["name"]}  seed={c["seed"]}  '
-              f'pid={proc.pid}  [{launched}/{total_commands}]')
+        print(
+            f'[{time.strftime("%T")}] ▶ GPU={gpu_id}  {c["name"]}  seed={c["seed"]}  '
+            f"pid={proc.pid}  [{launched}/{total_commands}]"
+        )
         _print_status(now, force=True)
         return True
 
     # ---- 信号处理：SIGTERM → 等同于 Ctrl+C ----
     def _on_terminate(signum, frame):
         raise KeyboardInterrupt()
+
     signal.signal(signal.SIGTERM, _on_terminate)
 
     # ---- 首次填充 ----
     name_seeds = Counter()
     name_done = Counter()
     for c in commands:
-        name_seeds[c['name']] += 1
-        if c['status'] == 'done':
-            name_done[c['name']] += 1
+        name_seeds[c["name"]] += 1
+        if c["status"] == "done":
+            name_done[c["name"]] += 1
     print(f'\n{"─"*60}')
     for name in sorted(name_seeds):
         d = name_done.get(name, 0)
         t = name_seeds[name]
-        bar = '✓' * d + '·' * (t - d) if d < t else '✓' * t
-        print(f'  {name:40s}  [{bar}]  {d}/{t}')
+        bar = "✓" * d + "·" * (t - d) if d < t else "✓" * t
+        print(f"  {name:40s}  [{bar}]  {d}/{t}")
     print(f'{"─"*60}')
-    print(f'[scheduler] 命令={total_commands}  done={done_ok + done_fail}  '
-          f'pending={len(queue)}  gpus={gpus}  gpu_tasks={gpu_tasks}  stagger={stagger}s\n')
+    print(
+        f"[scheduler] 命令={total_commands}  done={done_ok + done_fail}  "
+        f"pending={len(queue)}  gpus={gpus}  gpu_tasks={gpu_tasks}  stagger={stagger}s\n"
+    )
 
     # ---- 主循环 ----
     try:
@@ -366,14 +443,16 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                 for c, proc, fh in running[gpu_id]:
                     if proc is None:
                         # 重连的进程（非本调度器启动），检查 PID
-                        if not _pid_alive(c.get('pid')):
+                        if not _pid_alive(c.get("pid")):
                             fh.close()
-                            c['status'] = 'done'
+                            c["status"] = "done"
                             done_ok += 1
                             save_compiled(compiled, compiled_path)
-                            print(f'[{time.strftime("%T")}] ✓ GPU={gpu_id}  {c["name"]}  '
-                                  f'seed={c["seed"]}  pid={c["pid"]}  DETACHED-OK  '
-                                  f'[{done_ok + done_fail}/{total_commands}]')
+                            print(
+                                f'[{time.strftime("%T")}] ✓ GPU={gpu_id}  {c["name"]}  '
+                                f'seed={c["seed"]}  pid={c["pid"]}  DETACHED-OK  '
+                                f"[{done_ok + done_fail}/{total_commands}]"
+                            )
                         else:
                             still.append((c, proc, fh))
                         continue
@@ -383,21 +462,25 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                         fh.close()
                         if ret == 0:
                             done_ok += 1
-                            status = 'OK'
+                            status = "OK"
                         else:
                             done_fail += 1
-                            status = f'FAIL({ret})'
-                        c['status'] = 'done'
+                            status = f"FAIL({ret})"
+                        c["status"] = "done"
                         save_compiled(compiled, compiled_path)
-                        print(f'[{time.strftime("%T")}] ✓ GPU={gpu_id}  {c["name"]}  '
-                              f'seed={c["seed"]}  pid={proc.pid}  {status}  '
-                              f'[{done_ok + done_fail}/{total_commands}]')
+                        print(
+                            f'[{time.strftime("%T")}] ✓ GPU={gpu_id}  {c["name"]}  '
+                            f'seed={c["seed"]}  pid={proc.pid}  {status}  '
+                            f"[{done_ok + done_fail}/{total_commands}]"
+                        )
                     else:
                         still.append((c, proc, fh))
                 running[gpu_id] = still
 
             # 2. 填空位
-            for gpu_id in sorted(gpus, key=lambda g: _gpu_available_slots(g), reverse=True):
+            for gpu_id in sorted(
+                gpus, key=lambda g: _gpu_available_slots(g), reverse=True
+            ):
                 while _try_launch(gpu_id, now):
                     pass
 
@@ -408,16 +491,16 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                 time.sleep(1)
 
     except KeyboardInterrupt:
-        print(f'\n[scheduler] 正在终止所有子进程...')
+        print(f"\n[scheduler] 正在终止所有子进程...")
         for gpu_id in gpus:
             for c, proc, fh in running[gpu_id]:
                 fh.close()
                 if proc is not None:
                     proc.terminate()
-                elif c.get('pid'):
+                elif c.get("pid"):
                     # 重连的进程：用 PID 杀
                     try:
-                        os.kill(c['pid'], 15)  # SIGTERM
+                        os.kill(c["pid"], 15)  # SIGTERM
                     except OSError:
                         pass
         # 等子进程退出
@@ -429,25 +512,27 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
                         proc.wait(timeout=3)
                     except subprocess.TimeoutExpired:
                         proc.kill()
-                elif c.get('pid'):
+                elif c.get("pid"):
                     try:
-                        os.kill(c['pid'], 9)  # SIGKILL
+                        os.kill(c["pid"], 9)  # SIGKILL
                     except OSError:
                         pass
-        print(f'[scheduler] 已终止。进度已保存至 {compiled_path}')
-        print(f'[scheduler] 恢复时运行: python schedule.py --run={compiled_path} '
-              f'--gpus={",".join(str(g) for g in gpus)} --gpu_tasks={gpu_tasks}')
+        print(f"[scheduler] 已终止。进度已保存至 {compiled_path}")
+        print(
+            f"[scheduler] 恢复时运行: python schedule.py --run={compiled_path} "
+            f'--gpus={",".join(str(g) for g in gpus)} --gpu_tasks={gpu_tasks}'
+        )
         sys.exit(1)
 
     # ---- 汇总 ----
     elapsed = time.time() - start_time
     print(f'\n{"="*60}')
     print(f'  结束时间: {time.strftime("%Y-%m-%d %T")}')
-    print(f'  总耗时:   {elapsed/60:.1f}m ({elapsed/3600:.2f}h)')
-    print(f'  完成:     {done_ok + done_fail}/{total_commands}')
-    print(f'  成功:     {done_ok}')
+    print(f"  总耗时:   {elapsed/60:.1f}m ({elapsed/3600:.2f}h)")
+    print(f"  完成:     {done_ok + done_fail}/{total_commands}")
+    print(f"  成功:     {done_ok}")
     if done_fail > 0:
-        print(f'  失败:     {done_fail}')
+        print(f"  失败:     {done_fail}")
     print(f'{"="*60}')
 
 
@@ -455,26 +540,29 @@ def run_scheduler(compiled, compiled_path, gpus, gpu_tasks, stagger):
 # 入口
 # ---------------------------------------------------------------------------
 
+
 def main(_):
     # ---- 确定运行路径 ----
     run_path = FLAGS.run
     if not run_path and FLAGS.tasks_config:
         # 根据 tasks_config 推导 compiled 路径
-        candidate = FLAGS.tasks_config.replace('.json', '.compiled.json')
+        candidate = FLAGS.tasks_config.replace(".json", ".compiled.json")
         if candidate == FLAGS.tasks_config:
-            candidate = FLAGS.tasks_config + '.compiled.json'
+            candidate = FLAGS.tasks_config + ".compiled.json"
         if os.path.exists(candidate) and not FLAGS.compile:
             # 已有编译文件，直接走执行（除非显式要求 --compile）
             run_path = candidate
     if not run_path and not FLAGS.tasks_config:
-        if os.path.exists('tasks.compiled.json'):
-            run_path = 'tasks.compiled.json'
+        if os.path.exists("tasks.compiled.json"):
+            run_path = "tasks.compiled.json"
         else:
-            sys.exit('未找到 tasks.compiled.json，请先 --tasks_config=X --compile 或指定 --run。')
+            sys.exit(
+                "未找到 tasks.compiled.json，请先 --tasks_config=X --compile 或指定 --run。"
+            )
 
     # ---- 模式：--run（或自动检测到 compiled 文件）直接执行 ----
     if run_path and not FLAGS.compile:
-        print(f'[schedule] 执行: {run_path}')
+        print(f"[schedule] 执行: {run_path}")
         compiled = load_compiled(run_path)
         gpus = [int(g) for g in FLAGS.gpus]
         run_scheduler(compiled, run_path, gpus, FLAGS.gpu_tasks, FLAGS.stagger)
@@ -482,25 +570,27 @@ def main(_):
 
     # ---- 模式：编译（--compile 或 compiled 文件不存在时自动编译） ----
     if not FLAGS.tasks_config:
-        sys.exit('编译需要 --tasks_config。')
+        sys.exit("编译需要 --tasks_config。")
 
     compiled = compile_tasks(FLAGS.tasks_config)
     out_path = write_compiled(compiled, FLAGS.tasks_config)
 
-    total = len(compiled['commands'])
-    print(f'[compile] {FLAGS.tasks_config} → {out_path}')
-    print(f'[compile] 共 {total} 条命令')
+    total = len(compiled["commands"])
+    print(f"[compile] {FLAGS.tasks_config} → {out_path}")
+    print(f"[compile] 共 {total} 条命令")
 
     if FLAGS.dry_run:
-        for i, c in enumerate(compiled['commands']):
+        for i, c in enumerate(compiled["commands"]):
             print(f'  [{i}] {c["name"]}  seed={c["seed"]}')
             print(f'      {c["cmd"]}')
         return
 
     if FLAGS.compile:
-        print(f'\n审查通过后执行:')
-        print(f'  python schedule.py --gpus={",".join(str(g) for g in FLAGS.gpus)} '
-              f'--gpu_tasks={FLAGS.gpu_tasks}')
+        print(f"\n审查通过后执行:")
+        print(
+            f'  python schedule.py --gpus={",".join(str(g) for g in FLAGS.gpus)} '
+            f"--gpu_tasks={FLAGS.gpu_tasks}"
+        )
         return
 
     # --compile 未设置：编译后自动执行
@@ -508,5 +598,5 @@ def main(_):
     run_scheduler(compiled, out_path, gpus, FLAGS.gpu_tasks, FLAGS.stagger)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(main)

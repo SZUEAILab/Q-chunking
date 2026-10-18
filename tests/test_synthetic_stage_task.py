@@ -1,6 +1,6 @@
 import numpy as np
 
-from analyze_synthetic_stage_task import (
+from research.stage_task import (
     APPROACH_RADIUS,
     BASE_SIGMA,
     DS_TANGENTIAL_STD,

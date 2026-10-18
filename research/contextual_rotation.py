@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contextual held-out rotation test for exploration covariance families."""
+"""Held-out rotation diagnostic; run with ``python -m research.contextual_rotation``."""
 
 import argparse
 import csv

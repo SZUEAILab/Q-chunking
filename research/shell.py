@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Learn a sparse two-stage shell task with REINFORCE policy families."""
+"""Learn a sparse two-stage shell task; run with ``python -m research.shell``."""
 
 import argparse
 import csv

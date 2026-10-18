@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 
-from train_synthetic_shell_rl import (
+from research.shell import (
     ANGLE_TOLERANCE,
     APPROACH_RADIAL_TOLERANCE,
     APPROACH_RADIUS,

@@ -1,8 +1,8 @@
 import jax
 import numpy as np
 
-from train_synthetic_shell_offpolicy import policy_log_prob, sample_all
-from train_synthetic_shell_rl import (
+from research.shell_offpolicy import policy_log_prob, sample_all
+from research.shell import (
     CONDITIONS,
     PROJECTED_TANGENT_CONDITION,
     initial_parameters,

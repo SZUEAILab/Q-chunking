@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from analyze_robot_moment_control_task1_pilot import load_complete_runs
+from research.metrics import load_moment_runs
 
 
 def write_csv(path, rows):
@@ -57,7 +57,9 @@ class MomentPilotAnalysisTest(unittest.TestCase):
                 ],
             )
 
-            loaded = load_complete_runs(Path(directory), run_group=run_group)
+            loaded = load_moment_runs(
+                Path(directory), run_group=run_group, eval_steps=steps
+            )
 
         self.assertEqual(len(loaded), 1)
         self.assertEqual(loaded[0]["manipulation_pass_count"], 6)

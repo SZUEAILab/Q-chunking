@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Joint state-to-mean and covariance learning on held-out rotations."""
+"""Joint mean/covariance diagnostic; run as ``research.joint_contextual_policy``."""
 
 import argparse
 import csv

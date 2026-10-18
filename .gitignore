@@ -7,17 +7,27 @@ dist/
 .DS_Store
 .idea/
 .ruff_cache/
-exp/
-exp_logs/
+/exp
+/exp_logs
 logs/
 .venv/
 .worktrees/
 
 *.json
 !tasks.example.json
+!experiment_configs/*.json
 !docs/ds-visualizer/package.json
 !docs/ds-visualizer/package-lock.json
 !docs/ds-visualizer/components.json
 *.compiled.json
 
 *.log
+
+# Generated outputs live on QC_DATA_ROOT; published summaries live in docs/data.
+/docs/images/
+/docs/results/
+/results/
+/reports/
+/control/
+/tmp/
+/wandb/

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controlled two-stage diagnostic for direction--speed exploration.
+"""Controlled two-stage diagnostic; run with ``python -m research.stage_task``.
 
 The experiment is deliberately policy-learning-free: it isolates the action
 sampling mechanism by asking whether a fixed stochastic policy discovers a

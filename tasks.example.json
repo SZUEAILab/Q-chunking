@@ -20,7 +20,8 @@
       "entry": "main_online.py",
       "env_name": "cube-triple-play-singletask-task2-v0",
       "horizon_length": 1,
-      "ds_mode": "stereographic"
+      "ds_mode": "integrated",
+      "ds_integrated_type": "stereographic"
     },
     {
       "name": "qc_cube_task2",

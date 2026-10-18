@@ -1,6 +1,9 @@
 import csv
 
-from analyze_learned_shell_formal import bootstrap_interval, load_per_run
+import pytest
+
+from research.metrics import bootstrap_interval, load_shell_runs
+from research.shell import CONDITIONS
 
 
 def test_bootstrap_interval_is_ordered_for_positive_differences():
@@ -16,7 +19,7 @@ def test_bootstrap_interval_is_ordered_for_positive_differences():
 def test_formal_curve_loader_uses_named_success_column(tmp_path):
     path = tmp_path / "curve.csv"
     rows = []
-    for condition in __import__("train_synthetic_shell_rl").CONDITIONS:
+    for condition in CONDITIONS:
         for seed in range(100, 132):
             rows.extend(
                 [
@@ -45,7 +48,15 @@ def test_formal_curve_loader_uses_named_success_column(tmp_path):
         writer.writeheader()
         writer.writerows(rows)
 
-    loaded = load_per_run(path)
+    loaded = load_shell_runs(path, conditions=CONDITIONS, expected_seeds=range(100, 132))
 
     assert len(loaded) == 7 * 32
     assert all(row["auc"] == 0.5 for row in loaded)
+
+
+def test_shell_loader_rejects_missing_registered_seed(tmp_path):
+    path = tmp_path / "curve.csv"
+    path.write_text("condition,seed,stage0_interactions,success,discovery,precision\n")
+
+    with pytest.raises(ValueError, match="Expected.*seeds"):
+        load_shell_runs(path, conditions=CONDITIONS, expected_seeds=(71746,))

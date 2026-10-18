@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from train_synthetic_shell_rl import (
+from research.shell import (
     CONDITIONS,
     APPROACH_RADIUS,
     DS_RADIAL_STD,
@@ -70,7 +70,7 @@ def test_parameter_diagnostics_are_finite_for_each_family():
 
 
 def test_target_angle_can_define_axis_aligned_counterexample():
-    import train_synthetic_shell_rl as module
+    import research.shell as module
 
     original = float(np.rad2deg(module.TARGET_ANGLE))
     try:

@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from train_contextual_rotation import (
+from research.contextual_rotation import (
     CONDITIONS,
     RADIUS,
     angle_features,

@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from train_joint_contextual_policy import (
+from research.joint_contextual_policy import (
     CONDITIONS,
     FEATURE_DIM,
     MEAN_FRAME_CONDITION,
