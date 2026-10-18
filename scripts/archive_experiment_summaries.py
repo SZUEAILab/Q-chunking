@@ -132,11 +132,14 @@ def main() -> None:
             continue
         copy(source, Path("legacy-analysis/results") / relative,
              "historical report; preserves pilot, failed and censored boundaries")
-    for source in sorted((args.repo / "docs").glob("*protocol*.md")):
-        copy(source, Path("protocols") / source.name, "protocol snapshot at archival time")
-    for name in ("current_results.md", "ds_temporal_action_noise_research_status_20261010.md"):
-        copy(args.repo / "docs" / name, Path("protocols") / name,
-             "historical interpretation snapshot, not a new analysis")
+    docs_root = args.repo / "docs"
+    for relative in (
+        "current/research.md", "current/experiments.md", "current/results.md",
+        "archive/action_space.md", "archive/noise_shaping.md", "archive/synthetic.md",
+        "archive/robotics.md", "archive/results.md", "archive/research_history.md",
+    ):
+        copy(docs_root / relative, Path("protocols") / relative,
+             "documentation snapshot at archival time; historical boundaries retained")
 
     for source in sorted((root / "reports").rglob("*")):
         relative = source.relative_to(root / "reports")

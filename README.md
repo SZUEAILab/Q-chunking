@@ -19,6 +19,13 @@
 ## Overview
 Q-chunking runs RL on a *temporally extended action (action chunking) space* with an expressive behavior constraint to leverage prior data for improved exploration and online sample efficiency.
 
+## Direction–Speed research extension
+
+This checkout also contains the ongoing Direction–Speed action/noise/temporal-shaping study. Start from
+[`docs/index.md`](docs/index.md) for the research plan, verified current results, experiment protocol,
+GPU scheduling guidance, and the historical-evidence index. The retired Superpowers/SDD workspace is not
+part of the active workflow.
+
 ## Installation
 ```bash
 pip install -r requirements.txt
