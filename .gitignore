@@ -23,9 +23,9 @@ logs/
 
 *.log
 
-# Generated outputs live on QC_DATA_ROOT; published summaries live in docs/data.
-/docs/images/
-/docs/results/
+# Generated data lives on QC_DATA_ROOT; curated docs/images figures are tracked.
+/docs/images/*.csv
+/docs/images/*.npz
 /results/
 /reports/
 /control/
