@@ -151,6 +151,32 @@ truncation 保留为 episode 边界。Actor 和 critic 的更新时钟不同，�
 当前云端环境仍需 CUDA Torch 验收，GAC 长程矩阵尚未启动；近邻对照的长期稳定性、
 调参公平性与性能差异仍待正式比较。
 
+### 云端独立 CUDA 环境准备
+
+现有四卡实例仍执行冻结 RLPD 队列，GAC 依赖在本地另行准备，没有安装到运行中的
+`/workspace/venv`。官方 PyTorch wheel index 已定位 Python 3.12 / x86_64 的
+`torch-2.14.0+cu126-cp312-cp312-manylinux_2_28_x86_64.whl`，保留发布方 SHA-256。
+根依赖固定 OGBench 1.2.1、MuJoCo 3.9.0、Gymnasium 1.3.0、NumPy 2.4.4 与 pytest 7.4.4；
+当前下载仍在运行，尚未形成完整 wheel 集合或完成离线安装。
+
+`control/gac_cloud_runtime_20261019/prepare_wheel_lock.py` 在下载成功后检查根版本、
+官方 Torch 哈希、每个 wheel 的元数据和声明的 Linux 平台标签，再生成逐包哈希锁。
+未完成下载的拒绝检查通过，没有提前生成 lock 或就绪标记。该工具仅检查软件包身份，
+不能替代依赖闭包的离线安装、干净环境验证、真实 GPU 运算或云端工程。
+第一次下载入口因原项目解释器没有 pip 而退出，日志保留；当前下载使用已有 pip 的
+解释器，不修改原项目环境。根依赖、来源、过程日志均位于同一数据盘控制目录。
+
+只读云端核查确认 CPython 3.12.13 的实际解释器及 `/opt` 位于根 overlay，glibc 为 2.35。
+后续环境拟在非挂载的 `/opt` 独立创建，仍须验收实际动态库与所有导入路径。
+从当前前端 `TaskToImage` 与 service 追溯到“存为镜像”的实际接口为
+`POST /gateway/foundation/api/v1/image`，包含 name/tag/content/uploadType/sceneList/jobId/teamId
+及 clusterId；开发任务保存的 uploadType 为 4。当前账号已有 Harbor 账号，源任务仍为
+Running。来源文件哈希、scene 字典和只读核查保存于控制目录，未发送镜像创建请求。
+
+CUDA 依赖属于环境实质变化，须在现有队列技术终态后完成云端真实入口短测，再保存新
+镜像版本并等待其可用。当前仅完成安装与保存路径的准备，不能标记为云端验收完成、
+镜像可复用或 GAC 正式实验已启动；也没有为此申请额外付费实例。
+
 ## 动作支持与后续对照
 
 官方采样把完整动作向量的单位方向与单位球面噪声作未归一化凸组合，权重为
