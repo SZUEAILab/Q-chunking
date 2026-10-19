@@ -5,6 +5,7 @@ import pytest
 
 from agents.gac_reference import GACReferenceConfig
 from main_gac_reference import OnlineReplay, expected_updates, sample_batch, validate_plan
+from main_gac_reference import execute_action, evaluate_policy
 
 
 def example(value=0):
@@ -76,3 +77,54 @@ def test_valid_protocols_are_explicit_and_empty_buffer_is_not_sampled():
     assert validate_plan(plan('prior_balanced')).batch_size==256
     replay=OnlineReplay(example(),3)
     with pytest.raises(ValueError,match='empty'):replay.sample(2,np.random.default_rng(3))
+
+
+def test_larger_radius_requires_explicit_execution_and_preserves_requested_values():
+    value_plan=plan();value_plan['learner']['radius']=2.5
+    with pytest.raises(ValueError,match='explicit clipping'):validate_plan(value_plan)
+    value_plan['action_execution']='clip'
+    assert validate_plan(value_plan).radius==2.5
+    request=np.array([1.5,-1.2,.1,.2,-.2],dtype=np.float32);original=request.copy()
+    executed=execute_action(request,2.5,'clip')
+    np.testing.assert_array_equal(executed,np.clip(original,-1,1))
+    np.testing.assert_array_equal(request,original)
+    assert np.max(np.abs(request))>1 and np.max(np.abs(executed))==1
+    value_plan['action_execution']='implicit'
+    with pytest.raises(ValueError,match='Declare'):validate_plan(value_plan)
+
+
+def test_original_identity_and_uniform_cube_warmup_remain_distinct():
+    request=np.array([.1,.2,.3,.1,.1],dtype=np.float32)
+    np.testing.assert_array_equal(execute_action(request,1),request)
+    warmup=np.full(5,.9,np.float32)
+    np.testing.assert_array_equal(execute_action(warmup,1,warmup=True),warmup)
+    with pytest.raises(ValueError,match='radius'):execute_action(warmup,1)
+
+
+@pytest.mark.parametrize('action_request',[np.zeros(4),np.array([np.nan,0,0,0,0]),np.array([3.,0,0,0,0])])
+def test_clipping_does_not_hide_malformed_or_out_of_ball_requests(action_request):
+    with pytest.raises(ValueError):execute_action(action_request,2.5,'clip')
+
+
+def test_evaluation_uses_the_declared_execution_and_counts_actual_clipping():
+    from types import SimpleNamespace
+    import torch
+    class Policy:
+        config=SimpleNamespace(radius=2.5)
+        rng_cpu=torch.get_rng_state().clone()
+        rng_cuda=None
+        critic_updates=actor_updates=target_updates=0
+        def sample_actions(self,observation,seed=None):
+            assert seed is not None
+            return np.array([1.5,-1.2,0,.2,0],dtype=np.float32)
+    class Environment:
+        def reset(self,seed=None):
+            self.actions=[]
+            return np.zeros(7),{}
+        def step(self,action):
+            assert action.shape==(5,) and np.max(np.abs(action))<=1
+            self.actions.append(action.copy())
+            return np.zeros(7),0.,len(self.actions)==3,False,{'success':0.}
+    env=Environment();report=evaluate_policy(Policy(),env,5,1,'clip')
+    assert report['episodes'][0]['length']==report['episodes'][0]['clipped_action_steps']==3
+    np.testing.assert_array_equal(env.actions[0],np.array([1,-1,0,.2,0],dtype=np.float32))

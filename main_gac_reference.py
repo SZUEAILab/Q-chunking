@@ -39,7 +39,8 @@ def validate_plan(plan):
     fields = {'seed', 'env_name', 'replay_protocol', 'dataset_path', 'dataset_sha256', 'validation_sha256',
               'online_steps', 'replay_capacity', 'eval_seed', 'eval_interval', 'eval_episodes', 'log_interval',
               'learner', 'device', 'torch_version', 'environment_versions', 'source_commit', 'source_files'}
-    if set(plan) != fields:
+    optional = {'action_execution'}
+    if not fields <= set(plan) or set(plan) - fields - optional:
         raise ValueError('Unexpected or missing GAC plan fields: ' + str(set(plan) ^ fields))
     if plan['replay_protocol'] not in ('online_only', 'prior_balanced') or plan['device'] not in ('cpu', 'cuda'):
         raise ValueError('Unknown replay protocol or backend')
@@ -54,8 +55,11 @@ def validate_plan(plan):
     if set(plan['learner']) - set(asdict(GACReferenceConfig())):
         raise ValueError('Unknown GAC learner settings')
     config = GACReferenceConfig(**plan['learner']); config.validate()
-    if config.radius != 1:
-        raise ValueError('Cube reference protocol uses the official radius=1 full-action ball')
+    execution = plan.get('action_execution', 'identity')
+    if execution not in ('identity', 'clip'):
+        raise ValueError('Declare identity or clip action execution')
+    if execution == 'identity' and config.radius != 1:
+        raise ValueError('Identity Cube execution requires radius=1; larger radii require explicit clipping')
     if plan['replay_protocol'] == 'prior_balanced':
         if config.batch_size % 2 or not all(plan[k] for k in ('dataset_path', 'dataset_sha256', 'validation_sha256')):
             raise ValueError('Balanced prior requires even batch and explicit dataset identity')
@@ -120,24 +124,48 @@ def sample_batch(replay, prior, batch_size, rng):
     return batch, dict(prior_rows=batch_size // 2, online_rows=online_size, prior_indices=prior_indices, online_indices=online_indices)
 
 
-def evaluate_policy(agent, env, seed, episodes):
+def execute_action(requested, radius, execution='identity', warmup=False):
+    """Bound environment inputs without changing the official requested-action Q.
+
+    The learner and replay retain the requested action, including values outside
+    the Box in explicit clip mode. Warm-up uses the original uniform Box.
+    """
+    requested = np.asarray(requested)
+    if requested.shape != (5,) or not np.isfinite(requested).all():
+        raise ValueError('Expected one finite five-dimensional action request')
+    if not np.isfinite(radius) or radius <= 0 or execution not in ('identity', 'clip'):
+        raise ValueError('Invalid GAC execution specification')
+    if execution == 'identity' and radius != 1:
+        raise ValueError('Identity execution requires the radius=1 ball')
+    if warmup:
+        if np.max(np.abs(requested)) > 1 + 1e-6:
+            raise ValueError('Warm-up request exceeds the uniform Box')
+    elif np.linalg.norm(requested) > radius + 1e-6 * max(1., radius):
+        raise ValueError('GAC request exceeds its configured full-vector radius')
+    if execution == 'identity' and np.max(np.abs(requested)) > 1 + 1e-6:
+        raise ValueError('Unclipped request exceeds Cube bounds')
+    return np.clip(requested, -1, 1) if execution == 'clip' else requested.copy()
+
+
+def evaluate_policy(agent, env, seed, episodes, action_execution='identity'):
     before_cpu = agent.rng_cpu.clone()
     before_cuda = agent.rng_cuda.clone() if agent.rng_cuda is not None else None
     counters = (agent.critic_updates, agent.actor_updates, agent.target_updates)
     records = []
     for episode in range(episodes):
         observation, _ = env.reset(seed=seed + episode)
-        done, length = False, 0
+        done, length, clipped_steps = False, 0, 0
         while not done:
-            action = agent.sample_actions(observation, seed=seed + episode * 1000000 + length)
-            if not np.isfinite(action).all() or np.linalg.norm(action) > 1 + 1e-6:
-                raise ValueError('Illegal full-vector GAC evaluation action')
+            requested = agent.sample_actions(observation, seed=seed + episode * 1000000 + length)
+            action = execute_action(requested, agent.config.radius, action_execution)
+            clipped_steps += int(np.any(requested != action))
             observation, _, terminated, truncated, info = env.step(action.copy())
             length += 1; done = bool(terminated or truncated)
         success = float(info['success'])
         if success not in (0., 1.):
             raise ValueError('Expected observed binary terminal success')
-        records.append(dict(episode=episode, reset_seed=seed + episode, length=length, success=int(success)))
+        records.append(dict(episode=episode, reset_seed=seed + episode, length=length, success=int(success),
+                            clipped_action_steps=clipped_steps))
     if not torch.equal(before_cpu, agent.rng_cpu) or before_cuda is not None and not torch.equal(before_cuda, agent.rng_cuda):
         raise ValueError('Evaluation advanced learner random stream')
     if counters != (agent.critic_updates, agent.actor_updates, agent.target_updates):
@@ -177,6 +205,7 @@ def initial_state_digest(agent):
 def run(plan_path, output):
     plan_path, output = Path(plan_path), Path(output)
     plan = json.loads(plan_path.read_text()); config = validate_plan(plan)
+    execution = plan.get('action_execution', 'identity')
     plan_sha = digest(plan_path); source_root = Path(__file__).resolve().parent
     verify_inputs(plan, source_root)
     versions = {name: importlib.metadata.version(name) for name in plan['environment_versions']}
@@ -186,7 +215,8 @@ def run(plan_path, output):
         raise ValueError('Explicit CUDA backend is unavailable; no CPU fallback')
     output.mkdir(parents=True, exist_ok=False)
     started = time.time(); env = eval_env = None
-    counts = dict(environment_transitions=0, sampled_prior_rows=0, sampled_online_rows=0, sampling_events=0)
+    counts = dict(environment_transitions=0, sampled_prior_rows=0, sampled_online_rows=0, sampling_events=0,
+                  execution_clipped_steps=0)
     try:
         if plan['replay_protocol'] == 'prior_balanced':
             from envs.ogbench_utils import make_ogbench_env_and_datasets
@@ -208,6 +238,7 @@ def run(plan_path, output):
         initial_sha = initial_state_digest(agent)
         effective = dict(learner=asdict(config), observation_dim=len(observation), action_dim=5,
                          replay_protocol=plan['replay_protocol'], prior_transitions=0 if prior is None else len(prior['actions']),
+                         action_execution=execution, replay_action_coordinates='requested', critic_action_coordinates='requested',
                          online_replay_capacity=plan['replay_capacity'], device=str(agent.device), source_commit=plan['source_commit'])
         (output / 'effective_config.json').write_text(json.dumps(effective, indent=2) + '\n')
         example = dict(observations=observation, actions=np.zeros(5), rewards=np.zeros(1), dones=np.zeros(1), next_observations=observation)
@@ -217,21 +248,22 @@ def run(plan_path, output):
         grid = sorted({0, plan['online_steps']} | set(range(plan['eval_interval'], plan['online_steps'] + 1, plan['eval_interval'])))
         with (output / 'eval.jsonl').open('x') as eval_log, (output / 'train.jsonl').open('x') as train_log, (output / 'actions.jsonl').open('x') as action_log:
             def evaluation(step):
-                row = dict(step=step, **evaluate_policy(agent, eval_env, plan['eval_seed'], plan['eval_episodes']))
+                row = dict(step=step, **evaluate_policy(agent, eval_env, plan['eval_seed'], plan['eval_episodes'], execution))
                 evaluations.append(row); eval_log.write(json.dumps(row, allow_nan=False) + '\n'); eval_log.flush()
             evaluation(0)
             for global_step in range(plan['online_steps']):
                 if len(observations) < 16: observations.append(np.asarray(observation).copy())
                 warmup = global_step < config.learning_starts
-                action = warmup_rng.uniform(low, high).astype('float32') if warmup else agent.sample_actions(observation)
-                if not np.isfinite(action).all() or np.max(np.abs(action)) > 1 + 1e-6 or not warmup and np.linalg.norm(action) > 1 + 1e-6:
-                    raise ValueError('Illegal collected GAC action')
+                requested = warmup_rng.uniform(low, high).astype('float32') if warmup else agent.sample_actions(observation)
+                action = execute_action(requested, config.radius, execution, warmup)
+                counts['execution_clipped_steps'] += int(np.any(requested != action))
                 next_observation, reward, terminated, truncated, _ = env.step(action.copy())
-                transition = dict(observations=np.asarray(observation), actions=action, rewards=np.asarray([reward]),
+                transition = dict(observations=np.asarray(observation), actions=requested, rewards=np.asarray([reward]),
                                   dones=np.asarray([terminated]), next_observations=np.asarray(next_observation))
                 replay.add(transition); counts['environment_transitions'] += 1
                 step = global_step + 1
                 action_log.write(json.dumps(dict(step=step, zero_based_loop=global_step, warmup=warmup, action=action.tolist(),
+                    requested_action=requested.tolist(),
                     terminated=bool(terminated), truncated=bool(truncated)), allow_nan=False) + '\n')
                 if global_step > config.learning_starts:
                     batch, sample = sample_batch(replay, prior, config.batch_size, sample_rng)
@@ -280,12 +312,14 @@ def run(plan_path, output):
         if digest(plan_path) != plan_sha: raise ValueError('Plan changed during run')
         receipt = dict(status='complete', source_commit=plan['source_commit'], source_files=plan['source_files'], plan_sha256=plan_sha,
             replay_protocol=plan['replay_protocol'], counts=counts, actual_updates=actual, evaluation_steps=grid,
+            action_execution=execution, replay_action_coordinates='requested', critic_action_coordinates='requested',
             initial_model_and_rng_sha256=initial_sha,
             observed_eval_episode_counts=[row['episode_count'] for row in evaluations], exact_checkpoint_fields=fields,
             restored_policy_probes=len(probes), checkpoint_sha256=digest(checkpoint), effective_config_sha256=digest(output / 'effective_config.json'),
             runtime=dict(torch=torch.__version__, compiled_cuda=torch.version.cuda, device=str(agent.device), packages=versions),
             started=started, finished=time.time(), limitations=['Local single-environment driver; official defaults use eight vector environments.',
                 'Prior-balanced replay is an explicit GAC adaptation, not the original online-only algorithm.',
+                'Explicit clip execution is a Cube boundary adaptation; official learner Q queries and replay retain requested coordinates.',
                 'Sampled-row counts include replacement and actor reuse of the same critic minibatch; they are not unique transition counts.',
                 'Fixed evaluation seeds do not certify complete simulator cache/RNG matching.'])
         with (output / 'receipt.json').open('x') as stream: stream.write(json.dumps(receipt, indent=2) + '\n')
