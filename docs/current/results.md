@@ -416,6 +416,13 @@ CPU 39 项／跳过 1 项、CUDA 40 项检查通过；radius=2.5 的额外官方
 [环境范围](../reference/gac_baseline.md#云端独立-cuda-环境准备)，数据盘证据为
 `control/gac_clean_runtime_20261019/readiness.json`。
 
+部署归档的实际解包证明通过：固定依赖逐文件验哈希，runtime v2 的 125 个训练 Python
+文件、32 个科学配置和上游浅克隆 Git 对象完整还原；导出包 40+39 项检查、一次解包源码
+的真实 CUDA 64 步及独立 179 字段恢复通过。首版缺 shallow boundary 的失败包保留，
+并非重跑科学结果。较小 runtime 已在原四卡实例暂存与核验，依赖包尚在传输，云端安装
+与正式 GAC 运行未开始。证据为数据盘 `control/gac_reference_comparison_20261019/package-proof-v2.json`，
+详见[部署范围](../reference/gac_baseline.md#部署归档与暂存)；不提供新增性能结论。
+
 ## 下一步
 
 优先完成本轮完整 action-adapter 的 72 运行复现与消融、critic 等效动作诊断及独立外部

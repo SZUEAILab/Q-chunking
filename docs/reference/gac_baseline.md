@@ -253,6 +253,34 @@ CUDA 依赖属于环境实质变化，须在现有队列技术终态后完成云
 镜像版本并等待其可用。当前完成了本地依赖及真实工程、云端安装与保存路径准备，不能标记为云端验收完成、
 镜像可复用或 GAC 正式实验已启动；也没有为此申请额外付费实例。
 
+### 部署归档与暂存
+
+独立依赖归档包含 62 个 wheel、哈希锁和依赖来源，大小 3805224960 bytes；较小的
+runtime v2 归档包含 125 个冻结训练 Python 文件、独立分析及其测试、32 个原科学配置、
+上游 Git 对象与 MIT 许可，共 170 个清单文件。两者各自绑定归档与逐文件 SHA-256，
+不搬动本地 venv，不传输原 `.git/config`、认证文件或 SSH 私钥。后续控制器代码可单独
+版本化，固定依赖归档复用，避免重复传输约 3.8 GB 的软件包。
+
+第一次实际解包在离线 Git 还原处失败：上游是 shallow checkout，普通 Git bundle 没有
+记录原 `.git/shallow`，fetch 因缺少父 commit 而拒绝。该失败发生在 package 测试和真实
+入口启动前；旧归档、解包目录和日志保留。runtime v2 带入原浅克隆边界，导入 Git 对象后
+恢复该边界并校验 tree connectivity，指定 commit 与 GAC.py／LICENSE 字节均一致。
+它还原的是原浅克隆快照，不声称提供完整上游历史；科学配置与训练源未因此更改。
+
+两个实际归档解包并逐文件验哈希后，通过导出的 40 项 source 检查和 39 项 analysis 检查。
+又从解包后的源码运行 radius=2.5、online-only 的真实 CUDA 64 步入口，observed exit=0，
+31/30/31 次更新、179 个 checkpoint 字段与原始请求 replay 均通过独立核验。
+对解包副本修改 source 字节的破坏检查被拒绝，原科学文件哈希不变。这些属于迁移工程，
+没有新增长程科学训练或性能结论。
+
+现有四卡实例的只读核查确认 `/workspace` 为 dpc 持久化挂载、`/opt` 为根 overlay，
+Python 3.12.13、Git 和四张 RTX4090 可见。较小 runtime v2 已在该实例暂存，归档读回 SHA
+及全部 source/config 清单核验通过；依赖大包仍在上传，准确进度与 SSH／remote process
+存活证据位于数据盘控制目录。传输只写独立 releases 目录，尚未在云端安装、执行 GAC
+GPU 短测、保存镜像或启用正式批次控制器。暂存工具只传输并验收归档，没有安装或训练命令。
+本地部署清单、解包证明与传输记录位于 `control/gac_reference_comparison_20261019/`，
+主要入口为 `deployment-packages-v2.json`、`package-proof-v2.json` 和 `stage-*-process.json`。
+
 ## 动作支持与后续对照
 
 官方采样把完整动作向量的单位方向与单位球面噪声作未归一化凸组合，权重为
