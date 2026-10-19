@@ -151,6 +151,42 @@ truncation 保留为 episode 边界。Actor 和 critic 的更新时钟不同，�
 当前云端环境仍需 CUDA Torch 验收，GAC 长程矩阵尚未启动；近邻对照的长期稳定性、
 调参公平性与性能差异仍待正式比较。
 
+### 较大 radius 与执行边界的独立验收
+
+固定 commit 的 `GAC.py` 默认 radius=1，但 `README.MD` 在多数 MuJoCo 示例使用 2.5，
+Ant 使用 1。作者这些示例不是 OGBench 超参数证据。后续完整强基线比较不能只凭此前
+radius=1 的工程检查声称已覆盖作者建议设置；radius 选择和执行边界须在正式比较前登记。
+
+原 `29536cb` driver 的 radius=1 发布包保持冻结。新入口 `371fe5b` 增加可选
+`action_execution="clip"`，允许较大 radius，并对**完整五维请求逐轴裁剪**后交给 Cube。
+省略该字段仍是原 radius=1 identity 协议；较大 radius 缺少显式裁剪声明会拒绝启动。
+官方训练循环把 actor 的原始请求存入 replay，Q 查询也使用原始请求。新适配保留这个
+learner／replay 坐标约定，不把裁剪后的执行动作悄悄替换为 Q 的输入。
+prior-balanced 中的先验动作仍是原数据内的归一化命令；超界在线请求属于不同分布，
+不能声称两者完全匹配或它等同于只改变几何的消融。
+
+训练日志分别保存 requested_action 与实际传给环境的 action，独立计数裁剪步骤；
+评估也使用声明的执行方式并记录每 episode 的裁剪次数。warm-up 仍使用原均匀 Box，
+不将它误限制在策略球内。官方 learner 文件字节未变，125 文件快照仅入口与其测试改变。
+较大 radius 的裁剪是 Cube 边界适配，不是对官方 MuJoCo 环境执行行为的认证。
+
+新入口通过 CPU 39 项／跳过 1 项、专用 CUDA 环境 40 项检查。radius=2.5 的 46 维观测、
+五维动作、batch256 案例另与官方 AST 完成六次交错采样和六次更新，模型、Adam、RNG
+和 loss 精确一致，最大状态误差为 0。该数值对照发生在请求坐标，不认证环境裁剪等价。
+
+本地 GPU 0 的三个真实 64 步工程均退出 0：原 identity/online-only，以及 radius=2.5 的
+clip/online-only、clip/prior-balanced。每次 critic/actor/target=31/30/31，step 0/64
+各实际一 episode，评估共额外 6000 步。两个 clip 案例各有 25/28 个训练步骤发生裁剪，
+最大请求绝对值为 2.205/1.777，最大执行绝对值均为 1；这些是工程现象，不是性能指标。
+三组五模型与 Torch RNG 初始化哈希一致，不证明物理 reset 状态或后续轨迹一致。
+
+独立新进程恢复每个 checkpoint 的 179 个字段、核对实际 Adam 计数与 16 个策略探针，
+并将首批 replay 的 actions 与记录的原始请求逐项核对。两个 clip 案例的首批在线 replay
+确实保留了绝对值 1.777 的请求，环境输入日志仍在 Box 内；实际 prior/online 索引与
+原始字段也逐项通过。所有训练与批次冻结记录未被覆盖，失败的测试收集与 oracle 导入
+尝试保留在数据盘 `control/gac_radius_20261019/`。两次错误均发生在相应验收案例开始前，
+没有重跑长程科学实验。当前仍无云端 GPU 验收、GAC 正式矩阵或 posthoc−GAC 性能结论。
+
 ### 云端独立 CUDA 环境准备
 
 现有四卡实例仍执行冻结 RLPD 队列，GAC 依赖在本地另行准备，没有安装到运行中的

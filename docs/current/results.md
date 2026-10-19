@@ -384,6 +384,22 @@ critic/actor/target=31/30/31、step 0/64 各实际 1 episode。两种协议的�
 原版纯在线 GAC 或 RLPD 内单一几何消融。云端 Torch 仍为 CPU 版，GAC 长程比较尚未
 启动，也没有 posthoc 超过 GAC 的性能结论。
 
+### GAC 较大 radius 的执行边界验收
+
+针对作者 MuJoCo 示例使用 radius=2.5、原 Cube driver 只允许 1 的覆盖缺口，新源码
+`371fe5b` 增加显式 clip 执行，完整官方 learner 保持不变；replay/Q 保留原始请求坐标，
+环境接收裁剪动作。三项本地 CUDA 64 步工程均退出 0：identity/online-only、
+clip/online-only、clip/prior-balanced，各实测 31/30/31 次 critic/actor/target 更新。
+两个 clip 案例的训练裁剪步骤为 25/28，执行输入逐轴有界；独立检查确认首批在线 replay
+仍保留绝对值 1.777 的请求，而非被静默替换成执行动作。
+
+CPU 39 项／跳过 1 项、CUDA 40 项检查通过；radius=2.5 的额外官方 AST 完整 learner
+数值案例最大状态误差为 0。三个 checkpoint 各 179 个字段精确恢复，原始批次/索引、
+实际评估 episode、计数与 16 个策略探针通过。三次评估共额外 6000 步，单独于 192 个
+训练步；这些证据不提供 GAC 或 posthoc 性能判断。完整范围与适配限制见
+[GAC 参考](../reference/gac_baseline.md#较大-radius-与执行边界的独立验收)，证据在数据盘
+`control/gac_radius_20261019/readiness.json`。云端 CUDA 安装、镜像和正式矩阵仍待完成。
+
 ## 下一步
 
 优先完成本轮完整 action-adapter 的 72 运行复现与消融、critic 等效动作诊断及独立外部

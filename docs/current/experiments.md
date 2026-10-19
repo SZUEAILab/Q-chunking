@@ -203,6 +203,12 @@ target frequency=1 时，预期 critic/actor/target 次数为 994999/994998/9949
 这些为开发验收，不提供 GAC/posthoc 性能判断；GAC 正式矩阵和云端 CUDA 环境尚未冻结/验收，
 不向既有 RLPD/FQL 批次插入运行。证据位于数据盘 `control/gac_driver_20261019/`。
 
+新入口 `371fe5b` 单独增加显式 clip 执行，保留请求坐标 replay/Q，用于覆盖作者 MuJoCo
+示例中的较大 radius，而非将原 radius=1 工程当作全部强基线。三项本地 CUDA 64 步、
+独立数据/checkpoint 核验和 radius=2.5 的原始 AST 数值对照通过，见
+[执行边界](../reference/gac_baseline.md#较大-radius-与执行边界的独立验收)。两种 radius、裁剪
+与数据协议的正式比较仍须另行冻结，不能从工程裁剪比例或短测结果选择优胜设置。
+
 云端独立 CUDA 依赖包正在另行下载，尚未完成离线安装或云端 GPU 验收。已核对根文件系统
 位置及当前前端的镜像保存接口；新环境须先真实短测、再保存可用镜像版本，详见
 [环境准备边界](../reference/gac_baseline.md#云端独立-cuda-环境准备)。现有训练环境和批次保持冻结。
