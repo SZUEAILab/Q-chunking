@@ -64,6 +64,21 @@ log-speed<−1；这与 tanh 策略速度坐标不一致。近零方向分支仍
 这些导数没有认证 latent critic 的实际 actor 梯度，Gaussian 探针也不代表训练后的策略。
 数据、解释边界和对应训练消融见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
 
+### 原版 posthoc 的神经网络初始化检查
+
+在 CPU 上按冻结源码和正式有效配置重建 native/posthoc 两种网络、四个初始化 seed，
+使用 128 个固定验证先验状态、每状态 64 个共同噪声样本；没有训练、环境交互或性能读取。
+原始噪声倍率下，native/posthoc 的平均 XYZ 范数为 1.083/0.965，平均状态内范数 SD 为
+0.267/0.446，平均状态内 XYZ 协方差 trace 为 1.225/1.111。幅值波动增加与平均动作
+变小、总条件方差略小同时出现，因此不能用“动作更大”或“总噪声更小”概括。
+
+同一个 posthoc actor 保留所有 Gaussian heads 与样本、只改为 Cartesian 执行 XYZ 时，
+平均范数/状态内范数 SD 为 1.068/0.267；scalar 控制逐样本保持相同。
+该映射反事实是初始化诊断，不是训练基线或性能消融。位置参数非零时，posthoc 的
+pooled median 也不固定为 1；CPU 重建不认证远程 GPU 初始化逐位一致。
+6 项测试与八个完整模型路径通过。详见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)，
+数据盘报告为 `reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、

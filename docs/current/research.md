@@ -14,6 +14,8 @@ RLPD 是首个研究算法；FQL 用于跨算法检验，RoboMimic 用于跨域�
 已完成固定 mapper 的前向探针、Jacobian 与先验编码核验，见
 [原版 posthoc 机制](../reference/method.md#511-原版-posthoc-优势的可检验解释)。当前优先假设是
 幅值行为先验、价值表示与潜坐标正则的组合；不将它简化为更大动作或 critic 冗余单因。
+冻结网络的固定状态初始化检查进一步观察到：posthoc 平均幅值较小，但状态内幅值
+波动较大；同一组网络 heads 的映射反事实保留该差异。它是初始化证据，不是性能归因。
 
 当前机制筛选固定 Cube-Triple task2 与 Cube Double task2，四个配对训练 seed（10–13）、
 每运行 1M 步。比较 native、Cartesian L2 projection、两个 adapter 版本各自的

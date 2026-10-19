@@ -8,6 +8,8 @@
 
 ## 基础复现与原始 DS 比较
 
+- [posthoc_initial_policy_20261019.png](posthoc_initial_policy_20261019.png)：冻结网络初始化、固定状态条件动作统计与同 heads 映射反事实；阴影是四 seed 范围，不是性能区间。
+
 - [posthoc_mechanism_probes_20261019.png](posthoc_mechanism_probes_20261019.png)：共同 Gaussian 前向探针与验证先验 log-speed 编码；不是训练后性能或因果归因。
 
 - [action_adapter_legacy_paired_auc_20261019.png](action_adapter_legacy_paired_auc_20261019.png)：全部五任务、H1/H5、十配对 seed；统一 endpoint 与实际观测 AUC，包含全零结果。

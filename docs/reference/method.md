@@ -945,6 +945,38 @@ SD=1 时，baseline/posthoc 的**平均**范数是 1.053/0.995，不能概括为
 `exp(-1)` 乃至零的动作。因此该幅值下界仅适用于常规分支，不能声称小动作在全局执行
 支持中不存在。固定探针未采到该分支，不证明训练策略也不会进入它。
 
+**冻结神经网络初始化的固定状态检查。** 后续在 CPU 上使用完整的冻结 `ccab449` 源码
+重建真实 actor 架构；84 个源码文件逐一验哈希，有效配置来自正式运行目录，另行核对
+配置文件 SHA。seeds 10–13、128 个 SHA 固定验证先验非终止状态、每状态 64 次共同
+Gaussian draw；不读 reward/eval，不更新参数，也不认证与远程 GPU 初始化逐位相等。
+
+保留网络实际输出的状态相关位置和尺度后，原始噪声倍率 1 下，按状态和初始化 seed 等权：
+
+| 初始策略 / 执行映射 | 平均 XYZ 范数 | 平均状态内范数样本 SD | 平均状态内 XYZ 样本协方差 trace |
+|---|---:|---:|---:|
+| Native actor | 1.083 | 0.267 | 1.225 |
+| Posthoc actor | 0.965 | 0.446 | 1.111 |
+| 同一个 posthoc actor，XYZ 用普通 Cartesian 执行 | 1.068 | 0.267 | 1.183 |
+
+最后一行固定 posthoc 的所有 Gaussian heads 和相同噪声，只丢弃速度头、直接执行 XYZ；
+yaw/gripper 的执行值逐样本相同。这是读数上的映射反事实，不是独立训练的 baseline。
+它表明上述初始化差异包含执行映射本身的贡献，仍未证明任何任务收益。
+
+将固定网络的原始 Gaussian noise 乘数从 0.2 增到 2，native 平均范数由 0.384 到 1.376，
+posthoc 由 0.938 到 0.994，同 posthoc heads 的 Cartesian 执行则由 0.405 到 1.365。
+但 posthoc 的平均状态内范数 SD 同时由 0.165 增到 0.550，因此“平均幅值较稳定”不能
+改写成“探索方差不变”或“噪声更小”。原始倍率下，posthoc pooled median 的四 seed
+平均约为 0.926；上一节精确接近 1 的中位数不能外推到非零位置的网络或训练后策略。
+
+初始化策略的范数波动、同状态 XYZ 协方差及不同状态均值变化分别统计；不把跨状态变化
+冒充条件探索噪声。四个初始化 seed 的范围不是性能置信区间。
+
+![Posthoc 初始化 actor 的固定状态诊断](../images/posthoc_initial_policy_20261019.png)
+
+工具为 [`research/posthoc_initial_policy.py`](../../research/posthoc_initial_policy.py)，6 项测试
+及八个完整初始化模型的 CPU 路径通过。报告位于数据盘
+`reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
+
 **方向/幅值的价值表示与理想梯度几何。** 在未裁剪的常规分支，令 `d=u/||u||`、
 `rho=exp(v)`，可直接推得
 
