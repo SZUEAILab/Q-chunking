@@ -91,7 +91,7 @@ step 0/64 各实际返回 1 个评估 episode，额外评估共 2000 个环境�
 
 上述单环境与独立评估是本地 driver 适配，不能冒充默认八环境的官方 benchmark；未来
 正式比较须分别报告向量循环数、实际转移、更新和 prior 使用量。云端现有 Torch 仍为
-CPU 版，GPU 运行环境、正式矩阵与 GAC/posthoc 长程性能比较仍待完成。
+CPU 版，GPU 运行环境与 GAC/posthoc 长程性能比较仍待完成；另行冻结的比较矩阵见下文。
 
 数值报告为数据盘 `reports/gac_reference_20261019/learner-equivalence-v2.json`，真实工程和
 checkpoint 证据在 `control/gac_reference_20261019/engineering-receipt.json`。首次 oracle
@@ -185,7 +185,32 @@ clip/online-only、clip/prior-balanced。每次 critic/actor/target=31/30/31，s
 确实保留了绝对值 1.777 的请求，环境输入日志仍在 Box 内；实际 prior/online 索引与
 原始字段也逐项通过。所有训练与批次冻结记录未被覆盖，失败的测试收集与 oracle 导入
 尝试保留在数据盘 `control/gac_radius_20261019/`。两次错误均发生在相应验收案例开始前，
-没有重跑长程科学实验。当前仍无云端 GPU 验收、GAC 正式矩阵或 posthoc−GAC 性能结论。
+没有重跑长程科学实验。当前仍无云端 GPU 验收或 posthoc−GAC 性能结论；比较设计已另行冻结。
+
+### 可复用的长程验收工具
+
+独立分析版本 `45a0998` 的 [`research/gac_reference_validation.py`](../../research/gac_reference_validation.py)
+不修改冻结训练源码 `371fe5b`。它要求 supervisor 观测到退出码 0，并核对来源、计划、
+依赖和实际有效配置；分别复算零基更新时钟、Adam 次数和含放回的 prior/online 抽样行数。
+评估从真实 step 0 积分到预算终点，逐 episode 核对数量、seed、成功聚合与裁剪次数，
+报告 AUC、endpoint、tail3 的实际点数，以及保留右删失的 time-to-50%。
+
+动作日志流式核对完整步轴、均匀 Box warm-up、策略请求球界和逐轴执行映射，分别保留
+termination/truncation。首批原始索引须为合法整数；数据与在线快照、原始先验逐字段核对，
+并用动作前缀复核在线 ring 中存的是 requested action。训练诊断要求实际 actor 更新事件
+的时间戳，不能把上一条 actor loss 当作当前 critic 更新。终态从新模板恢复完整 learner，
+检查有限模型/优化器、实际 Adam、RNG 与显式 seed 策略探针，并再次核对产物哈希。
+checkpoint 仍不包括 replay、物理环境及 NumPy 抽样器的完整轨迹续跑状态。
+
+39 项专项检查及独立导出包的同 39 项测试通过。新进程重新读取上述三次真实 CUDA 64 步
+运行，均通过可复用验收，各恢复 179 个状态字段；没有执行训练更新。另在独立复制的
+clip/online-only 目录中构造三个破坏案例：负 replay 索引、将原始请求替换为执行动作并
+同步修改裁剪计数、篡改 Adam step 并同步更新 checkpoint 哈希。三者分别在索引、原始
+replay 一致性和实际优化器计数处被拒绝，原始运行文件哈希不变。
+
+导出的分析源码、真实复核报告、破坏副本及验证结果位于数据盘
+`control/gac_validation_20261019/`。这些检查覆盖验收契约与真实短程接线，不构成百万步
+稳定性、GAC/posthoc 性能或正式矩阵已启动的证据；后续批次还须绑定该分析版本。
 
 ### 云端独立 CUDA 环境准备
 
@@ -193,14 +218,29 @@ clip/online-only、clip/prior-balanced。每次 critic/actor/target=31/30/31，s
 `/workspace/venv`。官方 PyTorch wheel index 已定位 Python 3.12 / x86_64 的
 `torch-2.14.0+cu126-cp312-cp312-manylinux_2_28_x86_64.whl`，保留发布方 SHA-256。
 根依赖固定 OGBench 1.2.1、MuJoCo 3.9.0、Gymnasium 1.3.0、NumPy 2.4.4 与 pytest 7.4.4；
-当前下载仍在运行，尚未形成完整 wheel 集合或完成离线安装。
+已完成 62 个 wheel 的下载、版本选择与 SHA-256 锁定，约 3.805 GB。
 
-`control/gac_cloud_runtime_20261019/prepare_wheel_lock.py` 在下载成功后检查根版本、
-官方 Torch 哈希、每个 wheel 的元数据和声明的 Linux 平台标签，再生成逐包哈希锁。
-未完成下载的拒绝检查通过，没有提前生成 lock 或就绪标记。该工具仅检查软件包身份，
-不能替代依赖闭包的离线安装、干净环境验证、真实 GPU 运算或云端工程。
-第一次下载入口因原项目解释器没有 pip 而退出，日志保留；当前下载使用已有 pip 的
-解释器，不修改原项目环境。根依赖、来源、过程日志均位于同一数据盘控制目录。
+只读取得现有云端 OGBench 的完整声明依赖闭包，按实际 extras/markers 包含 33 个分发包、
+54 条依赖边。最初无约束解析有 19 个版本不同，包括云端 SciPy 1.17.1 与新解析的 1.18.1，
+因此没有将最初下载集合直接当成正式环境。选择后的 32 个版本与现有云端一致；唯一例外
+是构建工具 setuptools：云端 70.2.0，而 Torch 2.14 的发布 metadata 要求至少 77.0.3，
+故显式固定最低兼容版 77.0.3。该例外及发布要求另行绑定，不声称所有环境包完全相同。
+
+版本二工具仅解析每个 wheel 顶层的 dist-info/METADATA，核对官方 Torch 哈希、根版本和
+声明的 Linux 平台标签后生成逐包哈希锁。初版曾因 setuptools 内含 vendored dist-info
+而拒绝解析，失败目录与日志保留，没有生成错误就绪标记；缺 pip 的首次下载入口也保留。
+选择后的 wheel 与来源记录在数据盘 `control/gac_cloud_runtime_20261019/matched-v2/`，
+未通过检查的旧 staging 目录未被覆盖。包身份与静态 ABI 标签核查不等于云端验收。
+
+本地新建不继承系统包的 GAC 环境，以 `--no-index --require-hashes` 完成离线安装，
+`pip check` 退出 0，62 个分发包的实际版本与安装位置逐项核对；没有 JAX/Flax。
+GPU 0 矩阵运算、40 项 learner/driver 与 39 项分析检查通过。在该新环境重新完成三次
+真实 64 步入口和独立终态验收，各 31/30/31 更新、各 179 个 checkpoint 字段精确恢复；
+四类 CUDA 官方 AST 数值案例最大状态误差为 0。此处是专用本地工程，不能从短测判断
+方法优劣，也不认证 cloud RTX4090 或跨 runtime 物理轨迹逐位相等。
+完整记录位于数据盘 `control/gac_clean_runtime_20261019/readiness.json`；嵌套研究脚本
+首次直接调用缺少 source-root 导入路径，发生在数值案例开始前，改用 `python -m` 后通过，
+旧失败记录保留，没有重跑长程科学实验。
 
 只读云端核查确认 CPython 3.12.13 的实际解释器及 `/opt` 位于根 overlay，glibc 为 2.35。
 后续环境拟在非挂载的 `/opt` 独立创建，仍须验收实际动态库与所有导入路径。
@@ -210,7 +250,7 @@ clip/online-only、clip/prior-balanced。每次 critic/actor/target=31/30/31，s
 Running。来源文件哈希、scene 字典和只读核查保存于控制目录，未发送镜像创建请求。
 
 CUDA 依赖属于环境实质变化，须在现有队列技术终态后完成云端真实入口短测，再保存新
-镜像版本并等待其可用。当前仅完成安装与保存路径的准备，不能标记为云端验收完成、
+镜像版本并等待其可用。当前完成了本地依赖及真实工程、云端安装与保存路径准备，不能标记为云端验收完成、
 镜像可复用或 GAC 正式实验已启动；也没有为此申请额外付费实例。
 
 ## 动作支持与后续对照
@@ -236,4 +276,7 @@ CUDA 依赖属于环境实质变化，须在现有队列技术终态后完成云
 
 当前冻结的 72 组筛选与 16 组 RLPD 基线不增加 GAC 组。后续基线实现先固定本页的上游
 身份与适配选择，再进行数值和环境工程验收；正式任务、seed、预算及分析在读取新结果前
-另行冻结。已有正向 posthoc 结果继续作为完整方法复现的动机，GAC 核验不替代该主线。
+另行冻结。现已冻结的独立 32 运行采用两任务、四 seed、两半径/边界和两数据协议，训练源
+`371fe5b`、分析 `45a0998`，详见[比较协议](../current/experiments.md#gac-完整基线的冻结开发比较)。
+该设计尚未启动，仍受云端工程与镜像门槛约束。已有正向 posthoc 结果继续作为完整方法
+复现的动机，GAC 核验不替代该主线。

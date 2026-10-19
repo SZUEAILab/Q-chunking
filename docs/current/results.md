@@ -398,7 +398,23 @@ CPU 39 项／跳过 1 项、CUDA 40 项检查通过；radius=2.5 的额外官方
 实际评估 episode、计数与 16 个策略探针通过。三次评估共额外 6000 步，单独于 192 个
 训练步；这些证据不提供 GAC 或 posthoc 性能判断。完整范围与适配限制见
 [GAC 参考](../reference/gac_baseline.md#较大-radius-与执行边界的独立验收)，证据在数据盘
-`control/gac_radius_20261019/readiness.json`。云端 CUDA 安装、镜像和正式矩阵仍待完成。
+`control/gac_radius_20261019/readiness.json`。云端 CUDA 安装与镜像仍待完成；独立 32 运行
+比较设计已冻结，但尚未启动，见[实验](experiments.md#gac-完整基线的冻结开发比较)。
+
+独立分析 `45a0998` 的可复用 GAC 终态工具通过 39 项专项检查，并从导出包通过相同测试。
+重新读取三次原 CUDA 工程，实际评估、完整动作轴、原始 batch/索引、31/30/31 更新和
+各 179 个 checkpoint 字段均通过，训练更新为 0。对独立副本构造的负索引、擦除原始请求、
+错误 Adam 计数三种破坏均被拒绝，原文件哈希保持不变。详细限制见
+[验收工具](../reference/gac_baseline.md#可复用的长程验收工具)，报告在数据盘
+`control/gac_validation_20261019/readiness.json`；它不证明百万步稳定性或新增性能收益。
+
+62 个带哈希 wheel 已在本地新 GAC 环境完成离线安装，`pip check` 通过且没有继承系统包。
+现有云端 OGBench 声明闭包 33 个包中 32 个版本匹配，setuptools 因 Torch 要求从云端
+70.2.0 改为最低兼容 77.0.3，例外明确保留。新环境通过 40+39 项检查、三次真实 CUDA
+64 步入口与独立恢复、四类官方 AST 数值对照（最大误差 0）。这些工程没有安装到运行中
+的云端环境，也不提供性能结论。安装与核验记录见
+[环境范围](../reference/gac_baseline.md#云端独立-cuda-环境准备)，数据盘证据为
+`control/gac_clean_runtime_20261019/readiness.json`。
 
 ## 下一步
 

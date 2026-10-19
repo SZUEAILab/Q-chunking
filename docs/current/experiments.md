@@ -200,7 +200,7 @@ target frequency=1 时，预期 critic/actor/target 次数为 994999/994998/9949
 
 源码 `29536cb` 的 125 文件快照通过两种协议各一次真实 CUDA 64 步工程，初始化模型/RNG
 一致，更新次数与数据来源计数通过独立复核；19 项入口契约测试通过。
-这些为开发验收，不提供 GAC/posthoc 性能判断；GAC 正式矩阵和云端 CUDA 环境尚未冻结/验收，
+这些为开发验收，不提供 GAC/posthoc 性能判断；GAC 云端 CUDA 环境尚未验收，正式比较尚未启动，
 不向既有 RLPD/FQL 批次插入运行。证据位于数据盘 `control/gac_driver_20261019/`。
 
 新入口 `371fe5b` 单独增加显式 clip 执行，保留请求坐标 replay/Q，用于覆盖作者 MuJoCo
@@ -209,9 +209,46 @@ target frequency=1 时，预期 critic/actor/target 次数为 994999/994998/9949
 [执行边界](../reference/gac_baseline.md#较大-radius-与执行边界的独立验收)。两种 radius、裁剪
 与数据协议的正式比较仍须另行冻结，不能从工程裁剪比例或短测结果选择优胜设置。
 
-云端独立 CUDA 依赖包正在另行下载，尚未完成离线安装或云端 GPU 验收。已核对根文件系统
-位置及当前前端的镜像保存接口；新环境须先真实短测、再保存可用镜像版本，详见
+可复用终态工具 [`research.gac_reference_validation`](../../research/gac_reference_validation.py)
+另以 `45a0998` 固定分析来源，验收完整预算、实际 episode、请求/执行动作、原始批次、
+更新与 checkpoint；39 项专项检查、三份真实 CUDA 工程复核及三种破坏副本拒绝检查通过。
+工具与训练发布分开绑定，尚未用于百万步 GAC 运行；见[验收范围](../reference/gac_baseline.md#可复用的长程验收工具)。
+
+CUDA 依赖已形成 62-wheel 哈希锁并完成本地独立离线安装与真实 GPU 工程，OGBench 声明
+依赖中 32/33 个版本与现有云端一致，setuptools 的 Torch 必需版本例外显式登记。云端
+安装、GPU 验收与镜像仍待完成；已核对根文件系统位置和当前前端保存接口，详见
 [环境准备边界](../reference/gac_baseline.md#云端独立-cuda-环境准备)。现有训练环境和批次保持冻结。
+
+### GAC 完整基线的冻结开发比较
+
+`gac_reference_comparison_20261019` 已单独冻结 32 个运行：两个开发任务 Cube Triple task2／
+Cube Double task2、seeds 10–13、两种 radius/执行配方、两种数据协议，每次 1M 在线环境步，
+没有离线更新。训练源固定 `371fe5b` 的 125 个 Python 文件，独立验收分析固定 `45a0998`。
+
+| 配方 | 执行与学习坐标 | 数据协议 |
+|---|---|---|
+| radius=1 | identity；完整五维球内请求，Q/replay 使用请求 | online-only 与 prior-balanced 分开运行 |
+| radius=2.5 | 逐轴 clip 后执行；Q/replay 仍使用原始请求 | 同上 |
+
+其余保留完整官方 learner 配方，不按短测裁剪比例或当前筛选结果调整参数。online-only 是
+数据访问参照；与 RLPD 的主要完整算法比较使用 prior-balanced。后者每次 critic update
+抽取 128 prior／128 online，含放回且 actor 重用同批次；在线 ring 容量 1M，prior 独立只读。
+两种配方均不称为与 posthoc 支持完全匹配的几何消融，也不将作者 MuJoCo 半径写成 OGBench
+最优值。预期 critic/actor/target 次数分别为 994999/994998/994999，保留与 RLPD 时钟的差异。
+
+固定真实 step 0–1M 的 100k 网格、每点 50 episodes、独立 eval seed 20261019，主指标为
+归一化 success AUC；另报 endpoint、tail3、右删失 time-to-50%、实际更新数和时长。
+24 项描述性对照包括任务内八项 GAC radius/边界或数据协议比较，以及原论文配方 native／
+原版 posthoc 的 UTD1/20 相对两个 prior-balanced GAC 配方的十六项完整算法比较。
+各项必须有全部四个配对 seed 才生成组估计；枚举 `4^4` 个经验 bootstrap，不作确认性或
+同时覆盖主张。失败、零结果和缺失均保留，不重跑、续跑、替换 seed 或只汇总可用子集。
+
+四个 GPU lane 每个固定一个 seed、串行八个条件；XOR offsets 0/3/5/6 使每个队列位置的
+任务、数据协议、半径各 2/2，任意因素对覆盖全部四种组合。配置与调度表已生成并核验。
+它们尚未接入启动控制器：等待既有 FQL 及上游技术终态，再复用当前四卡实例；完整离线
+依赖、云端四卡预验收、真实短测与独立核验、新镜像保存可用均为启动前条件，没有成功率
+方向门槛。数据与完整配置、24 项对照、来源和冻结哈希位于数据盘
+`control/gac_reference_comparison_20261019/`。该批次不替代 fresh-seed、held-out 或跨域确认。
 
 ## 批次最少登记什么
 
