@@ -11,6 +11,7 @@ from flax import linen as nn
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from rlpd_networks import Ensemble, StateActionValue, MLP
 from direction_speed import DirectionSpeedAdapter
+from direction_speed.adapter import validate_auxiliary_control
 from direction_speed.postprocessors import L2BallProjectionPostprocessor
 from direction_speed.distributions import assemble_action_pipeline
 
@@ -120,6 +121,7 @@ def _adapter_from_config(config):
         speed_squash=config["adapter_speed_squash"],
         speed_interpretation=config["adapter_speed_interpretation"],
         speed_bound=config.get("ds_speed_bound", "cube"),
+        execution_map=config.get("adapter_execution_map", "direction_speed"),
     )
 
 
@@ -585,6 +587,9 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
             ex_actions: Example batch of actions.
             config: Configuration dictionary.
         """
+        validate_auxiliary_control(config)
+        if config.get("adapter_execution_map") == "cartesian_aux" and ex_actions.shape[-1] != 5:
+            raise ValueError("Cartesian auxiliary control requires five-dimensional replay actions")
         rng = jax.random.PRNGKey(seed)
         rng, init_rng = jax.random.split(rng, 2)
 
@@ -732,6 +737,7 @@ def get_config():
             ds_moment_radial_std_gain=0.35,
             ds_moment_radius_mean_gain=4.0,
             adapter_representation="none",
+            adapter_execution_map="direction_speed",
             adapter_speed_squash="tanh",
             adapter_speed_interpretation="log",
             adapter_critic_space="latent",

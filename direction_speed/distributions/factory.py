@@ -130,13 +130,16 @@ class AdapterPipelineRecipe(ActionPipelineRecipe):
 
     @property
     def components(self):
+        postprocessor = ("DirectionSpeedAdapter[cartesian_aux,ignored_coordinate=3]"
+                         if self.adapter.execution_map == "cartesian_aux" else
+                         "DirectionSpeedAdapter["
+                         f"{self.adapter.representation.value},"
+                         f"speed={self.adapter.speed_interpretation.value}]")
         return PipelineComponents(
             "DistributionParameterHeads",
             "MultivariateNormalDiag",
             f"MixedSquashBijector[speed={self.adapter.speed_squash.value}]",
-            "DirectionSpeedAdapter["
-            f"{self.adapter.representation.value},"
-            f"speed={self.adapter.speed_interpretation.value}]",
+            postprocessor,
         )
 
     @property
@@ -352,6 +355,7 @@ def resolve_pipeline_recipe(config, *, adapter=None) -> ActionPipelineRecipe:
             speed_squash=config["adapter_speed_squash"],
             speed_interpretation=config["adapter_speed_interpretation"],
             speed_bound=config.get("ds_speed_bound", "cube"),
+            execution_map=config.get("adapter_execution_map", "direction_speed"),
         )
         return ADAPTER_RECIPE_REGISTRY[representation](adapter)
 

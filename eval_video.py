@@ -46,6 +46,7 @@ def main():
             "ds_adapter_speed_interpretation", "log"
         ),
         ds_adapter_critic_space=flags.get("ds_adapter_critic_space", "config"),
+        ds_adapter_execution_map=flags.get("ds_adapter_execution_map", "config"),
         ds_regularizer=flags.get("ds_regularizer", "config"),
         ds_separate_alpha=flags.get("ds_separate_alpha", False),
         config=config,

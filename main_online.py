@@ -154,6 +154,12 @@ flags.DEFINE_enum(
     "Adapter critic input: latent, executed environment action, or canonical embedding.",
 )
 flags.DEFINE_enum(
+    "ds_adapter_execution_map",
+    "config",
+    ["config", "direction_speed", "cartesian_aux"],
+    "Adapter execution: direction-speed mapping or six-dimensional Cartesian auxiliary control.",
+)
+flags.DEFINE_enum(
     "ds_regularizer",
     "config",
     ["config", "policy_coordinate", "action_volume", "semantic_product"],
@@ -245,6 +251,7 @@ def main(_):
         ds_adapter_speed_squash=FLAGS.ds_adapter_speed_squash,
         ds_adapter_speed_interpretation=FLAGS.ds_adapter_speed_interpretation,
         ds_adapter_critic_space=FLAGS.ds_adapter_critic_space,
+        ds_adapter_execution_map=FLAGS.ds_adapter_execution_map,
         ds_regularizer=FLAGS.ds_regularizer,
         ds_separate_alpha=FLAGS.ds_separate_alpha,
         config=config,

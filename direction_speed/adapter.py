@@ -334,13 +334,19 @@ def _decompose_chunked(
 
 @dataclass(frozen=True)
 class DirectionSpeedAdapter:
-    """Bidirectional mapping between policy and environment action spaces."""
+    """Policy/environment codec, including an explicit auxiliary-head control.
+
+    ``cartesian_aux`` drops coordinate 3 at execution and lifts environment
+    actions with a zero placeholder there. Its training interface is restricted
+    to an env critic without BC; the placeholder is not an observed BC label.
+    """
 
     representation: DirectionRepresentation | str = DirectionRepresentation.CARTESIAN
     speed_squash: SpeedSquash | str = SpeedSquash.SIGMOID
     speed_interpretation: SpeedInterpretation | str = SpeedInterpretation.DIRECT
     speed_bound: RadialBound | str = RadialBound.CUBE
     eps: float = EPS
+    execution_map: str = "direction_speed"
 
     def __post_init__(self):
         object.__setattr__(
@@ -355,6 +361,15 @@ class DirectionSpeedAdapter:
         object.__setattr__(self, "speed_bound", RadialBound(self.speed_bound))
         if self.eps <= 0.0:
             raise ValueError("eps must be positive")
+        if self.execution_map not in ("direction_speed", "cartesian_aux"):
+            raise ValueError("Unknown adapter execution map")
+        if self.execution_map == "cartesian_aux" and (
+            self.representation is not DirectionRepresentation.CARTESIAN
+            or self.speed_squash is not SpeedSquash.TANH
+            or self.speed_interpretation is not SpeedInterpretation.LOG
+            or self.speed_bound is not RadialBound.SPHERE
+        ):
+            raise ValueError("Cartesian auxiliary control requires cartesian/tanh/log/sphere")
 
     def policy_action_dim(self, env_action_dim: int) -> int:
         return _policy_action_dim(env_action_dim, self.representation.value)
@@ -372,6 +387,11 @@ class DirectionSpeedAdapter:
     def decompose(self, env_actions: np.ndarray) -> np.ndarray:
         if env_actions.ndim == 0 or env_actions.shape[-1] < DEFAULT_DIR_DIMS:
             raise ValueError("env_actions must have at least three action dimensions")
+        if self.execution_map == "cartesian_aux":
+            # A representative lift, not an observed auxiliary action or BC label.
+            return np.concatenate(
+                [env_actions[..., :3], np.zeros_like(env_actions[..., :1]), env_actions[..., 3:]], axis=-1
+            )
         return _decompose_numpy(
             env_actions,
             self.eps,
@@ -390,6 +410,8 @@ class DirectionSpeedAdapter:
                 f"policy_actions requires at least {minimum_dim} dimensions for "
                 f"{self.representation.value}"
             )
+        if self.execution_map == "cartesian_aux":
+            return np.clip(np.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1), -1., 1.)
         return _compose_numpy(
             policy_actions,
             self.eps,
@@ -407,6 +429,10 @@ class DirectionSpeedAdapter:
         return self.compose(policy_actions)
 
     def decompose_jax(self, env_actions: jnp.ndarray) -> jnp.ndarray:
+        if self.execution_map == "cartesian_aux":
+            return jnp.concatenate(
+                [env_actions[..., :3], jnp.zeros_like(env_actions[..., :1]), env_actions[..., 3:]], axis=-1
+            )
         return _decompose_jax(
             env_actions,
             self.eps,
@@ -417,6 +443,8 @@ class DirectionSpeedAdapter:
         )
 
     def compose_jax(self, policy_actions: jnp.ndarray) -> jnp.ndarray:
+        if self.execution_map == "cartesian_aux":
+            return jnp.clip(jnp.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1), -1., 1.)
         return _compose_jax(
             policy_actions,
             self.eps,
@@ -431,6 +459,9 @@ class DirectionSpeedAdapter:
     ) -> np.ndarray:
         if horizon_length < 1:
             raise ValueError("horizon_length must be at least 1")
+        if self.execution_map == "cartesian_aux":
+            actions = env_actions.reshape(env_actions.shape[0], horizon_length, -1)
+            return self.decompose(actions).reshape(actions.shape[0], -1)
         return _decompose_chunked(
             env_actions,
             horizon_length,
@@ -439,3 +470,19 @@ class DirectionSpeedAdapter:
             self.speed_interpretation.value,
             self.speed_bound.value,
         )
+
+
+def validate_auxiliary_control(config):
+    """Limit the new map intervention to its implemented H1 SAC/env interface."""
+    if config.get("adapter_execution_map", "direction_speed") != "cartesian_aux":
+        return
+    expected = dict(agent_name="acrlpd", adapter_representation="cartesian", adapter_critic_space="env",
+                    adapter_speed_squash="tanh", adapter_speed_interpretation="log", ds_speed_bound="sphere",
+                    env_action_dim=5, policy_action_dim=6, critic_action_dim=5, horizon_length=1,
+                    actor_update_mode="sac", bc_alpha=0., ds_regularizer="policy_coordinate",
+                    ds_phase_regularization="none", ds_stage_speed_constraint="none",
+                    use_integrated_ds=False, use_cartesian_l2_projection=False,
+                    ds_separate_alpha=False, ds_separate_actor_trunks=False, ds_moment_controlled=False)
+    for key, value in expected.items():
+        if config.get(key) != value:
+            raise ValueError(f"Cartesian auxiliary control requires {key}={value!r}")

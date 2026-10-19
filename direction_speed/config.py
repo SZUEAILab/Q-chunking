@@ -67,6 +67,7 @@ def configure_direction_speed(
     ds_adapter_speed_squash: str = "sigmoid",
     ds_adapter_speed_interpretation: str = "direct",
     ds_adapter_critic_space: str = "config",
+    ds_adapter_execution_map: str = "config",
     ds_regularizer: str = "config",
     ds_separate_alpha: bool = False,
     config: MutableMapping[str, Any],
@@ -124,11 +125,17 @@ def configure_direction_speed(
         raise ValueError("--ds_mode=projection is only implemented for ACRLPD.")
 
     # --- adapter DS ---
+    execution_map = (config.get("adapter_execution_map", "direction_speed")
+                     if ds_adapter_execution_map == "config" else ds_adapter_execution_map)
+    if execution_map == "cartesian_aux" and (mode is not DirectionSpeedMode.ADAPTER or agent_name != "acrlpd"):
+        raise ValueError("Cartesian auxiliary control requires ACRLPD adapter mode")
+    config["adapter_execution_map"] = execution_map
     adapter = DirectionSpeedAdapter(
         representation=ds_adapter_representation,
         speed_squash=ds_adapter_speed_squash,
         speed_interpretation=ds_adapter_speed_interpretation,
         speed_bound=speed_bound,
+        execution_map=execution_map,
     )
     critic_space = "latent"
     if mode is DirectionSpeedMode.ADAPTER:
@@ -153,6 +160,8 @@ def configure_direction_speed(
         if critic_space == "canonical" and agent_name != "acrlpd":
             raise ValueError("Canonical adapter critic is only implemented for ACRLPD.")
         config["adapter_critic_space"] = critic_space
+        if execution_map == "cartesian_aux" and critic_space != "env":
+            raise ValueError("Cartesian auxiliary control requires the env critic")
     else:
         config["adapter_representation"] = "none"
         config["adapter_critic_space"] = "latent"
