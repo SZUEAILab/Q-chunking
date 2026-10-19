@@ -78,6 +78,15 @@ SSH、GPU、挂载与远程工程验收，通过才启动筛选。当前尚无�
 训练源码、数据、72/16 运行任务配置及首轮科学预注册保持不变，资源修订单独登记。
 两份发布包的 84/90 个 Python 源文件和外层包成员均已逐一核验哈希，控制器语法检查通过。
 
+四卡尚未分配时，首轮控制包进一步更新至 revision 5，仅加强产物验收：核对全部显式
+命令覆盖项、实际 learner 配方、每步完整动作分量、精确 joint/Adam 更新次数及有限优化器状态。
+该 learner 的 TrainState 从 1 开始，Adam 从 0 开始；1M 步、start_training=5000、UTD=1
+应为 995001 次联合更新，TrainState 计数为 995002。22 项验收测试通过，已有 native 和
+legacy-canonical 的两个真实 64 步 checkpoint 均复核为 33 次更新、TrainState=34，哈希未变，
+未重跑训练。旧包保存在 `before-screen-validator-v5/`，外层包仅 `remote_runner.py` 改变。
+首轮冻结驱动没有记录实际返回的评估 episode 数，验收输出明确标为“仅能核对配置”；
+后续独立基线仍按真实返回的 episode/success 计数验收。
+
 ### Critic 等效动作检查
 
 独立离线诊断新增 9 项测试通过。真实 checkpoint 的配对工程检查使用相同训练 seed 9004、

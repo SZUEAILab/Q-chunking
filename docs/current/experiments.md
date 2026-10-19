@@ -38,6 +38,9 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 `effective_agent_config.json`。调度状态 `done` 不能替代验收：必须核对真实 returncode、
 完整评估轴、有限损失、精确最终预算、必需 checkpoint 与源码/数据身份。失联进程的退出码
 记为未知，不纳入成功统计。
+首轮 joint optimizer 的计数从零记录为 Adam count，TrainState 则从 1 开始；验收分别核对
+`max(0, budget-max(1,start_training)+1)×UTD` 及其加 1，并检查优化器状态有限。
+首轮驱动没有实际返回的 episode 计数，该证据限制保留在报告中，不能由配置值冒充观测。
 
 训练后的 critic 诊断由 [`research.action_adapter_diagnostics`](../../research/action_adapter_diagnostics.py)
 独立读取冻结源码与 checkpoint。状态来自输入 SHA-256 固定的 validation-prior 非终止观测，
