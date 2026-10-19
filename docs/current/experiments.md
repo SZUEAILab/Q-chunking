@@ -82,9 +82,22 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 采样与 log-prob、辅助坐标的零 Q 输入导数和保留的熵导数、真实 learner 更新及不支持的
 接口拒绝。两个开发任务各两种映射的 CPU 64 步入口全部退出 0，独立恢复逐项核对
 64 个环境步、33 个优化器更新、TrainState=34、六维 actor/五维 critic、目标熵 −3 和
-step 0/64 评估轴；每任务的两种映射初始完整状态 SHA 相同。评估实际 episode 计数仍受
+step 0/64 评估轴；每任务的两种映射初始完整 agent 状态 SHA 相同，包含网络、优化器和
+RNG，不包括模拟器物理状态。评估实际 episode 计数仍受
 原 driver 限制，仅有 flags 依据，不能称为已观测计数。工程证据在数据盘
-`control/posthoc_map_control_20261020/readiness.json`；云端 GPU 验收未进行。
+`control/posthoc_map_control_20261020/readiness.json`；该记录只覆盖 CPU 工程。
+
+后续源码 `a087495` 为新在线运行补入实际评估计数：从返回的完整非视频轨迹计算 episode
+数和 terminal success 次数，并核对聚合 success；缺失、非二值或不一致标签不能当作失败
+补零。36 项本地相关检查通过，包括视频排除、计数不符、部分标签缺失和 float32 均值舍入。
+这不回填 `7058825` 工程或原冻结批次的日志，既有 `flags_only` 限制继续保留。
+
+该后续源码在同一四卡实例的空闲 GPU 0 完成 36 项检查，以及 Cube Double 上两种映射各
+64 步的真实入口与独立恢复。五个实际子进程均退出 0；每组 33 次更新、TrainState=34，
+step 0/64 各实际返回 2 个非视频 episode，二值成功次数与聚合 success 一致。两组完整
+agent 初始化 SHA 相同，37 个已有控制/科学配置文件哈希不变。只上传约 264 KB 的独立
+源码及工具包，没有新增实例；该验收不覆盖 Cube Triple 的 GPU 工程或新长程科学比较。
+证据在数据盘 `control/posthoc_map_control_gpu_20261020/cloud-receipt.json`。
 
 该入口独立于现有 72 运行和后续已冻结基线源码，尚未登记新的长程训练矩阵。
 现有源码保持默认 direction-speed 执行路径；新对照与原版 env 版本将需在共同源码、

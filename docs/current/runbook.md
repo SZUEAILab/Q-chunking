@@ -94,6 +94,13 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 
 ## 分析和发布
 
+新 `main_online.py` 的评估日志记录从实际返回的完整非视频轨迹计算的
+`evaluation_episodes_observed`；环境提供二值 success 时，另记
+`evaluation_successes_observed` 并校验它与聚合 success 一致。配置 episode 数、视频数和
+观测计数分别保留。未完成轨迹、部分 success 标签缺失或不一致聚合会显式报错；
+环境完全不提供 success 时，只记录 episode 数，不伪造失败次数。
+这项记录不回填旧日志；当前冻结首批仍按其 `flags_only` 限制解释。
+
 1. 核对原始运行和评估，记录缺失、失败和排除原因；
 2. 按冻结指标做 seed/block 配对分析，输出表格与图；
 3. 将正文使用的图收录到 `docs/images/`，更新[结果](results.md)；
