@@ -977,6 +977,51 @@ posthoc 由 0.938 到 0.994，同 posthoc heads 的 Cartesian 执行则由 0.405
 及八个完整初始化模型的 CPU 路径通过。报告位于数据盘
 `reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
 
+**小动作的概率，而非全局不可达。** 对常规分支 `||u||>=epsilon`，逐轴 clip 后有
+`||clip(rho*d)||₂>=min(rho,1)>=exp(-1)`：没有坐标被裁剪时范数为 rho；只要发生裁剪，
+至少一个坐标的绝对值为 1。因此，对 `0<r<=exp(-1)`，执行范数小于 r 必须满足
+`||u||<epsilon*r*e`。这仍允许近零分支执行小动作；它限制的是进入该区域的概率。
+
+若同一状态的原始方向 heads 为独立 `Z_i~N(mu_i,sigma_i²)`，令
+`w=atanh(epsilon*r*e)`，可由每个区间内的最大 Gaussian 密度得到
+
+$$
+\Pr(\|a_{xyz}\|<r\mid s)\le
+\prod_{i=1}^3\min\left\{1,
+\frac{2w}{\sigma_i\sqrt{2\pi}}
+\exp\left[-\frac{\max(|\mu_i|-w,0)^2}{2\sigma_i^2}\right]\right\}.
+$$
+
+该保守上界不需要速度头的均值或方差。对同 heads 的 Cartesian 执行，使用内接坐标盒
+`|tanh(Z_i)|<r/sqrt(3)` 及盒内最小密度另得下界。按状态先分别求界、再等权汇总，
+采用 log-sum-exp；不把平均 log 概率当作平均概率。
+
+后续 CPU 检查复用了上述八个 actor 的参数 SHA、同 128 状态面板与同一组共同噪声，
+没有训练新网络。下表固定阈值 `||a_xyz||<0.3`；前两列为 float32 draws 的经验比例，
+最后一列是连续 Gaussian、理想实数映射下的概率上界，二者不是相同类型的估计量。
+
+| 固定原始噪声倍率 | Native 小动作经验比例 | 同 posthoc heads 的 Cartesian 经验比例 | Posthoc 概率上界约值（不是百分比） |
+|---:|---:|---:|---:|
+| 0.2 | 30.951% | 28.015% | 1.49e-17 |
+| 0.5 | 4.358% | 4.688% | 1.84e-18 |
+| 1.0 | 0.583% | 0.616% | 2.59e-19 |
+| 2.0 | 0.070% | 0.092% | 3.34e-20 |
+
+四个 posthoc 初始化 seed 在每档各 8192 个 draw 中均没有小于 0.3 的动作；解析界独立
+来自参数和映射，不能由零次采样反推该数量级。阈值 0.1/0.2/0.3 都离 `exp(-1)` 有余量，
+避免将浮点边界舍入误当成分支行为；这些界没有认证有限 RNG/float32 实现的精确概率律。
+固定验证先验中，Cube Triple/Double 范数小于 0.3 的比例分别为 18.46%/18.36%，
+与初始化策略行为分开报告，不作为整个训练 replay 分布的精确测量。
+
+![Posthoc 初始化的小动作概率诊断](../images/posthoc_small_action_probability_20261019.png)
+
+这为“方向噪声收缩时，执行幅值的分配受到不同约束”提供了更具体的机制证据。
+初始化平均幅值较小与小动作概率极低可以同时成立；不能据此声称训练时一定避免坍缩、
+小动作全局不可达、或这种偏置必然提高成功率。工具为
+[`research/posthoc_small_actions.py`](../../research/posthoc_small_actions.py)，10 项测试与
+八个完整冻结初始化路径通过。报告为数据盘
+`reports/action_adapter_validation_20261019/posthoc-small-action-probes.json`。
+
 **训练后固定状态复核（待运行）。** 为检查这些差异是否在学习后保留，已固定原筛选中
 8 个 native 和 32 个原版 posthoc 的最终 1M checkpoint；按任务使用相同的验证状态、
 共同噪声与四档噪声倍率。所有 40 个身份和分析输入单独绑定哈希，原版四种接口或设置

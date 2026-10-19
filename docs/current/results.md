@@ -79,6 +79,23 @@ pooled median 也不固定为 1；CPU 重建不认证远程 GPU 初始化逐位�
 6 项测试与八个完整模型路径通过。详见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)，
 数据盘报告为 `reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
 
+### 原版 posthoc 的小动作概率检查
+
+对上一节相同八个初始化 actor、同状态与共同噪声复核，所有参数 SHA、面板和噪声身份
+一致。原始噪声倍率下，XYZ 范数小于 0.3 的 native / 同 posthoc heads Cartesian
+执行经验比例为 0.583% / 0.616%；posthoc 在每 seed 8192 个 draw 中均未采到。
+由连续独立 Gaussian 与理想实数映射直接求得的 posthoc 概率上界约为 `2.59e-19`；
+该上界不是从零次采样推断，也不是有限 RNG/float32 概率律的认证。
+
+将固定噪声乘数设为 0.2，native 的经验比例为 30.951%，同 heads Cartesian 为 28.015%，
+posthoc 的理想上界仍约 `1.49e-17`。因此平均动作稍小与几乎没有小幅动作可以同时出现，
+更具体地支持幅值分配/噪声响应的候选解释，不提供训练后或性能因果结论。
+Cube Triple/Double 的序列化验证先验分别有 18.46%/18.36% 动作范数小于 0.3。
+
+10 项概率界、均值汇总、实际 mapper 分支和小动作可达性测试通过；未追加训练。
+证明、全部四档与图见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
+数据盘报告为 `reports/action_adapter_validation_20261019/posthoc-small-action-probes.json`。
+
 ### 训练后策略诊断的验收与等待状态
 
 训练后固定状态工具通过 17 项测试，并以冻结 `ccab449` 源码完整恢复已有的真实
