@@ -476,6 +476,16 @@ CUDA 环境和镜像仍待完成，没有新增科学性能结论。证据与边
 [完整控制器](../reference/gac_baseline.md#完整云端启动与终态门槛)及数据盘
 `control/gac_reference_comparison_20261019/scientific-controller-cloud-receipt.json`。
 
+## 执行映射因果对照的工程验收
+
+新增六维 Cartesian 辅助 head 对照 `7058825`，用于保留 actor、潜动作正则与 env critic，
+只改变执行映射。50 项相关检查及两个任务各两种映射的 CPU 64 步真实工程通过，
+驱动与独立验证进程均实际退出 0；33 次更新、TrainState=34、checkpoint 恢复和保存的
+执行映射标记通过核验。每任务两组的完整初始化状态 SHA 相同，辅助坐标的 Q 输入导数
+为零而熵坐标保留。它不提供任何任务性能效应估计，也未完成云端 GPU 或长程预注册。
+证据为 `control/posthoc_map_control_20261020/readiness.json`，范围见
+[实验准备](experiments.md#执行映射因果对照的实现准备)。当前冻结训练及后续队列未修改。
+
 ## 下一步
 
 优先完成本轮完整 action-adapter 的 72 运行复现与消融、critic 等效动作诊断及独立外部

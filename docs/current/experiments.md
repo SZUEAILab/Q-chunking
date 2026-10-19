@@ -69,6 +69,29 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 不只对成功运行取平均。该工具依赖上游生命周期验收，不冒充再次读取原始日志或恢复模型。
 单独本地 CPU 监控在首轮终态后立即生成 JSON 和 Markdown 汇总，不必等待 reference 完成。
 
+### 执行映射因果对照的实现准备
+
+新增 `--ds_adapter_execution_map=cartesian_aux`，用于共同六维 actor 下的 Cartesian 执行
+对照。它保留原版 cartesian/tanh/log actor 的参数化、所有六个潜坐标的 log-prob 与温度，
+只在执行与 actor/target Q 查询中去掉第 4 个辅助幅值坐标；前 3 个 XYZ 和后 2 个 scalar
+直接进入环境。两组 critic 均读五维真实环境动作，prior/replay 不补造观测到的辅助动作。
+接口限定 ACRLPD、H1、env critic、无 BC 的普通 SAC；辅助零坐标只用于代表性 lift，
+不是有观测依据的行为克隆标签。checkpoint 视频恢复也读取显式执行映射标记。
+
+源码 `7058825` 通过 50 项相关检查，包括相同 actor/critic/优化器/RNG 初始化、共同动作
+采样与 log-prob、辅助坐标的零 Q 输入导数和保留的熵导数、真实 learner 更新及不支持的
+接口拒绝。两个开发任务各两种映射的 CPU 64 步入口全部退出 0，独立恢复逐项核对
+64 个环境步、33 个优化器更新、TrainState=34、六维 actor/五维 critic、目标熵 −3 和
+step 0/64 评估轴；每任务的两种映射初始完整状态 SHA 相同。评估实际 episode 计数仍受
+原 driver 限制，仅有 flags 依据，不能称为已观测计数。工程证据在数据盘
+`control/posthoc_map_control_20261020/readiness.json`；云端 GPU 验收未进行。
+
+该入口独立于现有 72 运行和后续已冻结基线源码，尚未登记新的长程训练矩阵。
+现有源码保持默认 direction-speed 执行路径；新对照与原版 env 版本将需在共同源码、
+数据与完整配置下配对，不能直接把两个来源的成绩差全部归于映射。短程工程与初始化
+等价性只能验收接口，不证明幅值机制导致任务收益。研究假设及反证见
+[研究计划](research.md#幅值机制仍缺的训练干预)。
+
 ### 原论文 RLPD 的独立参考配方
 
 原论文 RLPD learner 的独立配方移植已完成数值对照，见[基线来源与验证](../reference/rlpd_baselines.md)。
