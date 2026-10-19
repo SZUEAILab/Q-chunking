@@ -6,11 +6,14 @@
 RLPD 是首个研究算法；FQL 用于跨算法检验，RoboMimic 用于跨域检验。已有 pilot 不等于迁移结论成立。
 环境中的“speed”通常是归一化动作幅值，不一定是真实物理速度。
 
-## Action-adapter 当前验证主线（2026-10-19）
+## 原版 posthoc 当前验证主线（2026-10-19）
 
-本分支优先检验已有正向任务结果的完整 action-adapter，保留六月 tanh/log-speed 原版，
+本分支优先检验已有正向任务结果的完整 posthoc（action-adapter），保留六月 tanh/log-speed 原版，
 并与后来的 sigmoid/direct/cube 版本分开登记。首先回答完整方法能否复现、能否迁移，
 再解释方向–幅值表示、critic 接口与熵目标各自的贡献。
+已完成固定 mapper 的前向探针、Jacobian 与先验编码核验，见
+[原版 posthoc 机制](../reference/method.md#511-原版-posthoc-优势的可检验解释)。当前优先假设是
+幅值行为先验、价值表示与潜坐标正则的组合；不将它简化为更大动作或 critic 冗余单因。
 
 当前机制筛选固定 Cube-Triple task2 与 Cube Double task2，四个配对训练 seed（10–13）、
 每运行 1M 步。比较 native、Cartesian L2 projection、两个 adapter 版本各自的

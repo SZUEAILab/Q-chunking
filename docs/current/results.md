@@ -48,6 +48,22 @@ bootstrap，未作确认性多比较结论。
 优势的来源，也不构成放弃完整原方法的证据。新筛选因而分别保留 legacy、direct 及各自的
 latent/env/canonical 对照，完整方法复现和机制解释分开判断。
 
+## 原版 posthoc 的前向机制诊断
+
+以冻结 legacy mapper 和 SHA 固定的两个验证先验进行 CPU 只读诊断；没有训练新模型。
+固定零均值共同 Gaussian 探针中，SD=0.2/0.5/1/2 的 baseline XYZ 范数中位数为
+0.302/0.689/1.076/1.394，posthoc 均约为 1；SD=1 的平均范数反而为 baseline 1.053、
+posthoc 0.995。相同输入在裁剪前的方向一致，posthoc 真正逐轴裁剪比例约 39.29%。
+这更具体地指向幅值分配与执行映射差异，不足以认定实际训练中哪一项造成收益。
+
+Cube-Triple / Cube Double 验证先验分别有 21.59% / 21.35% 的动作经 canonical 编码后
+log-speed<−1；这与 tanh 策略速度坐标不一致。近零方向分支仍可执行小动作，不能把
+此编码差异写成全局执行支持排除。两份先验均未包含该近零分支，六月快照与当前 mapper
+在全部先验 decompose 上一致；零动作编码的边界差异仍单独保留。
+解析 Jacobian 与实际 mapper 自动微分的最大差约 1.30e-7，9 项诊断测试通过。
+这些导数没有认证 latent critic 的实际 actor 梯度，Gaussian 探针也不代表训练后的策略。
+数据、解释边界和对应训练消融见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、

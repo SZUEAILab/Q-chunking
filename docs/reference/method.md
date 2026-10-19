@@ -907,6 +907,97 @@ $$
 
 Spherical 与 stereographic 的 $D\to D$ 方向 codec 在避开图奇点且未触发执行裁剪的有效域内可逆，不包含 Cartesian 的冗余方向长度；执行裁剪仍可使整体映射多对一。其 `log_prob` 按实验定义仍是 compose 前 policy-coordinate density。Integrated DS 则把几何 Jacobian 纳入分布，并直接输出 env action。两者应作为不同的熵坐标消融，不应混称为同一个 env-action density。
 
+### 5.1.1 原版 posthoc 优势的可检验解释
+
+本节针对六月的 Cartesian D+1、tanh/log-speed posthoc。历史 task1–4 在 H1/H5 的八组
+平均 observed-AUC 差均为正，task5 两组均为零，详见[统一重算](../current/results.md)。
+这些结果支持优先复现完整方法；机制贡献仍需训练对照拆开。
+
+写 `u=tanh(z_xyz)`、`v=tanh(z_speed)`，原版执行映射为
+
+$$
+a_{xyz}=\operatorname{clip}\!\left(\exp(v)\frac{u}{\max(\|u\|,\epsilon)},-1,1\right).
+$$
+
+**幅值先验与噪声尺度。** 当方向范数不低于 epsilon 时，裁剪前的平移范数是
+`exp(v)`，位于 `(exp(-1),exp(1))`。它以乘法调节幅值，改变方向坐标的模长本身不改变
+执行方向或幅值。在零均值共同高斯探针中，降低方向头的噪声尺度不会像原 Cartesian
+策略那样直接缩小执行动作；幅值仍主要由独立速度头决定。动作空间影响初始化与行为的
+研究已有[相关证据](https://proceedings.mlr.press/v270/esser25a.html)，但本项目的归因须由自身对照验证。
+
+以下为 200000 个固定、共同原始 Gaussian 样本的前向诊断。均值固定为零，标量控制维度
+共享同一输入；它不是实际初始化网络或训练后策略的测量。
+
+| 原始 Gaussian SD | Baseline XYZ 范数中位数 | Posthoc XYZ 范数中位数 | Posthoc 真实逐轴裁剪比例 |
+|---|---:|---:|---:|
+| 0.2 | 0.302 | 1.000 | 20.15% |
+| 0.5 | 0.689 | 1.000 | 33.41% |
+| 1.0 | 1.076 | 1.000 | 39.29% |
+| 2.0 | 1.394 | 1.000 | 42.65% |
+
+SD=1 时，baseline/posthoc 的**平均**范数是 1.053/0.995，不能概括为 posthoc 总是输出
+更大的动作。共同 XYZ 原始输入在裁剪前给出完全相同的方向；新增“均匀方向”不是这组
+映射差异的解释。更具体的候选是幅值分配、硬裁剪和噪声尺度到实际行为的响应发生改变。
+这里约为 1 的中位数来自零均值速度坐标：一半的 `v` 为正、一半为负；常规方向分支
+下逐轴裁剪不会把范数从单位球的一侧跨到另一侧。这不是已学策略中位数固定为 1 的结论。
+
+近零方向是必须保留的例外：`||u||<epsilon` 时，归一化分母停止缩小，可以执行小于
+`exp(-1)` 乃至零的动作。因此该幅值下界仅适用于常规分支，不能声称小动作在全局执行
+支持中不存在。固定探针未采到该分支，不证明训练策略也不会进入它。
+
+**方向/幅值的价值表示与理想梯度几何。** 在未裁剪的常规分支，令 `d=u/||u||`、
+`rho=exp(v)`，可直接推得
+
+$$
+\frac{\partial a}{\partial u}=\frac{\rho}{\|u\|}(I-dd^\top),
+\qquad \frac{\partial a}{\partial v}=\rho d.
+$$
+
+这使方向变量沿切向改变动作，log-speed 变量沿径向改变动作；它可能使依赖方向和幅值的
+价值结构更容易表达和学习。对实际 mapper 的独立解析、JAX 自动微分和有限差分核对通过，
+解析最大误差为 `1.30e-7`。这些导数针对 compose 后的执行映射，尚不是训练中的 actor
+梯度证据：原版 latent critic 直接读取 `(u,v,...)`，不显式经过 compose。
+只有当学得的 Q 遵循执行等价关系时，才自动具有上述理想价值梯度结构。
+
+**Replay 与策略坐标的分布差异。** 两份 SHA 固定验证先验中，Cube-Triple 的
+64849/300300（21.59%）、Cube Double 的 21371/100100（21.35%）平移动作范数低于
+`exp(-1)`，其 canonical log-speed 编码低于 −1，超出 tanh 速度坐标的范围。
+这是真实数据上的 latent 编码差异，不是“这些执行动作全局不可达”的证明；近零方向
+分支可执行小动作，但它们会使用不同潜坐标。该差异可能改变 Q 的拟合/外推方式，效果
+符号尚未确定。更容易拟合的径向特征与不受约束的潜动作外推需要分别验证。
+
+这两份验证先验没有方向范数低于 epsilon 的动作。六月 Git 快照 `54d7c6d` 与当前
+legacy mapper 在其全部动作的 decompose、以及 1024 个固定策略探针的 compose 上最大差
+均为 0。零动作的 decompose 仍有差异：旧快照为零方向，当前实现回退到 north；已单独
+保存边界检查。快照不是旧训练进程实际执行源码的认证。
+
+**潜坐标熵。** D+1 策略增加一个方向模长自由度；在常规分支放缩 `u` 不改变执行动作，
+却可能改变 latent log-prob。H1 的默认熵目标也从 baseline 的 −2.5 变成 −3，H5 则为
+−12.5/−15。因而潜动作熵和实际行为探索不能等同，已有
+[动作冗余研究](https://proceedings.mlr.press/v161/baram21a.html)也讨论了动作熵与状态熵的区别。
+共同数值熵目标对照仅排查 setpoint 差异，没有统一参考测度或消除冗余自由度。
+
+| 当前问题 | 已冻结对照 | 解释范围 |
+|---|---|---|
+| 完整原版收益能否在同协议下重现？ | legacy latent − native | 完整配方效果，不能直接分摊各机制贡献 |
+| 收益是否依赖潜动作 critic 接口？ | legacy latent / env / canonical | 固定 actor 和熵；canonical 与 latent 保持相同输入维数，干预执行等价编码 |
+| 熵目标数值是否是主要来源？ | legacy common entropy − legacy latent | 仅改变数值目标；仍保留 latent 熵和额外坐标 |
+| 原版与 direct 配方为什么不同？ | 分别登记的两组接口对照 | 包含 squash、幅值映射和支持差异，不能单独归因为 log-speed |
+
+如果 legacy 的优势在 env/canonical 接口仍保留，则“潜 critic 的冗余是收益必需条件”会受到
+削弱；仍需区分 actor 映射和熵。若共同熵目标后优势保留，只能削弱“目标值差异单独解释
+全部收益”的说法。当前九组不是完整因素析因设计，尚不能排尽容量差异，也没有固定状态
+下执行分布完全匹配的 actor 对照。后续严格幅值先验归因仍需在选定配方后预先冻结比较。
+H5 的方向和幅值都逐 chunk 产生，本轮 posthoc 没有独立的方向/幅值时钟，不将 H5 正向
+结果直接解释为“方向慢、幅值快”。
+
+![Posthoc 前向映射与先验编码诊断](../images/posthoc_mechanism_probes_20261019.png)
+
+工具为 [`research.posthoc_mechanism`](../../research/posthoc_mechanism.py)，9 项测试通过。
+输入绑定当前冻结 mapper、六月快照、两份 validation-prior SHA 和共同 probe 面板。
+报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-mechanism-probes.json`。
+本次只运行 CPU 诊断，未修改或追加正在执行的 72 组训练。
+
 ### 5.2 Distribution-integrated DS：actor 分布内部的语义变换
 
 Integrated DS（分布内集成）把方向-速度结构放在统一 Pipeline（流水线）的 Policy Transform（策略变换器）位置：
