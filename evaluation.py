@@ -34,6 +34,41 @@ def add_to(dict_of_lists, single_dict):
     for k, v in single_dict.items():
         dict_of_lists[k].append(v)
 
+
+def observed_evaluation_counts(stats, trajectories, *, expected_episodes):
+    """Audit completed evaluation trajectories, excluding rendered episodes.
+
+    Count terminal binary success only when the environment exposes it. Missing
+    or partial labels cannot be silently interpreted as failed episodes.
+    """
+    count = len(trajectories)
+    if count != expected_episodes:
+        raise ValueError(f"Observed {count} evaluation episodes; expected {expected_episodes}")
+    successes = []
+    for trajectory in trajectories:
+        done, infos = trajectory.get("done", []), trajectory.get("info", [])
+        if not done or len(done) != len(infos) or not bool(done[-1]) or any(done[:-1]):
+            raise ValueError("Evaluation trajectory is incomplete or contains multiple episodes")
+        terminal = flatten(infos[-1])
+        if "success" in terminal:
+            value = np.asarray(terminal["success"])
+            if value.ndim != 0 or not np.isfinite(value) or float(value) not in (0., 1.):
+                raise ValueError("Terminal evaluation success must be a finite binary scalar")
+            successes.append(int(value))
+    observed = {"evaluation_episodes_observed": count}
+    if successes or "success" in stats:
+        if len(successes) != count or not count or "success" not in stats:
+            raise ValueError("Evaluation success labels or aggregate are missing")
+        success_count = sum(successes)
+        aggregate = np.asarray(stats["success"])
+        if aggregate.ndim != 0 or not np.isfinite(aggregate) or not np.isclose(
+            float(aggregate), success_count/count, rtol=0., atol=1e-7
+        ):
+            raise ValueError("Aggregate success differs from observed terminal successes")
+        observed["evaluation_successes_observed"] = success_count
+    return observed
+
+
 def evaluate(
     agent,
     env,

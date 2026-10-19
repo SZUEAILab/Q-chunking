@@ -19,7 +19,7 @@ from utils.flax_utils import save_agent
 from utils.datasets import Dataset, ReplayBuffer
 from utils.artifact_paths import results_dir
 
-from evaluation import evaluate
+from evaluation import evaluate, observed_evaluation_counts
 from agents import agents
 from direction_speed import ActionExecutionPipeline, configure_direction_speed
 from direction_speed.moment_control import (
@@ -494,7 +494,7 @@ def main(_):
     )
 
     def evaluate_and_log(step):
-        eval_info, _, _ = evaluate(
+        eval_info, trajectories, _ = evaluate(
             agent=make_eval_agent(agent),
             env=eval_env,
             action_dim=raw_action_dim,
@@ -503,6 +503,9 @@ def main(_):
             video_frame_skip=FLAGS.video_frame_skip,
             eval_seed=FLAGS.eval_seed,
         )
+        eval_info.update(observed_evaluation_counts(
+            eval_info, trajectories, expected_episodes=FLAGS.eval_episodes
+        ))
         logger.log(eval_info, "eval", step=step)
 
     if FLAGS.eval_at_start:
