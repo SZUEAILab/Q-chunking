@@ -1022,6 +1022,38 @@ $$
 八个完整冻结初始化路径通过。报告为数据盘
 `reports/action_adapter_validation_20261019/posthoc-small-action-probes.json`。
 
+**动作到物理位移的单步检查。** 使用相同八个冻结 actor，但另取 Cube Triple task2 的
+16 个固定 fresh reset 状态、每状态 8 个共同 draw，比较噪声乘数 0.2/1。
+每个条件先恢复同一份完整 `mjSTATE_INTEGRATION`，再刷新前向运动学；完整起始状态和
+观测逐项相等。5120 次显式单步中包含 1024 次 posthoc 相同动作重放，末状态均精确一致。
+初始状态与编译模型文件均保存；reset 内部的 goal-stabilization 步另于显式探针计数之外。
+
+OGBench 当前控制周期为 0.05 s，XYZ 归一化指令先乘每轴 0.05 m，再做 workspace 裁剪、
+IK 和 PD/物理仿真，不能把动作范数直接叫作真实速度。额外的零 XYZ 对照保留同一
+posthoc yaw/夹爪值；先对实际位移向量减去该对照的位移，再取范数，得到下表。
+它不是两个位移范数的直接相减，也不对 native 使用不同 scalar heads 的零点修正。
+
+| 原始噪声乘数 | Posthoc 相对零 XYZ 的位移范数 | 同 heads Cartesian 相对零 XYZ 的位移范数 | 配对差均值及四个初始化 seed 范围（mm） |
+|---:|---:|---:|---:|
+| 0.2 | 17.159 mm | 7.893 mm | +9.266，范围 +8.495 到 +11.244 |
+| 1.0 | 17.809 mm | 19.915 mm | −2.106，范围 −2.930 到 −1.231 |
+
+原始噪声下，未作零点修正的 native/posthoc 平均实际末端位移也为 20.540/18.015 mm。
+因此 posthoc 不是总让机器人移动更多；在这个固定、未训练单步实验中，它改变了整体
+噪声变化与物理位移之间的响应。相同 heads、样本、scalar 控制及完整物理起点下，
+posthoc/Cartesian 的单步差异可归于执行映射；该归因不延伸到训练收益或状态覆盖。
+
+![冻结初始化策略的动作到物理位移诊断](../images/posthoc_physical_motion_20261019.png)
+
+单纯重复 reset seed 的两次工程检查虽给出相同观测、qpos/qvel，但 ctrl 与 warm-start
+缓存不同；本探针用完整状态恢复处理配对。尚未量化该差异对既有评估或长程比较的影响，
+不能据此认定它造成了旧收益。当前冻结训练不改写，后续复现也须说明 seed 覆盖范围。
+本地与云端 OGBench 的 45 个 Python 源文件及 OGBench 1.2.1、MuJoCo 3.9.0、Gymnasium
+1.3.0 版本相同；这不认证不同硬件上的逐位物理等价。11 项位移、完整起点、float32
+反归一化舍入及缺失配对测试通过，报告为数据盘
+`reports/action_adapter_validation_20261019/posthoc-physical-motion-probes.json`。
+状态来自 fresh reset，不能替代验证先验面板、已学策略访问分布或长期任务成绩。
+
 **训练后固定状态复核（待运行）。** 为检查这些差异是否在学习后保留，已固定原筛选中
 8 个 native 和 32 个原版 posthoc 的最终 1M checkpoint；按任务使用相同的验证状态、
 共同噪声与四档噪声倍率。所有 40 个身份和分析输入单独绑定哈希，原版四种接口或设置

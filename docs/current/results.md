@@ -96,6 +96,26 @@ Cube Triple/Double 的序列化验证先验分别有 18.46%/18.36% 动作范数�
 证明、全部四档与图见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
 数据盘报告为 `reports/action_adapter_validation_20261019/posthoc-small-action-probes.json`。
 
+### 冻结策略的单步物理运动检查
+
+相同八个初始化 actor 在 16 个 fixed reset 状态、每状态八个共同 draw、噪声乘数 0.2/1
+下完成 5120 次显式物理步进，分析进程退出 0。各条件完整起始积分状态与观测一致，
+1024 次相同 posthoc 动作重放的完整末状态精确相同；未更新模型，未分析 reward/success。
+控制周期是 50 ms，额外零 XYZ 条件保持相同 yaw/夹爪。
+
+相对零 XYZ 对照的位移向量范数，posthoc / 同 heads Cartesian 在噪声 0.2 下为
+17.159 / 7.893 mm，配对差 +9.266 mm、四个初始化 seed 全为正；噪声 1 下为
+17.809 / 19.915 mm，差 −2.106 mm、四个 seed 全为负。范围是初始化描述，非性能置信区间。
+它支持噪声到物理运动响应不同，不能解释为“总是移动更多”或已证实提高训练成功率。
+
+本地/云端环境的 45 个 OGBench Python 文件和三项核心版本核对一致；11 项分析测试通过。
+完整状态恢复的必要性、控制器链路和限制见[机制参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
+两次工程 reset 检查发现部分控制/求解器缓存未由 seed 单独固定，其长程影响尚未测量。
+原始单步记录、状态/模型快照和报告位于数据盘
+`reports/action_adapter_validation_20261019/posthoc-physical-motion-probes.*`。
+启动路径和工程序列化的两项错误均保存在 `control/action_adapter_validation_20261019/physical-motion/`；
+它们发生在正式物理探针开始前，没有重跑训练或筛选不利案例。
+
 ### 训练后策略诊断的验收与等待状态
 
 训练后固定状态工具通过 17 项测试，并以冻结 `ccab449` 源码完整恢复已有的真实

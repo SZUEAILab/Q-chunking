@@ -166,6 +166,7 @@ episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不�
 - 同一任务的方法使用相同 seed、预算、数据和评估协议；评估 RNG 与训练 RNG 分离。
 - 表示、噪声和时间相关性分别消融；幅值、协方差、饱和和初始化差异需要披露。
 - 动作几何既看状态平均，也看固定状态条件；匹配几个矩不等于匹配完整分布。
+- 仅给定 reset seed 不自动证明完整求解器状态相同；单步物理反事实先检查完整起点与重放，报告 seed 的实际覆盖范围。
 - 外部强基线改变 learner、熵目标或正则时，明确标为算法配方差异。
 - 固定时间实验包含 reactive、direction hold、translation repeat、full repeat。
   真正多步 option 的折扣与 backup 按实际持续时间处理。
