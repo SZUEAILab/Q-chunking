@@ -64,6 +64,11 @@ API 返回完整 SSH 命令，也不能把容器 IP 直接当作代理目标别�
 owner 的实际进程与脚本哈希。恢复观察前保存旧脚本、状态、PID 和日志；按依赖顺序恢复
 owner，更新进程绑定，并确认新 owner 识别已有训练。不能用观察失败触发重新部署或重跑。
 
+GAC 环境准备使用同一实例中的独立远端 owner，入口及绑定保存在数据盘
+`control/gac_reference_comparison_20261019/environment-owner-binding.json`。它等待 FQL 完整终态
+和四卡空闲，只执行一次冻结环境入口，实际等待子进程后记录退出码。已有 intent 或准备
+失败均需检查，不能重新运行 staging 脚本；该 owner 不保存镜像或启动 GAC 科学矩阵。
+
 [`research.observation_retry`](../../research/observation_retry.py) 为只读查询提供有界重试，
 保留最终原始错误；认证、文件身份、schema 和平台业务错误立即上报。当前主观察器只对
 GET 和已核实的 cluster-list 查询采用它，镜像保存、任务提交等写操作不进入重试。

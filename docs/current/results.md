@@ -453,7 +453,8 @@ CPU 39 项／跳过 1 项、CUDA 40 项检查通过；radius=2.5 的额外官方
 部署归档的实际解包证明通过：固定依赖逐文件验哈希，runtime v2 的 125 个训练 Python
 文件、32 个科学配置和上游浅克隆 Git 对象完整还原；导出包 40+39 项检查、一次解包源码
 的真实 CUDA 64 步及独立 179 字段恢复通过。首版缺 shallow boundary 的失败包保留，
-并非重跑科学结果。较小 runtime 已在原四卡实例暂存与核验，依赖包尚在传输，云端安装
+并非重跑科学结果。较小 runtime 已在原四卡实例暂存与核验；依赖包已于北京时间
+2026-10-20 00:20 完成远端哈希和读回校验。云端安装
 与正式 GAC 运行未开始。证据为数据盘 `control/gac_reference_comparison_20261019/package-proof-v2.json`，
 详见[部署范围](../reference/gac_baseline.md#部署归档与暂存)；不提供新增性能结论。
 
@@ -468,7 +469,10 @@ CUDA 环境和镜像仍待完成，没有新增科学性能结论。证据与边
 独立云端控制器 `13c2ba8` 连同核心工具通过 142 项逻辑检查，导出包和现有云端实例均
 通过；实际 inspect 等待 FQL，实际 launch 入口拒绝提前启动。检查前后科学输出、独立
 环境路径都未创建，原 35 个科学文件不变。此处正向完整矩阵测试是合成 fixture，不是
-新的科学结果；本地接续、云端环境与镜像操作仍待接入。详见
+新的科学结果；云端环境与镜像操作仍待执行。环境准备的远端接续进程已启用，
+实际 PID/源码绑定与等待状态已核验，七项运行边界检查在本地和云端通过；
+当前没有创建目标环境或科学输出。它只接续环境准备，尚未接续镜像保存及科学启动。
+证据为 `control/gac_reference_comparison_20261019/environment-owner-readiness.json`。详见
 [完整控制器](../reference/gac_baseline.md#完整云端启动与终态门槛)及数据盘
 `control/gac_reference_comparison_20261019/scientific-controller-cloud-receipt.json`。
 

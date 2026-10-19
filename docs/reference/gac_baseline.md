@@ -275,8 +275,8 @@ runtime v2 归档包含 125 个冻结训练 Python 文件、独立分析及其�
 
 现有四卡实例的只读核查确认 `/workspace` 为 dpc 持久化挂载、`/opt` 为根 overlay，
 Python 3.12.13、Git 和四张 RTX4090 可见。较小 runtime v2 已在该实例暂存，归档读回 SHA
-及全部 source/config 清单核验通过；依赖大包仍在上传，准确进度与 SSH／remote process
-存活证据位于数据盘控制目录。传输只写独立 releases 目录，尚未在云端安装、执行 GAC
+及全部 source/config 清单核验通过；依赖大包于北京时间 2026-10-20 00:20 完成远端哈希与
+读回校验，完整回执位于数据盘控制目录。传输只写独立 releases 目录，尚未在云端安装、执行 GAC
 GPU 短测、保存镜像或启用正式批次控制器。暂存工具只传输并验收归档，没有安装或训练命令。
 本地部署清单、解包证明与传输记录位于 `control/gac_reference_comparison_20261019/`，
 主要入口为 `deployment-packages-v2.json`、`package-proof-v2.json` 和 `stage-*-process.json`。
@@ -366,8 +366,13 @@ FQL 沿用冻结的 16 运行技术门槛；云端工程另核对八类身份、
 环境目录均不存在，35 个科学文件 SHA 不变。证据为控制目录下的
 `scientific-controller-package.json`、`scientific-controller-cloud-receipt.json`。
 
-当前云端启动/终态工具已暂存，尚未启用。本地接续监控、环境准备执行与镜像保存操作
-仍待接入；新 CUDA 环境、GAC 镜像和 32 次百万步科学训练均未完成。
+当前云端启动/终态工具已暂存，尚未启用。另有只负责环境准备的远端 owner 已启用，
+真实 PID/命令/源码哈希和 `waiting_for_fql` 已核验；目标环境、环境控制与科学输出均未创建。
+该批次工具在本地、云端各通过七项检查，覆盖上游未完成、占用 GPU、已有环境/intent、
+非零退出和工程回执不完整；它只调用已冻结的环境入口，实际等待退出，不重试失败准备。
+证据为 `environment-owner-binding.json`、`environment-owner-cloud-receipt.json`、
+`environment-owner-live-verification.json`。镜像保存和科学启动接续仍待执行；
+新 CUDA 环境、GAC 镜像和 32 次百万步科学训练均未完成。
 
 ## 动作支持与后续对照
 
