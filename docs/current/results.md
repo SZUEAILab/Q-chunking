@@ -348,6 +348,20 @@ post-warmup 动作；其协方差与均值另用直接 batch 计算核对一致�
 完整 action-adapter 的 GAC 性能比较。旧目录缺有效配置，源码快照也不构成执行来源证明。
 来源、动作支持和后续比较边界见 [GAC 基线](../reference/gac_baseline.md)。本次未训练。
 
+独立官方配方的 `5051c30` GAC learner 已与原始 AST 更新分支完成三类 CPU 对照，
+覆盖完整 256×2、batch256、交错采样和六次更新，模型、Adam、RNG 与 loss 最大状态差为 0；
+14 项行为测试通过。122 文件冻结快照另完成真实 Cube-Triple task2 的 CPU 64 步在线工程，
+实际 critic/actor/target=31/30/31，step 0/64 各 1 episode，完整 checkpoint 与 16 个恢复策略
+探针通过，进程退出 0。旧材料审查未训练的范围与这次新增工程分开记录。
+后续 `1d6bef4` 在本地专用 CUDA 环境完成三类 46 维观测的官方完整更新核对，最大误差
+仍为 0；CPU 最新三例同样通过。原项目 87 项回归与 CUDA 专项 17 项检查通过。
+123 文件快照在空闲 GPU 0 另完成真实 64 步工程，同样实测 31/30/31 更新、两点各 1 episode，
+完整 GPU checkpoint 与 16 个恢复探针通过。GPU 环境最初的无关 JAX/TFP 导入失败保留，
+代理注册改为按需加载后通过；云端环境与旧批次未变。云端 Torch 仍为 CPU 版，
+未启动 GAC 长程比较，尚无其对 posthoc 的性能结论。
+数值和工程证据分别位于数据盘 `reports/gac_reference_20261019/` 与
+`control/gac_reference_20261019/`；source、prior 与向量预算边界见上述参考。
+
 ## 下一步
 
 优先完成本轮完整 action-adapter 的 72 运行复现与消融、critic 等效动作诊断及独立外部

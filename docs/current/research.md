@@ -57,6 +57,10 @@ fresh seed 的确认。离线预训练与在线效率分别统计，见[实验](
 固定官方 GAC 代码与旧项目适配的区别、17 项数值核对和边界差异见
 [GAC 基线来源](../reference/gac_baseline.md)。旧 GAC 分组策略的支持匹配不能自动用于
 当前允许 XYZ 单位球外动作的 legacy adapter，旧对照也不替代当前完整方法的性能比较。
+独立的完整官方配方 GAC learner 已通过 CPU/CUDA 各三类逐步数值对照，最大误差为 0；
+两种后端均通过真实 64 步单环境工程及 checkpoint 验收。依赖隔离的原项目回归与 CUDA
+专项检查通过；云端 GPU 环境及长程比较仍待完成。完整算法对照与共同学习器几何消融
+继续分开标记，不能把这些工程证据当作 posthoc 已超过 GAC 的结果。
 
 动作冗余与熵的区别已有 [Action redundancy in reinforcement learning（UAI 2021）](https://proceedings.mlr.press/v161/baram21a.html)
 研究；[PLAS（CoRL）](https://proceedings.mlr.press/v155/zhou21b.html) 已利用潜动作空间限制

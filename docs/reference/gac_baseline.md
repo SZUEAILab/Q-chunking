@@ -39,7 +39,7 @@ GAC-DS，各为 seeds 92–97。旧 GAC 动作头、浓度正则和 loss 的工�
 归档源码的哈希，保留该来源限制；没有重新训练，也没有把旧分数并入当前 72 运行。
 旧性能比较见[历史结果](../archive/results.md)，不是当前完整 action-adapter 的竞争结果。
 
-## 数值一致的范围
+## 旧适配的数值一致范围
 
 只从固定上游 AST 加载已检查的 actor 方法，不执行其训练入口。共同测试点的方向范数远离零、采用相同固定
 Gaussian 噪声下，核对旧移植的采样值、方向/浓度梯度、浓度变换、正则项及其梯度；
@@ -58,6 +58,67 @@ Gaussian 噪声下，核对旧移植的采样值、方向/浓度梯度、浓度�
 报告为数据盘 `reports/action_adapter_validation_20261019/gac-reference-audit.json`；
 可复核脚本及初次失败记录位于 `control/action_adapter_validation_20261019/`。
 官方 PDF 下载未完成，部分文件不用于证据；本次数值审查以固定官方代码为依据。
+
+## 独立官方配方学习器（2026-10-19）
+
+新增 [`agents/gac_reference.py`](../../agents/gac_reference.py)，保留固定上游的完整
+Torch actor/Q 网络、初始化顺序、两个独立 Q 及其 targets、两个 Adam、min target/actor Q、
+固定 alpha、浓度 surrogate 与正则、actor 梯度裁剪和更新后 target EMA。
+使用[官方 MIT 许可](gac-upstream-LICENSE.txt)。它不是旧 GAC-DS，也不是在 RLPD 上替换 actor。
+CPU 初版为 `5051c30`；后续 `1d6bef4` 增加可选依赖隔离、设备 RNG 隔离和 CUDA 数值入口。
+当前已验收 CPU learner 与本地 CUDA 单环境工程，尚未验收云端 GAC 长程运行。
+
+[`research/check_gac_reference.py`](../../research/check_gac_reference.py) 直接核验下载文件与
+固定 commit 的 Git 对象字节，再从 AST 加载完整官方类与原始 `global_step > learning_starts`
+更新分支。只用固定 replay stub 替代采样器，不运行上游环境/日志入口，也不重新编写一份
+oracle 更新。三类案例采用完整 256×2 网络、batch256，覆盖不同 policy/target 间隔、
+alpha/radius 与 3/5 维动作。初始化、交错的六次采集采样、六次完整更新的所有模型、
+Adam 状态、Torch RNG 和 loss 均精确一致，最大状态差为 0。
+
+本地 API 用私有 Torch RNG 保留采集与更新的交错流；显式 eval seed 不推进训练 RNG，
+也不改调用者的随机状态。完整 checkpoint 包含五个模型、两个优化器、RNG 与更新计数；
+CPU 同设备恢复后下一次采样与更新精确一致。原 14 项测试覆盖这些行为、完整动作球支持、
+更新时钟、官方零方向与单样本正则边界，以及非法配置拒绝。
+官方 helper 的单样本无偏方差仍为 NaN，learner 明确拒绝 batch<2，不将其悄悄修为零。
+这里的 `-kappa` 仍是官方浓度 surrogate，不认证真实动作分布的熵。
+
+更新时钟保持零基循环语义：严格在 `global_step > learning_starts` 后更新 critic，
+在 policy event 连续更新 `policy_frequency` 次 actor，再按 target 间隔更新 target。
+单环境 64 步、learning_starts=32 的真实 Cube-Triple task2 CPU 工程运行退出 0，实测
+critic/actor/target 更新为 31/30/31，而非把 warm-up 边界近似成 32 次。
+step 0/64 各实际返回 1 个评估 episode，额外评估共 2000 个环境步，独立于 64 个训练步。
+未用离线先验；完整 checkpoint 恢复与 16 个策略探针通过，122 个冻结 Python 源文件核对一致。
+
+上述单环境与独立评估是本地 driver 适配，不能冒充默认八环境的官方 benchmark；未来
+正式比较须分别报告向量循环数、实际转移、更新和 prior 使用量。云端现有 Torch 仍为
+CPU 版，GPU 运行环境、正式矩阵与 GAC/posthoc 长程性能比较仍待完成。
+
+数值报告为数据盘 `reports/gac_reference_20261019/learner-equivalence-v2.json`，真实工程和
+checkpoint 证据在 `control/gac_reference_20261019/engineering-receipt.json`。首次 oracle
+误把保存源码目录当作 Git 工作树，在数值案例开始前退出；改为验证其对应 Git 对象后通过。
+原脚本、失败日志和修正说明均保留，没有重跑任何长程科学实验。
+
+### 本地 CUDA 后端的验收
+
+本地另有可复用的 CUDA 解释器，已据此创建专用 GAC 环境，保留 OGBench 1.2.1、
+MuJoCo 3.9.0、Gymnasium 1.3.0 与 NumPy 2.4.4，使用 Torch 2.14.0+cu126。
+仅使用空闲 GPU 0（RTX6000 Ada），没有修改云端环境或其他 GPU 上的工作。
+三类完整 learner 案例在 CUDA 上采用真实任务的 46 维观测、batch256、六次交错采样与
+六次更新，所有参数、优化器、CPU/CUDA RNG 和 loss 与官方 AST 精确一致，最大误差为 0。
+新源码在原项目 CPU 环境再次通过三类数值核对；两种后端各自与参考比较，不声称跨设备
+随机流或训练轨迹逐位相等。
+
+CUDA 环境首次在数值计算前被 eager agent 包导入的不相关 JAX/TFP 依赖阻止。
+代理注册现按需加载，保留原 keys、可变注册与类导出；原 RLPD/FQL/注册/GAC 的 87 项
+回归通过，CUDA 专用环境另有 17 项 GAC/依赖隔离检查通过。新增检查确认 CPU agent
+也不会重置其他可见 CUDA generator。没有修补云端 JAX/TFP 或替换其依赖。
+
+`1d6bef4` 的 123 文件快照另完成真实 CUDA 64 步工程：critic/actor/target=31/30/31，
+step 0/64 各实际返回 1 episode，额外评估 2000 步；完整 GPU checkpoint 从新模板恢复
+精确一致，16 个显式 seed 策略探针一致。该记录验证本地 CUDA 路径，不替代云端 RTX4090
+验收或长程性能。报告为数据盘 `reports/gac_reference_20261019/learner-equivalence-cuda-v2.json`
+和 `control/gac_reference_20261019/engineering-receipt-cuda.json`；CPU 最新数值报告为
+`reports/gac_reference_20261019/learner-equivalence-cpu-final.json`。
 
 ## 动作支持与后续对照
 
