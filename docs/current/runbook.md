@@ -76,6 +76,12 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 2026-10-19 DNS 故障及七个 owner 的恢复材料保存在数据盘
 `control/action_adapter_validation_20261019/monitor-recovery-dns-20261019/`；原科学训练未重试。
 
+只读 health 探针复用平台查询时，重试事件必须写独立的
+`health-observation-events.jsonl`，不能复用主 owner 的阶段文件回调。2026-10-20 的隔离修正
+通过合成认证/客户端检查：GET 短暂失败可重试且不覆盖权威阶段，写请求失败只发出一次。
+记录在数据盘 `control/action_adapter_validation_20261019/health-observation-isolation-20261020/`，
+没有对训练、既有 owner 或科学配置执行恢复/重跑。
+
 ## 文件放在哪里
 
 | 内容 | 位置 |
