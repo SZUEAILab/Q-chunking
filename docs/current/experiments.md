@@ -181,6 +181,28 @@ alpha300 取自固定官方 Cube Double 命令，对两个方法及 Triple 原�
 本批仍是两个开发任务上的跨算法验证，不能称为 fresh-seed 确认或广任务泛化。
 计划、逐运行配置、部署包和接续控制器位于数据盘 `control/fql_posthoc_transfer_20261019/`。
 
+### GAC 近邻对照的训练准备
+
+[`main_gac_reference.py`](../../main_gac_reference.py) 保留官方配方 learner，另行声明本地
+单环境 OGBench driver。`online_only` 不声明或加载 prior；`prior_balanced` 每个 critic
+minibatch 使用一半冻结训练先验、一半在线 replay，作为 GAC+prior 协议单独标注。
+该比例与现有 RLPD 对照的数据比例对齐，网络、目标、温度 surrogate 与更新节奏仍不同。
+
+两协议的预算、数据 SHA、版本、源码、独立评估和 learner 配置由 JSON plan 固定；
+原始环境动作保持五维，结束与截断分开记录，bootstrap 使用 termination 而非 truncation。
+在线 replay 使用独立 ring，prior 保持只读。记录抽样行数及首批原始索引；抽样含放回，
+同一 critic batch 会被 actor 重用，不能把计数当作唯一经验数或独立统计样本数。
+
+更新保持官方零基循环条件；1M 环境步、learning_starts=5000、policy frequency=2、
+target frequency=1 时，预期 critic/actor/target 次数为 994999/994998/994999。
+评估使用真实 step 0、间隔点及预算终点；actor loss 保留其实际更新 global step，
+避免将上一次 actor loss 标记成当前 critic 步。
+
+源码 `29536cb` 的 125 文件快照通过两种协议各一次真实 CUDA 64 步工程，初始化模型/RNG
+一致，更新次数与数据来源计数通过独立复核；19 项入口契约测试通过。
+这些为开发验收，不提供 GAC/posthoc 性能判断；GAC 正式矩阵和云端 CUDA 环境尚未冻结/验收，
+不向既有 RLPD/FQL 批次插入运行。证据位于数据盘 `control/gac_driver_20261019/`。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |

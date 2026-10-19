@@ -348,19 +348,23 @@ post-warmup 动作；其协方差与均值另用直接 batch 计算核对一致�
 完整 action-adapter 的 GAC 性能比较。旧目录缺有效配置，源码快照也不构成执行来源证明。
 来源、动作支持和后续比较边界见 [GAC 基线](../reference/gac_baseline.md)。本次未训练。
 
-独立官方配方的 `5051c30` GAC learner 已与原始 AST 更新分支完成三类 CPU 对照，
-覆盖完整 256×2、batch256、交错采样和六次更新，模型、Adam、RNG 与 loss 最大状态差为 0；
-14 项行为测试通过。122 文件冻结快照另完成真实 Cube-Triple task2 的 CPU 64 步在线工程，
-实际 critic/actor/target=31/30/31，step 0/64 各 1 episode，完整 checkpoint 与 16 个恢复策略
-探针通过，进程退出 0。旧材料审查未训练的范围与这次新增工程分开记录。
-后续 `1d6bef4` 在本地专用 CUDA 环境完成三类 46 维观测的官方完整更新核对，最大误差
-仍为 0；CPU 最新三例同样通过。原项目 87 项回归与 CUDA 专项 17 项检查通过。
-123 文件快照在空闲 GPU 0 另完成真实 64 步工程，同样实测 31/30/31 更新、两点各 1 episode，
-完整 GPU checkpoint 与 16 个恢复探针通过。GPU 环境最初的无关 JAX/TFP 导入失败保留，
-代理注册改为按需加载后通过；云端环境与旧批次未变。云端 Torch 仍为 CPU 版，
-未启动 GAC 长程比较，尚无其对 posthoc 的性能结论。
-数值和工程证据分别位于数据盘 `reports/gac_reference_20261019/` 与
-`control/gac_reference_20261019/`；source、prior 与向量预算边界见上述参考。
+完整 GAC learner 已通过 CPU/CUDA 各三类原始 AST 更新对照，模型、Adam、训练 RNG 和
+loss 最大误差均为 0；原项目 87 项回归与 CUDA 专项 17 项检查通过。真实单环境 CPU/CUDA
+64 步工程与学习器恢复证据、首次数值入口/依赖导入失败及修正均保留在数据盘
+`control/gac_reference_20261019/`，范围见 [GAC 基线](../reference/gac_baseline.md)。
+
+源码 `29536cb` 的来源绑定训练入口已完成 `online_only` 和 `prior_balanced` 两种协议，
+125 文件快照、19 项入口契约测试及本地 GPU 0 的两次 64 步真实运行通过；每次实测
+critic/actor/target=31/30/31、step 0/64 各实际 1 episode。两种协议的五个模型和训练 RNG
+初始化哈希一致，数据来源抽取计数分别为 0/7936 与 3968/3968（prior/online，含放回）。
+
+独立新进程从新模板恢复每份学习器 checkpoint 的 179 个状态字段，精确一致；首批数据
+分别与原始先验索引、在线 replay 快照逐字段一致，64 条动作与各 16 个策略探针通过。
+日志保留 actor loss 实际所属的 global step；没有重跑训练。证据为数据盘
+`control/gac_driver_20261019/engineering-receipt.json` 与 `independent-validation.json`。
+该入口采用单环境本地数据/评估适配；GAC+prior 是明确的附加先验协议，不能把它标成
+原版纯在线 GAC 或 RLPD 内单一几何消融。云端 Torch 仍为 CPU 版，GAC 长程比较尚未
+启动，也没有 posthoc 超过 GAC 的性能结论。
 
 ## 下一步
 

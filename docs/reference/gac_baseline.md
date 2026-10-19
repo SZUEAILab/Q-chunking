@@ -120,6 +120,37 @@ step 0/64 各实际返回 1 episode，额外评估 2000 步；完整 GPU checkpo
 和 `control/gac_reference_20261019/engineering-receipt-cuda.json`；CPU 最新数值报告为
 `reports/gac_reference_20261019/learner-equivalence-cpu-final.json`。
 
+## 来源绑定的 GAC 训练入口
+
+[`main_gac_reference.py`](../../main_gac_reference.py) 使用 JSON plan，分别声明
+`online_only` 与 `prior_balanced`。前者使用纯在线 replay，后者把每个 critic batch 的
+一半替换为相同任务的冻结 prior，标为 GAC+prior。这样可对齐数据比例；与 RLPD/posthoc
+相比仍是完整算法配方差异，不能称为纯几何干预。当前入口支持单环境、归一化五维 Cube
+动作和 radius=1，原始 actor/Q/优化器保持不变。
+
+Plan 绑定源码、环境/Torch 版本、数据 SHA、实际预算、replay 容量与独立评估，拒绝已有
+输出和静默 CPU fallback。终点核对实际 critic/actor/target 与 Adam 计数、有限参数、
+实际 episode 记录、完整学习器 checkpoint 和策略恢复。学习器 checkpoint 不含 replay、
+物理环境及 NumPy 采样器状态，不能据此声称支持整条训练轨迹的精确续跑。
+
+每次保存首批数据的原始索引及在线 replay 快照，记录 prior/online 带放回抽取行数；
+不修改先验数组，不用 decompose/compose 改写环境动作。Bootstrap 使用真实 termination，
+truncation 保留为 episode 边界。Actor 和 critic 的更新时钟不同，日志另记 actor loss
+实际所属的 global step。完整学习器的三类 CPU/CUDA 数值证明继续使用原报告，不因 driver
+接线而升级为性能结果。
+
+源码 `29536cb` 的 125 文件快照在本地 GPU 0 完成两种协议各 64 步，均退出 0。
+相同 seed 的五个模型与训练 RNG 初始哈希一致；每次实测 31/30/31 次 critic/actor/target。
+纯在线共抽取 7936 次 online 行，prior 协议为 prior/online 各 3968 次；不等于唯一转移数。
+19 项入口测试通过。独立新进程恢复每份 checkpoint 的 179 个状态字段，逐项精确一致；
+首批 prior/online 数据分别与实际原始索引及 replay 快照精确一致，两点实际 episode 数、
+64 条采集动作及 16 个恢复探针通过。没有重跑两次训练。
+证据为数据盘 `control/gac_driver_20261019/engineering-receipt.json` 和
+`control/gac_driver_20261019/independent-validation.json`。
+
+当前云端环境仍需 CUDA Torch 验收，GAC 长程矩阵尚未启动；近邻对照的长期稳定性、
+调参公平性与性能差异仍待正式比较。
+
 ## 动作支持与后续对照
 
 官方采样把完整动作向量的单位方向与单位球面噪声作未归一化凸组合，权重为
