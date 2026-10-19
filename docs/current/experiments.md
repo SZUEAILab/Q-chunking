@@ -8,8 +8,11 @@
 ## Action-adapter 冻结筛选
 
 批次为 `action_adapter_validation_20261019`，配置、源码摘要、工程尝试与平台记录放在
-数据盘 `control/action_adapter_validation_20261019/`。用户授权 8×4090 不限时长；使用已有
+数据盘 `control/action_adapter_validation_20261019/`。用户将资源改为 4×4090，保持不限时长；使用已有
 兼容镜像、持久化挂载与独立源码发布目录，不覆盖其他批次。
+2026-10-19 因八卡排队时间过长，停止尚未运行的旧任务并提交四卡替换任务；
+`resource-amendment-4gpu.json` 记录此次资源修订。原科学预注册与任务配置保持冻结，
+首轮使用 GPU 0–3、每卡最多 8 个任务；基线阶段每卡 1 个任务。旧部署包和监控记录保留。
 
 | 方法 | 速度/支持 | Critic |
 |---|---|---|
@@ -49,7 +52,7 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 网络、目标聚合、熵备份和真实计算量，不能替换首轮方法组或称所有差异都来自动作表示。
 
 独立批次 `action_adapter_reference_20261019` 已冻结两个任务、seed 10–13、UTD=1/20，
-共 16 运行，复用首轮 8 卡实例并等待原 72 运行全部验收后启动；两个批次都保留自己的终态。
+共 16 运行，复用首轮 4 卡实例并等待原 72 运行全部验收后启动；两个批次都保留自己的终态。
 训练源为 `2c2d0c3`，独立运行包有逐文件哈希，50 episodes、真实 step 0–1M 评估网格与
 原批次相同。与 native、legacy/direct latent、legacy/direct canonical 的全部 20 个
 task/UTD/method 对照都作描述性报告，缺失配对显式显示，不用部分 seed 估计完整四配对效应。
