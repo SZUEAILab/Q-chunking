@@ -104,18 +104,21 @@ def assert_same(local, upstream):
     return maximum
 
 
-def run_case(learner, *, utd, backup_entropy, subset, full_width=False):
+def run_case(learner, *, utd, backup_entropy, subset, full_width=False,
+             action_dim=5, agent_class=RLPDReferenceAgent, config_overrides=None):
     rng = np.random.default_rng(20261022)
     obs = np.zeros(7, np.float32)
-    actions = np.zeros(5, np.float32)
+    actions = np.zeros(action_dim, np.float32)
     hidden = (256, 256) if full_width else (16, 16)
     config = get_config().to_dict()
     config.update(horizon_length=1, actor_hidden_dims=hidden, value_hidden_dims=hidden,
                   backup_entropy=backup_entropy, num_min_qs=subset)
-    local = RLPDReferenceAgent.create(9100, obs, actions, config)
+    config.update(config_overrides or {})
+    local = agent_class.create(9100, obs, actions, config)
     upstream = learner.create(
         9100, ExampleSpace(obs), ExampleSpace(actions), hidden_dims=hidden,
-        num_qs=10, num_min_qs=subset, backup_entropy=backup_entropy, critic_layer_norm=True)
+        num_qs=10, num_min_qs=subset, backup_entropy=backup_entropy, critic_layer_norm=True,
+        target_entropy=config["target_entropy"])
     # Flax 0.5 returned FrozenDict from init; current Flax returns dict.
     for name in ("actor", "critic", "target_critic", "temp"):
         state = getattr(upstream, name)
@@ -127,7 +130,7 @@ def run_case(learner, *, utd, backup_entropy, subset, full_width=False):
         batch = dict(
             observations=jnp.asarray(rng.normal(size=(size, 7)), dtype=jnp.float32),
             next_observations=jnp.asarray(rng.normal(size=(size, 7)), dtype=jnp.float32),
-            actions=jnp.asarray(rng.uniform(-.8, .8, size=(size, 5)), dtype=jnp.float32),
+            actions=jnp.asarray(rng.uniform(-.8, .8, size=(size, action_dim)), dtype=jnp.float32),
             rewards=jnp.asarray(rng.integers(-3, 1, size), dtype=jnp.float32),
             masks=jnp.asarray(rng.integers(0, 2, size), dtype=jnp.float32))
         local, info = local.update(batch, utd_ratio=utd)
@@ -136,6 +139,7 @@ def run_case(learner, *, utd, backup_entropy, subset, full_width=False):
         for name in reference_info:
             np.testing.assert_allclose(info[name], reference_info[name], rtol=3e-6, atol=3e-7)
     return dict(utd=utd, backup_entropy=backup_entropy, num_min_qs=subset,
+                action_dim=action_dim, local_agent=agent_class.__name__, target_entropy=config["target_entropy"],
                 hidden_dims=list(hidden), update_calls=3, critic_updates=int(local.critic.step),
                 actor_updates=int(local.actor.step), temperature_updates=int(local.temp.step),
                 max_absolute_state_error=max(errors), status="passed")

@@ -70,12 +70,24 @@ class RLPDReferenceAgent(flax.struct.PyTreeNode):
 
     @classmethod
     def create(cls, seed, ex_observations, ex_actions, config):
-        if config["horizon_length"] != 1:
-            raise ValueError("RLPD reference port requires horizon_length=1.")
+        cls._validate_learner_config(config)
         if (config.get("adapter_representation", "none") != "none"
                 or config.get("use_integrated_ds", False)
                 or config.get("use_cartesian_l2_projection", False)):
             raise ValueError("RLPD reference port currently supports native actions only.")
+        action_dim = ex_actions.shape[-1]
+        for name in ("action_dim", "env_action_dim", "policy_action_dim", "critic_action_dim"):
+            if name in config and config[name] != action_dim:
+                raise ValueError(f"Reference native action dimension mismatch: {name}")
+            config[name] = action_dim
+        if config["target_entropy"] is None:
+            config["target_entropy"] = -action_dim / 2
+        return cls._create_networks(seed, ex_observations, ex_actions, config)
+
+    @staticmethod
+    def _validate_learner_config(config):
+        if config["horizon_length"] != 1:
+            raise ValueError("RLPD reference port requires horizon_length=1.")
         if (config.get("actor_update_mode", "sac") != "sac"
                 or config.get("ds_phase_regularization", "none") != "none"
                 or config.get("ds_stage_speed_constraint", "none") != "none"
@@ -88,13 +100,12 @@ class RLPDReferenceAgent(flax.struct.PyTreeNode):
             raise ValueError("num_qs must be a positive integer.")
         if subset is not None and (not isinstance(subset, int) or not 1 <= subset <= num_qs):
             raise ValueError("num_min_qs must be None or an integer in [1, num_qs].")
-        action_dim = ex_actions.shape[-1]
-        for name in ("action_dim", "env_action_dim", "policy_action_dim", "critic_action_dim"):
-            if name in config and config[name] != action_dim:
-                raise ValueError(f"Reference native action dimension mismatch: {name}")
-            config[name] = action_dim
-        if config["target_entropy"] is None:
-            config["target_entropy"] = -action_dim / 2
+
+    @classmethod
+    def _create_networks(cls, seed, ex_observations, ex_actions, config):
+        """Build validated shapes with the upstream initialization and key order."""
+        action_dim = config["policy_action_dim"]
+        num_qs, subset = config["num_qs"], config["num_min_qs"]
         config["reference_upstream_commit"] = UPSTREAM_COMMIT
         rng, actor_key, critic_key, temp_key = jax.random.split(jax.random.PRNGKey(seed), 4)
         actor_base = partial(MLP, hidden_dims=config["actor_hidden_dims"], activate_final=True)
