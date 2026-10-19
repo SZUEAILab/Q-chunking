@@ -42,6 +42,10 @@ python schedule.py --run=<批次配置.compiled.json> --dry_run
 # 检查冻结配置、身份和输出目录后，再执行同一 compiled 文件。
 ```
 
+平台 SSH 连接需按当前控制台命令构造：该平台使用集群 SOCKS 代理下的 `root@jobId`，
+`debug-url` 的 `sshUrl` 可能只是容器 IP。核对 `sshState` 和集群 `sshProxyPath`，不能假定
+API 返回完整 SSH 命令，也不能把容器 IP 直接当作代理目标别名。
+
 ## GPU 调度和异常
 
 本地两张 RTX 6000 Ada 使用每卡 6 并发；云端 RTX 4090 首先显式使用每卡 8 并发。
