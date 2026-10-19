@@ -12,6 +12,7 @@
 | `main_online.py` | RLPD，在线交互并混合先验数据 |
 | `main_rlpd_reference.py` | 原论文 RLPD learner 配方的 H1 OGBench 适配；默认 UTD=20 |
 | `main.py` | FQL/QC 离线到在线训练 |
+| `main_fql_reference.py` | 独立 H1 官方 FQL learner 的本地 native/posthoc driver，使用来源绑定的 JSON plan |
 | `schedule.py` | 编译任务矩阵、分配 GPU 槽位、回填队列 |
 
 可复用的合成诊断在 `research/`：`shell`、`shell_offpolicy`、`stage_task`、

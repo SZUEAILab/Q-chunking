@@ -153,7 +153,9 @@ episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不�
 FQL 后续批次需先通过[固定官方 learner 核对](../reference/fql_baseline.md)，再验收真实
 数据、执行 mapper、replay、actor/target 查询、评估和 checkpoint。现有 QC/FQL fork、
 官方 native 参考与 posthoc 适配分别标记；alpha 是蒸馏权重，不沿用 SAC 熵目标解释。
-当前参考 learner 尚未加入长程矩阵，离线预算、在线采样配比和正式比较仍需单独冻结。
+新增独立 H1 driver 和潜动作 posthoc 后，仍未加入长程矩阵；离线预算、在线采样配比和
+正式比较需单独冻结。FQL 硬 clip 与 SAC tanh 的输出分布差异必须披露，不能把执行函数
+相同解释为完整随机策略相同。
 
 ## 批次最少登记什么
 

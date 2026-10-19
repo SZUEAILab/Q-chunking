@@ -5,7 +5,8 @@
 跨算法检验需要先固定 FQL 配方。项目现有 `agents/acfql.py` 是带 action chunking 的
 QC/FQL fork；它的 H1 更新仍与官方 FQL 存在差异，不能仅凭 H1 就称为官方参考实现。
 新增 [`agents/fql_reference.py`](../../agents/fql_reference.py) 独立保留固定官方版本的
-状态观测、单步 native learner；尚无正式训练入口或 posthoc 跨算法性能结果。
+状态观测、单步 native learner；另提供显式本地 driver 与潜动作 posthoc 适配。
+尚无 posthoc 的 FQL 长程性能结果。
 
 ## 固定来源与配方
 
@@ -41,10 +42,9 @@ learner RNG。官方 temperature 参数不参与计算，新类仅接受默认 1
 该桥接不规定采集方式、prior/online 比例或离线预训练步数，也不改变官方 `update`。
 自定义 TrainState 从 1 开始，三次 update 后为 4，不能据计数器直接推断四次优化。
 
-当前拒绝 adapter、projection、integrated DS、H>1、像素 encoder、Fourier 特征、
-weight decay、best-of-n 和非两个 Q 的设置。后续 posthoc 迁移必须单独核验真实执行
-mapper、replay 编码及 actor/target 查询；不能把当前 native learner 数值通过描述为
-已完成 posthoc 迁移。FQL 的硬 clip 输出与原 SAC tanh 输出也必须分别标记。
+Native 类继续拒绝 adapter；两类均拒绝 projection、integrated DS、H>1、像素 encoder、
+Fourier 特征、weight decay、best-of-n 和非两个 Q 的设置。FQL 的硬 clip 输出与
+原 SAC tanh 输出分别标记，不能把 native learner 数值通过直接描述为 posthoc 性能验证。
 
 ## 数值与行为验收
 
@@ -59,5 +59,58 @@ alpha 10/100/300 以及完整 512×4 网络。六维案例只是通用 learner �
 15 项本地行为测试覆盖采样 API/边界、无 padding 的 sequence bridge、checkpoint 后续更新、
 更新前 EMA 及不支持配方拒绝。
 
-本验证仅覆盖 learner；真实环境工程验收、数据/评估接线、posthoc 适配、正式矩阵与性能
-仍待完成。现有 action-adapter 云端三份发布包与长程矩阵不改动，也没有新增算力实例。
+上述初版验证仅覆盖 native learner，报告和源码身份保留在原批次，不被新验收覆盖。
+
+## Posthoc 适配与独立训练路径
+
+[`agents/fql_posthoc_reference.py`](../../agents/fql_posthoc_reference.py) 继承相同 update、
+actor/critic loss 和 flow 积分，只单独验证与初始化 D+1 潜动作网络。执行端采用原版
+Cartesian 方向、log 幅值、sphere 参考半径与最终逐轴 clip；critic、teacher 数据、actor
+查询与 target 查询都在潜坐标。FQL 的一步 actor 和 teacher 保持官方硬 clip 输出，
+没有替换为 tanh Gaussian，也没有 SAC 熵或温度损失。
+
+共享 codec 的 `adapter_speed_squash=tanh` 只固定原编码约定；解析配置另记
+`policy_output_transform=clip`，明确实际 FQL 输出。该适配保留原执行函数，但不能称为
+SAC 完整策略分布的逐项移植。数据中 log-radius 小于 −1 的 canonical 编码保留原值；
+teacher 输出仍受 clip 限制，这项支持差异须披露，不通过截断 replay 隐藏。
+
+[`main_fql_reference.py`](../../main_fql_reference.py) 是独立的本地 H1 OGBench driver。
+JSON plan 显式登记源码、数据 SHA、native/posthoc、离线与在线预算、learner 配置、
+uniform combined replay 或 50/50 balanced replay，以及固定评估协议。两种方法均把真实
+环境动作保存到 prior/replay，只在取 batch 时编码；不对先验先 decompose 再 compose 后
+写回，以免把编码的数值边界改写为原始动作。
+
+在线从第一步策略采集，每个环境步一次联合更新，没有 RLPD 的随机 warm-up 或仅 critic
+UTD。官方 uniform combined replay 和显式 balanced 模式分别登记，不把二者默认为相同。
+评估保留真实 step 0、离线终点、固定间隔及总预算终点，记录每个实际返回 episode 的长度
+与终点 success；采样 key 与 learner RNG 分离。数据 helper 与评估是本地适配，不能称为
+上游实验脚本或旧 benchmark 的完整复现。固定 reset seed 也不证明全部物理缓存逐位相同。
+
+运行拒绝已有输出目录，输入在执行前后核对，错误保留 incident，不自动重试；终点核对
+实际环境步、联合 Adam count、TrainState、有限参数/优化器与完整 checkpoint 恢复。
+正式长程矩阵、fresh-seed 确认、跨任务结论仍待完成；现有云端三份发布包与矩阵保持冻结。
+
+## 新适配的数值与真实环境验收（2026-10-19）
+
+源码 `8e2e850` 的独立 117 个 Python 文件快照完成十类官方数值核对：五类 native 与
+五类潜动作 posthoc，后者把真实环境动作编码为六维，并显式包含零动作对应的
+log-radius≈−13.8155。每例三次更新、完整参数/优化器/计数器/RNG/loss 均一致，最大状态
+差为 0；覆盖完整 512×4、mean/min、Q 归一化开关与不同 flow/alpha 设置。报告为数据盘
+`reports/fql_posthoc_reference_20261019/fql-posthoc-reference-equivalence.json`。
+
+本地空闲 GPU 0 另完成四次真实 Cube-Triple task2 工程检查：native/posthoc 各自采用
+uniform combined 或 balanced replay，完整 512×4、batch256、flow10、alpha300，均退出 0。
+每次固定 4 个离线更新、64 个在线环境步及更新，实际联合 Adam count=68、TrainState=69；
+总更新轴的 0/4/64/68 四个评估点各实际返回 1 个 episode，末状态与完整 checkpoint 检查通过。
+这四次短测仅检验接线，不支持性能或 replay 模式优劣判断；没有追加云端实例。
+
+独立 CPU 进程从全新模板恢复四个模型，每个 checkpoint 的 171 个状态字段在值、形状和
+类型上精确一致。原始 256 条采集动作与对应执行映射逐条一致；首个离线/在线 batch 编码
+与原记录一致，保留原始 replay。44 项本地行为和 driver 契约测试通过。
+
+首次独立检查错误地要求重新序列化后的整段字节相同；诊断确认字段精确一致，只有字典
+插入顺序变化。保留失败检查后改用逐字段精确核对，四次训练及原 checkpoint 未重跑或改写。
+GPU 编译日志包含 xtile diagnostic dumps，原日志全部保留；通过判断依据真实退出码、
+执行计数、有限值与可恢复模型，不宣称日志无诊断信息。验收与检查记录位于数据盘
+`control/fql_posthoc_reference_20261019/engineering-receipt.json` 和
+`control/fql_posthoc_reference_20261019/engineering-independent-validation-v2.json`。
