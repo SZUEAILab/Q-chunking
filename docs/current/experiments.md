@@ -148,6 +148,13 @@ episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不�
 只接受通过上游验收的 checkpoint，核对冻结源码、真实退出码、有效配置、精确优化器计数
 及文件哈希；失败和缺失不补 seed，四个 seed 未齐全时不输出该组汇总均值。
 
+### FQL 跨算法准备
+
+FQL 后续批次需先通过[固定官方 learner 核对](../reference/fql_baseline.md)，再验收真实
+数据、执行 mapper、replay、actor/target 查询、评估和 checkpoint。现有 QC/FQL fork、
+官方 native 参考与 posthoc 适配分别标记；alpha 是蒸馏权重，不沿用 SAC 熵目标解释。
+当前参考 learner 尚未加入长程矩阵，离线预算、在线采样配比和正式比较仍需单独冻结。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |

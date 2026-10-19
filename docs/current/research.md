@@ -45,6 +45,8 @@ OGBench 任务，再做 FQL 与 RoboMimic。原生算法配方和几何强基线
 seed 10–13、UTD1/20 的 16 次原版 posthoc 已冻结并接续原实例，配对既有 16 个 native；
 仍等待原批次与分析验收，尚无新长程结果。该开发验证不替代 fresh-seed 确认。
 它准备排查 learner 配方依赖，不替代后续 FQL 跨算法检验。
+FQL 跨算法准备先建立独立的[官方参考 learner](../reference/fql_baseline.md)，与现有
+action-chunking fork 分开；只验证 native 单步更新，不把它当作 posthoc 迁移或性能证据。
 相关工作已包含 [GAC（ICLR 2026）](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html)
 与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
 因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。

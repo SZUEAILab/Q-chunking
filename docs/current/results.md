@@ -144,6 +144,16 @@ TrainState=34，checkpoint 与配置哈希未变，没有重跑训练。
 及 `comparison-contract-engineering/`；最终报告将写到
 `reports/action_adapter_validation_20261019/posthoc-screen-comparisons.json` 和同名 Markdown。
 
+### FQL 官方参考学习器的数值验收
+
+独立的 native H1 FQL 参考类已与固定官方 `e8cd16e` 的未修改模块完成五类 CPU 数值
+核对：mean/min target、Q 归一化开/关、不同 flow step 与 alpha、五/六维通用 native
+动作，以及完整 512×4 网络。初始化、采样、flow 积分与连续三次更新的参数、优化器、
+计数器、RNG 和 loss 均一致，最大状态差为 0；另有 15 项行为测试通过。
+具体来源、接口与限制见 [FQL 参考](../reference/fql_baseline.md)。这只验收 learner，
+没有真实环境工程或 posthoc 性能结果，也未加入现有云端矩阵。报告在数据盘
+`reports/fql_reference_20261019/fql-reference-equivalence.json`。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、
