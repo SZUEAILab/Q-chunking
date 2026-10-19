@@ -114,6 +114,10 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 目前 HF 新归档在 `summaries/2026-10-19/`，专用导出器是
 [`archive_experiment_summaries.py`](../../scripts/archive_experiment_summaries.py)。
 未来按批次发布、统一 catalog、自动封存/保留规划尚未实现，不能把这些设计当作现有功能。
+首轮终态筛选图表由数据盘 `control/action_adapter_validation_20261019/watch_screen_figures.py`
+接续既有配对汇总，真实产物在 `reports/action_adapter_validation_20261019/figures/`，
+同时写入输入/输出 SHA 回执。检查生成结果后再把正文使用的图收录到 `docs/images/`；
+控制目录中带 synthetic 水印的版式检查图不能当作实验结果。
 需要查旧命令、压力测试和详细设计时见[历史运维记录](../archive/operations.md)。
 
 ## 最小维护检查

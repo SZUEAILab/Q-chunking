@@ -69,6 +69,15 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 不只对成功运行取平均。该工具依赖上游生命周期验收，不冒充再次读取原始日志或恢复模型。
 单独本地 CPU 监控在首轮终态后立即生成 JSON 和 Markdown 汇总，不必等待 reference 完成。
 
+另有独立 CPU 接续进程在上述终态汇总完成后导出固定图表：两任务的全部九种方法按
+原版/critic/完整配方分面展示，保留四个 seed 细线与完整四 seed 均值；全部 28 项 AUC
+配对差逐 seed 展示，并区分原主比较与两类次分析。没有新增比较或推断区间。
+缺失运行保留身份与缺失标记，不画部分 seed 的组均值。输入、工具和 PNG/PDF 输出均
+绑定 SHA；完整及缺失两类合成布局已渲染并目视检查，合成图明确水印，不作科学结果。
+真实图表仍等待终态；绑定与存活证据分别在数据盘
+`control/action_adapter_validation_20261019/terminal-figures-binding.json` 和
+`figure-owner-live-verification.json`，不改变训练或后续实验门槛。
+
 ### 执行映射因果对照的实现准备
 
 新增 `--ds_adapter_execution_map=cartesian_aux`，用于共同六维 actor 下的 Cartesian 执行
