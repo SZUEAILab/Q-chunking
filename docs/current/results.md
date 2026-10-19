@@ -64,6 +64,24 @@ log-speed<−1；这与 tanh 策略速度坐标不一致。近零方向分支仍
 这些导数没有认证 latent critic 的实际 actor 梯度，Gaussian 探针也不代表训练后的策略。
 数据、解释边界和对应训练消融见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
 
+### 评估采样路径核查
+
+六月 Git 快照 `54d7c6d` 与当前冻结 `ccab449` 的 `evaluation.py` 都声明了
+`eval_temperature=0`，但函数体没有读取它，也没有传给 actor。ACRLPD 的实际路径为
+`dist.sample(seed=rng)`，执行 wrapper 随后 compose；不因这个默认参数而切换到均值策略。
+
+对已有相同参数 SHA 的八个 CPU 初始化 actor（native/posthoc、seeds 10–13），分别运行
+两份 evaluator：共 16 个调用路径案例、32 次单 episode 的合成观测回放、512 个回放步骤。
+每例的 temperature 0/1 动作逐项相同，且与对应随机键的直接 actor 采样逐项相同；同状态
+改用不同键会改变动作。84 个冻结 Python 文件、actor 参数、learner RNG 和初始计数均未变。
+
+该检查没有物理步进、训练更新或任务收益读数；六月 evaluator 使用的是当前冻结初始化
+actor，不是恢复历史 checkpoint。因此它排查的是当前可见代码中的确定性评估假说，
+不认证历史进程的执行身份或独立评估随机源。没有修改正在运行的协议。
+工具与日志在数据盘 `control/action_adapter_validation_20261019/audit_evaluation_sampling.py`
+和 `evaluation-sampling-audit-attempt1.log`，完整报告为
+`reports/action_adapter_validation_20261019/posthoc-evaluation-sampling-audit.json`。
+
 ### 原版 posthoc 的神经网络初始化检查
 
 在 CPU 上按冻结源码和正式有效配置重建 native/posthoc 两种网络、四个初始化 seed，
