@@ -28,6 +28,9 @@ OGBench 任务，再做 FQL 与 RoboMimic。原生算法配方和几何强基线
 相关工作已包含 [GAC（ICLR 2026）](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html)
 与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
 因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。
+固定官方 GAC 代码与旧项目适配的区别、17 项数值核对和边界差异见
+[GAC 基线来源](../reference/gac_baseline.md)。旧 GAC 分组策略的支持匹配不能自动用于
+当前允许 XYZ 单位球外动作的 legacy adapter，旧对照也不替代当前完整方法的性能比较。
 
 动作冗余与熵的区别已有 [Action redundancy in reinforcement learning（UAI 2021）](https://proceedings.mlr.press/v161/baram21a.html)
 研究；[PLAS（CoRL）](https://proceedings.mlr.press/v155/zhou21b.html) 已利用潜动作空间限制
