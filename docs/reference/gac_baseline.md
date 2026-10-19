@@ -281,6 +281,27 @@ GPU 短测、保存镜像或启用正式批次控制器。暂存工具只传输�
 本地部署清单、解包证明与传输记录位于 `control/gac_reference_comparison_20261019/`，
 主要入口为 `deployment-packages-v2.json`、`package-proof-v2.json` 和 `stage-*-process.json`。
 
+### 受上游终态约束的环境入口
+
+独立环境工具 [`research.gac_environment_runtime`](../../research/gac_environment_runtime.py)
+固定于 `b429f8b`，与训练源 `371fe5b`、分析 `45a0998` 分开发布。约 10 KB 的操作代码包
+包含工具、29 项测试和环境 spec，不改写 runtime v2、依赖包或原 32 个科学配置。
+导出后本地测试通过；从真实冻结配置派生的八类 64 步工程计划均通过原 driver 静态校验，
+覆盖两个任务、两个 radius/执行边界和两个数据协议，原科学文件哈希不变。
+
+该工具的 `inspect` 与 `prepare` 都先核验 FQL 的 16 个运行、独立验证退出码、真实预算、
+GPU 后端、实际评估计数、两项完整配对分析及 scheduler 退出码；没有收益方向门槛。
+缺少终态时不创建控制目录或 venv，依赖传输不完整时也不能进入安装。准备阶段还要求
+根文件系统下的独立 Python/CUDA 环境、四卡实算、八类真实短测及独立 checkpoint/replay
+验收、四项官方数值对照。通过仅产生 ready-for-image 记录，不保存镜像或启动科学矩阵。
+
+操作代码包已上传同一四卡实例，归档及逐文件 SHA 核验通过；在旧环境关闭 GPU 可见性和
+pytest 插件自动加载后，29 项纯逻辑测试 observed exit=0。实际 `inspect` 也 observed
+exit=0，返回 `waiting_for_fql`；检查前后目标 `/opt` 环境和控制目录均不存在。
+这是云端只读门槛的验收，不是新 CUDA 环境或真实 GAC 入口的云端验收。安装入口尚未
+启动，镜像与 32 次科学训练仍待接续。操作包与回执分别为控制目录下的
+`environment-bootstrap-package.json`、`environment-bootstrap-cloud-receipt.json`。
+
 ## 动作支持与后续对照
 
 官方采样把完整动作向量的单位方向与单位球面噪声作未归一化凸组合，权重为

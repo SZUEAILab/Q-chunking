@@ -59,6 +59,18 @@ API 返回完整 SSH 命令，也不能把容器 IP 直接当作代理目标别�
 启动死亡的任务，因此异常队列先诊断、登记恢复 attempt，再按批次授权恢复。
 保留失败和 incident，不自动改 seed、覆盖目录或因科学结果不佳重跑。
 
+本地观察控制器退出不等于云端训练退出。网络或 DNS 观察失败时，先核对准确实例的
+远端 `started.json`、调度器 PID 与命令、终态文件和已有 launch lock，再检查所有本地
+owner 的实际进程与脚本哈希。恢复观察前保存旧脚本、状态、PID 和日志；按依赖顺序恢复
+owner，更新进程绑定，并确认新 owner 识别已有训练。不能用观察失败触发重新部署或重跑。
+
+[`research.observation_retry`](../../research/observation_retry.py) 为只读查询提供有界重试，
+保留最终原始错误；认证、文件身份、schema 和平台业务错误立即上报。当前主观察器只对
+GET 和已核实的 cluster-list 查询采用它，镜像保存、任务提交等写操作不进入重试。
+SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，不能把 255 当作未启动。
+2026-10-19 DNS 故障及七个 owner 的恢复材料保存在数据盘
+`control/action_adapter_validation_20261019/monitor-recovery-dns-20261019/`；原科学训练未重试。
+
 ## 文件放在哪里
 
 | 内容 | 位置 |
