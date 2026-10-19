@@ -88,7 +88,7 @@ UTD。官方 uniform combined replay 和显式 balanced 模式分别登记，不
 
 运行拒绝已有输出目录，输入在执行前后核对，错误保留 incident，不自动重试；终点核对
 实际环境步、联合 Adam count、TrainState、有限参数/优化器与完整 checkpoint 恢复。
-正式长程矩阵、fresh-seed 确认、跨任务结论仍待完成；现有云端三份发布包与矩阵保持冻结。
+正式长程结果、fresh-seed 确认、广任务结论仍待完成；现有云端三份发布包与矩阵保持冻结。
 
 ## 新适配的数值与真实环境验收（2026-10-19）
 
@@ -114,3 +114,16 @@ GPU 编译日志包含 xtile diagnostic dumps，原日志全部保留；通过�
 执行计数、有限值与可恢复模型，不宣称日志无诊断信息。验收与检查记录位于数据盘
 `control/fql_posthoc_reference_20261019/engineering-receipt.json` 和
 `control/fql_posthoc_reference_20261019/engineering-independent-validation-v2.json`。
+
+## 独立开发批次与阶段分离
+
+16 次 native/posthoc FQL 比较已单独冻结，具体矩阵、预算、replay 与接续门槛见
+[当前实验](../current/experiments.md#fql-跨算法准备)。训练源码继续使用已验收的 `8e2e850`，
+不把新分析工具混入该源码身份；[`research/fql_reference_validation.py`](../../research/fql_reference_validation.py)
+单独版本化，核对实际进程退出、完整动作流、评估 episode、有限损失及新模板 checkpoint 恢复。
+
+主指标固定在在线环境步轴；离线曲线单独报告。缺失/失败 seed 不生成完整组均值，
+time-to-50% 保留右删失，低成功率不触发重跑。该四 seed 批次属于开发检验，FQL 硬裁剪
+和 learner/预训练差异仍在，不能将跨算法结果称为历史 SAC 收益的单因素因果解释。
+新工具通过 22 项曲线、计数、动作流、序列化、配对及失败处理测试，并成功独立复核
+既有四个真实工程 checkpoint/日志，没有追加训练。

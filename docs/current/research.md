@@ -48,6 +48,9 @@ seed 10–13、UTD1/20 的 16 次原版 posthoc 已冻结并接续原实例，�
 FQL 跨算法准备使用独立的[官方参考 learner 与显式适配](../reference/fql_baseline.md)，
 与现有 action-chunking fork 分开。新增本地 H1 driver 与 log/sphere 潜动作 posthoc，
 保留 FQL 硬 clip、flow/蒸馏/Q 目标；数值和短程接线不替代跨算法性能证据。
+两个开发任务上 native/posthoc 的 16 次 FQL 长程比较已另行冻结，接续现有实例；
+它检验是否存在不依赖 SAC 熵温度的收益路径，不直接归因历史 SAC 优势，也不替代十个
+fresh seed 的确认。离线预训练与在线效率分别统计，见[实验](experiments.md#fql-跨算法准备)。
 相关工作已包含 [GAC（ICLR 2026）](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html)
 与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
 因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。

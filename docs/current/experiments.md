@@ -153,9 +153,33 @@ episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不�
 FQL 后续批次需先通过[固定官方 learner 核对](../reference/fql_baseline.md)，再验收真实
 数据、执行 mapper、replay、actor/target 查询、评估和 checkpoint。现有 QC/FQL fork、
 官方 native 参考与 posthoc 适配分别标记；alpha 是蒸馏权重，不沿用 SAC 熵目标解释。
-新增独立 H1 driver 和潜动作 posthoc 后，仍未加入长程矩阵；离线预算、在线采样配比和
-正式比较需单独冻结。FQL 硬 clip 与 SAC tanh 的输出分布差异必须披露，不能把执行函数
+新增独立 H1 driver 和潜动作 posthoc 后，不插入既有 RLPD 矩阵；离线预算、在线采样配比和
+正式比较单独冻结。FQL 硬 clip 与 SAC tanh 的输出分布差异必须披露，不能把执行函数
 相同解释为完整随机策略相同。
+
+独立开发批次 `fql_posthoc_transfer_20261019` 现已冻结：Cube-Triple task2 / Cube Double task2、
+native/posthoc、相同 seeds 10–13，共 16 运行；训练源码固定 `8e2e850` 的 117 个 Python 文件。
+两个方法都使用官方 learner 的完整 512×4、两个 Q、mean target、flow10、alpha300、
+Q 归一化关闭、batch256；每运行 1M 离线更新和 1M 在线环境步/更新，在线无随机 warm-up。
+alpha300 取自固定官方 Cube Double 命令，对两个方法及 Triple 原样使用，不事后分方法调参。
+
+全程真实总更新轴为 0–2M，每 100k 评估 50 episodes，独立 eval seed=20261019。
+主指标只积分真实在线阶段 `[1M,2M]`，减去离线预算后映射为在线环境步 `[0,1M]`；
+真实离线终点评估就是在线 step 0，不补零、不把离线更新当作在线样本效率。
+另报在线 endpoint/tail3、离线 AUC/endpoint、在线 time-to-50% 及删失、更新数和 wall time。
+两个 task-wise posthoc−native 比较都要求全部四对；枚举 `4^4` 个描述性重采样，不作确认检验。
+
+两方法统一采用 uniform combined replay，请求容量 2M，实际按官方逻辑取
+`max(2M, prior_size+1)`。Triple 先验为 3M 转移，实际容量 3,000,001；Double 为 1M，
+实际容量 2M，因此先验保留与覆盖过程跨任务不同，但每任务内两方法一致。原始环境动作
+保留在 replay，取 batch 时再编码；没有据性能切换到 balanced 模式。
+
+该批次接续同一四卡实例，每卡一个运行；任务与 native/posthoc 顺序按 seed/GPU 预先
+平衡。只在既有 RLPD posthoc 及其上游训练/分析技术完整验收后启动，没有收益方向门槛。
+云端仍须检查四张 4090、冻结源码/数据、解包测试，并完成 native/posthoc 的真实短测与
+独立 checkpoint 验收；不得自动重试、覆盖、续跑或替换 seed。
+本批仍是两个开发任务上的跨算法验证，不能称为 fresh-seed 确认或广任务泛化。
+计划、逐运行配置、部署包和接续控制器位于数据盘 `control/fql_posthoc_transfer_20261019/`。
 
 ## 批次最少登记什么
 
