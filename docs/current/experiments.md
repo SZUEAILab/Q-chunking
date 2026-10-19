@@ -86,7 +86,25 @@ GPU 预验收、配置、退出码、有限值、精确 critic/actor/温度更�
 原版 posthoc 现已另行接入同一原论文 RLPD learner 配方，见[适配范围与数值验证](../reference/rlpd_baselines.md#原版-posthoc-在同一-rlpd-配方中的适配)。
 它保持原版 tanh/log/sphere latent 方法，支持 H1、UTD=1/20 与显式共同数值熵目标；
 六维潜动作正则也进入 entropy backup。新源码 `e20834c` 与原两个批次分开，不改写已冻结
-的 72/16 运行或预先指定后续优胜配方。同配方 native/posthoc 的长程比较尚未登记和启动。
+的 72/16 运行或预先指定后续优胜配方。
+
+独立批次 `posthoc_reference_20261019` 已冻结 16 个原版 posthoc 运行：同两个开发任务、
+seed 10–13、UTD=1/20、每次 1M 步；与已冻结的 16 个 native 配对，不重跑 native。
+四项同 RLPD 配方的 posthoc−native 比较分别报告；另报 UTD1 的两项方法×learner 配方
+交互，以及同 RLPD 内两项方法×UTD 交互，共八项描述性比较。每项都要求全部四个 seed
+及其所有输入方法可用，缺失时不输出完整组估计；实际 0–1M AUC 为主，endpoint/tail3 为次。
+经验配对 bootstrap 枚举 `4^4` 个重采样，不作确认性、多比较覆盖或纯坐标因果主张。
+
+两份源码共有的 90 个 Python 文件中，88 个字节相同；另两项是 native 初始化/校验
+函数重构和数值核对工具扩展，均另有上游数值证据。新批次使用 `e20834c` 的 106 文件
+快照；14 项控制文件与配置、数据、计划和输入证据分别绑定哈希。native 与 posthoc
+分批执行，记录环境与时长；这不证明长程轨迹逐位相等，也不是 fresh-seed 确认。
+
+接续监控等待原 72 运行、16 个 native，以及 critic、动作几何、终点策略和配对汇总四类
+分析完整验收后，复用同一 Running 四卡实例，每卡一个任务。门槛只依赖技术完整性与
+身份核验，不按成功率或比较方向决定是否启动。远程仍须通过 UTD1/20 真实短测、实际
+episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不创建额外实例、不自动
+重试、覆盖、续跑或替换 seed。控制包和计划位于数据盘 `control/posthoc_reference_20261019/`。
 
 ### 已登记的动作与时间次指标
 

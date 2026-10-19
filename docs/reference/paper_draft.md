@@ -24,6 +24,7 @@
 | 2026-09-25 critic 消融 | sigmoid/direct，cube/sphere，task2 H1，各四 seed、500k | 该 direct 配方对 critic 接口敏感；不能转用于六月 tanh/log 配方的因果解释 |
 | 本分支冻结筛选 | 两任务、四 seed、九方法、1M，共 72 运行 | 比较完整 legacy/direct 配方、等宽 canonical、env critic、投影与熵目标；长程结果尚缺 |
 | 外部 RLPD 配方 | 独立的 16 运行、UTD=1/20 | learner 数值对照与短测已通过，正式性能尚缺；不是纯动作表示干预 |
+| 同 RLPD 配方的原版 posthoc | 新增独立 16 运行，配对既有 16 个 native，UTD=1/20 | 十二类数值核对和真实 GPU 短测通过，批次已冻结接续；长程结果尚缺，不是 fresh-seed 确认 |
 
 论文须先回答完整方法能否在统一协议下复现及迁移，再解释 critic、熵目标与动作支持的贡献。
 Canonical 只约束价值接口，保留潜动作熵；不得写成已经消除冗余探索或证明样本效率提高。
