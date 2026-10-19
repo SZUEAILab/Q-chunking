@@ -977,6 +977,15 @@ posthoc 由 0.938 到 0.994，同 posthoc heads 的 Cartesian 执行则由 0.405
 及八个完整初始化模型的 CPU 路径通过。报告位于数据盘
 `reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
 
+**训练后固定状态复核（待运行）。** 为检查这些差异是否在学习后保留，已固定原筛选中
+8 个 native 和 32 个原版 posthoc 的最终 1M checkpoint；按任务使用相同的验证状态、
+共同噪声与四档噪声倍率。所有 40 个身份和分析输入单独绑定哈希，原版四种接口或设置
+各自报告，不用 direct 配方替代。该计划在训练启动后、未读取中途成功率时登记，属于
+描述性次分析。四 seed 不齐全时不输出该组均值。
+工具 [`research/posthoc_checkpoint_policy.py`](../../research/posthoc_checkpoint_policy.py) 的
+17 项测试与已有真实 64 步 checkpoint 的冻结源码恢复路径通过；正式终点分析尚未执行。
+同 heads 的映射反事实仍不等于重训消融，也不能从固定验证状态的几何直接推断任务收益。
+
 **方向/幅值的价值表示与理想梯度几何。** 在未裁剪的常规分支，令 `d=u/||u||`、
 `rho=exp(v)`，可直接推得
 

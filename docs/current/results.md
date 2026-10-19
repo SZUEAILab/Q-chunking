@@ -79,6 +79,17 @@ pooled median 也不固定为 1；CPU 重建不认证远程 GPU 初始化逐位�
 6 项测试与八个完整模型路径通过。详见[方法参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)，
 数据盘报告为 `reports/action_adapter_validation_20261019/posthoc-initial-policy-probes.json`。
 
+### 训练后策略诊断的验收与等待状态
+
+训练后固定状态工具通过 17 项测试，并以冻结 `ccab449` 源码完整恢复已有的真实
+legacy-canonical 64 步工程 checkpoint，分析进程退出 0。计数仍为 33 次联合更新、
+TrainState=34，checkpoint 与配置哈希未变，没有重跑训练。
+该短程检查只验收恢复、共同噪声采样和分析链路，不提供训练后机制或性能结论。
+
+最终分析计划固定原筛选的 40 个 native/原版 checkpoint，见[次分析设计](experiments.md#训练后策略的固定状态次分析)。
+已有动作几何监控已接续该 CPU 分析，仍等待原训练批次结束；正式 40 个 checkpoint 尚未分析。
+工程报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-checkpoint-policy-engineering-v2.json`。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、

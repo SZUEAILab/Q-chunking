@@ -87,6 +87,23 @@ GPU 预验收、配置、退出码、有限值、精确 critic/actor/温度更�
 若原筛选未通过扩展门，原批次可用结果与未执行的 reference 批次会明确区分。
 失败、缺失或非法日志保留，某组未齐全时不生成完整 seed 组均值。
 
+### 训练后策略的固定状态次分析
+
+[`research.posthoc_checkpoint_policy`](../../research/posthoc_checkpoint_policy.py) 延续初始化诊断，
+只读取原 72 运行中 native 8 个和原版 tanh/log posthoc 32 个最终 1M checkpoint。
+后者包含 latent/env/canonical/common-entropy 四种接口或设置；direct 和 projection 保留为
+不适用记录，不与原版混算。40 个身份、预算、工具、helper 和计划分别绑定 SHA-256。
+
+每个任务固定 128 个 validation-prior 非终止状态、每状态 64 次共同 Gaussian draw，
+面板 seed=20261020，噪声 seed=20261023；原始噪声倍率固定为 0.2/0.5/1/2。
+对已学 actor 同时计算实际执行映射和同 heads 的 Cartesian 映射反事实，报告固定状态下的
+范数均值、范数 SD、XYZ 协方差及裁剪诊断。它不是重训对照，不能单独确定成功率收益来源。
+
+该次分析在训练已启动、尚未读取中途成功率时登记；不是原始预注册中的确认性检验。
+它在 72+16 训练批次与已有动作几何分析结束后复用原实例，单进程、CPU 执行，不追加训练。
+只接受通过上游验收的 checkpoint，核对冻结源码、真实退出码、有效配置、精确优化器计数
+及文件哈希；失败和缺失不补 seed，四个 seed 未齐全时不输出该组汇总均值。
+
 ## 批次最少登记什么
 
 | 项目 | 要写清楚的内容 |
