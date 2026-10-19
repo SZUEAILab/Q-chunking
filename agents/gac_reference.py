@@ -150,7 +150,7 @@ class GACReferenceAgent:
         env = SimpleNamespace(single_observation_space=SimpleNamespace(shape=(observation_dim,)),
                               single_action_space=SimpleNamespace(shape=low.shape, low=low, high=high))
         with torch.random.fork_rng(devices=self.cuda_devices):
-            torch.manual_seed(seed)
+            self._seed_owned_generators(seed)
             self.actor = GACActor(env, self.config).to(self.device)
             self.qf1 = SoftQNetwork(env).to(self.device)
             self.qf2 = SoftQNetwork(env).to(self.device)
@@ -165,6 +165,14 @@ class GACReferenceAgent:
         self.critic_updates = self.actor_updates = self.target_updates = 0
         self.last_global_step = None
 
+    def _seed_owned_generators(self, seed):
+        # torch.manual_seed also seeds unrelated CUDA devices. Seed only the
+        # generators saved by this agent's fork_rng context instead.
+        torch.random.default_generator.manual_seed(seed)
+        for index in self.cuda_devices:
+            with torch.cuda.device(index):
+                torch.cuda.manual_seed(seed)
+
     @contextmanager
     def _rng(self, seed=None):
         with torch.random.fork_rng(devices=self.cuda_devices):
@@ -172,7 +180,7 @@ class GACReferenceAgent:
                 torch.set_rng_state(self.rng_cpu)
                 if self.cuda_devices: torch.cuda.set_rng_state(self.rng_cuda, self.cuda_devices[0])
             else:
-                torch.manual_seed(seed)
+                self._seed_owned_generators(seed)
             yield
             if seed is None:
                 self.rng_cpu = torch.get_rng_state().clone()

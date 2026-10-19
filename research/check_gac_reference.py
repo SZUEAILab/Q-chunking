@@ -59,45 +59,53 @@ def compare(a,b):
     return 0.
 
 
-def run_case(official,code,config,action_dim):
-    local=GACReferenceAgent(20261031,7,-np.ones(action_dim),np.ones(action_dim),config)
+def run_case(official,code,config,action_dim,device="cpu",observation_dim=7):
+    device=torch.device(device)
+    cuda_devices=[device.index if device.index is not None else torch.cuda.current_device()] if device.type=='cuda' else []
+    local=GACReferenceAgent(20261031,observation_dim,-np.ones(action_dim),np.ones(action_dim),config,device)
     args=official.Args()
     for name,value in asdict(config).items():setattr(args,name,value)
-    env=SimpleNamespace(single_observation_space=SimpleNamespace(shape=(7,)),single_action_space=SimpleNamespace(shape=(action_dim,),low=-np.ones(action_dim,dtype='float32'),high=np.ones(action_dim,dtype='float32')))
+    env=SimpleNamespace(single_observation_space=SimpleNamespace(shape=(observation_dim,)),single_action_space=SimpleNamespace(shape=(action_dim,),low=-np.ones(action_dim,dtype='float32'),high=np.ones(action_dim,dtype='float32')))
     context=dict(torch=torch,F=F,args=args)
-    with torch.random.fork_rng(devices=[]):
+    with torch.random.fork_rng(devices=cuda_devices):
         torch.manual_seed(20261031)
-        context['actor']=official.GACActor(env,args)
-        for name in ('qf1','qf2','qf1_target','qf2_target'):context[name]=official.SoftQNetwork(env)
+        context['actor']=official.GACActor(env,args).to(device)
+        for name in ('qf1','qf2','qf1_target','qf2_target'):context[name]=official.SoftQNetwork(env).to(device)
         for name in ('qf1','qf2'):context[name+'_target'].load_state_dict(context[name].state_dict())
         context['q_optimizer']=torch.optim.Adam(list(context['qf1'].parameters())+list(context['qf2'].parameters()),lr=args.q_lr)
         context['actor_optimizer']=torch.optim.Adam(list(context['actor'].parameters()),lr=args.policy_lr)
         reference_rng=torch.get_rng_state().clone()
+        reference_cuda=torch.cuda.get_rng_state(cuda_devices[0]).clone() if cuda_devices else None
     def states():
         errors=[compare(getattr(local,name).state_dict(),context[name].state_dict()) for name in ('actor','qf1','qf2','qf1_target','qf2_target')]
         errors += [compare(local.q_optimizer.state_dict(),context['q_optimizer'].state_dict()),compare(local.actor_optimizer.state_dict(),context['actor_optimizer'].state_dict()),compare(local.rng_cpu,reference_rng)]
+        if cuda_devices:errors.append(compare(local.rng_cuda,reference_cuda))
         return max(errors)
     errors=[states()];rng=np.random.default_rng(20261031)
     actor_updates=target_updates=0
     for step in range(config.learning_starts+1,config.learning_starts+7):
-        observation=rng.normal(size=7).astype('float32')
+        observation=rng.normal(size=observation_dim).astype('float32')
         sampled=local.sample_actions(observation)
-        with torch.random.fork_rng(devices=[]),torch.no_grad():
+        with torch.random.fork_rng(devices=cuda_devices),torch.no_grad():
             torch.set_rng_state(reference_rng)
-            expected=context['actor'].get_action(torch.as_tensor(observation[None]))[0][0]
+            if cuda_devices:torch.cuda.set_rng_state(reference_cuda,cuda_devices[0])
+            expected=context['actor'].get_action(torch.as_tensor(observation[None],device=device))[0][0]
             reference_rng=torch.get_rng_state().clone()
+            if cuda_devices:reference_cuda=torch.cuda.get_rng_state(cuda_devices[0]).clone()
         compare(sampled,expected);errors.append(states())
         size=config.batch_size
-        batch=dict(observations=rng.normal(size=(size,7)).astype('float32'),next_observations=rng.normal(size=(size,7)).astype('float32'),
+        batch=dict(observations=rng.normal(size=(size,observation_dim)).astype('float32'),next_observations=rng.normal(size=(size,observation_dim)).astype('float32'),
                    actions=rng.uniform(-.8,.8,(size,action_dim)).astype('float32'),rewards=np.resize(np.asarray([-1,0,1,-2,0,-1,0,1],np.float32),size)[:,None],
                    dones=np.resize(np.asarray([0,0,1,0,1,0,1,1],np.float32),size)[:,None])
         info=local.update(batch,step)
-        data=SimpleNamespace(**{name:torch.as_tensor(value) for name,value in batch.items()})
+        data=SimpleNamespace(**{name:torch.as_tensor(value,device=device) for name,value in batch.items()})
         context.update(rb=SimpleNamespace(sample=lambda size:data),global_step=step)
-        with torch.random.fork_rng(devices=[]):
+        with torch.random.fork_rng(devices=cuda_devices):
             torch.set_rng_state(reference_rng)
+            if cuda_devices:torch.cuda.set_rng_state(reference_cuda,cuda_devices[0])
             exec(code,context)
             reference_rng=torch.get_rng_state().clone()
+            if cuda_devices:reference_cuda=torch.cuda.get_rng_state(cuda_devices[0]).clone()
         errors.append(states())
         for name in ('qf_loss','qf1_loss','qf2_loss'):
             compare(info[name],float(context[name].detach()))
@@ -106,24 +114,26 @@ def run_case(official,code,config,action_dim):
             for name in ('actor_loss','sac_actor_loss','kappa_reg_loss'):compare(info[name],float(context[name].detach()))
         if step%config.target_network_frequency==0:target_updates+=1
     assert local.critic_updates==6 and local.actor_updates==actor_updates and local.target_updates==target_updates
-    return dict(status='passed',config=asdict(config),action_dim=action_dim,updates=6,interleaved_collection_samples=6,
+    return dict(status='passed',config=asdict(config),action_dim=action_dim,observation_dim=observation_dim,device=str(device),updates=6,interleaved_collection_samples=6,
                 critic_updates=local.critic_updates,actor_updates=actor_updates,target_updates=target_updates,max_absolute_state_error=max(errors))
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--upstream-root',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--device',choices=('cpu','cuda'),default='cpu');parser.add_argument('--observation-dim',type=int,default=7)
     args=parser.parse_args()
     if args.output.exists():raise FileExistsError('Preserve existing oracle evidence')
     torch.set_num_threads(1)
     learner=Path(sys.modules[GACReferenceAgent.__module__].__file__);before=hashlib.sha256(learner.read_bytes()).hexdigest()
     official,code,source_sha=load_upstream(args.upstream_root)
-    cases=[run_case(official,code,GACReferenceConfig(learning_starts=0),5),
-           run_case(official,code,GACReferenceConfig(learning_starts=2,policy_frequency=1,target_network_frequency=2),5),
-           run_case(official,code,GACReferenceConfig(learning_starts=0,policy_frequency=3,target_network_frequency=2,alpha=.1,radius=.5),3)]
+    if args.device=='cuda' and (not torch.cuda.is_available() or torch.cuda.device_count()!=1):raise ValueError('Expose one CUDA GPU for the numerical check')
+    cases=[run_case(official,code,GACReferenceConfig(learning_starts=0),5,args.device,args.observation_dim),
+           run_case(official,code,GACReferenceConfig(learning_starts=2,policy_frequency=1,target_network_frequency=2),5,args.device,args.observation_dim),
+           run_case(official,code,GACReferenceConfig(learning_starts=0,policy_frequency=3,target_network_frequency=2,alpha=.1,radius=.5),3,args.device,args.observation_dim)]
     assert hashlib.sha256(learner.read_bytes()).hexdigest()==before
     assert hashlib.sha256((args.upstream_root/'GAC.py').read_bytes()).hexdigest()==source_sha
     report=dict(status='passed',upstream_commit=UPSTREAM_COMMIT,upstream_source_sha256=source_sha,local_source_sha256=before,
-                oracle_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),torch=torch.__version__,backend='cpu',cases=cases,
+                oracle_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),torch=torch.__version__,backend=args.device,cases=cases,
                 scope='Official network initialization, interleaved collection RNG, complete learner updates/optimizers/targets and losses. No environment/vector-budget or task-performance equivalence claim.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     with args.output.open('x') as stream:stream.write(json.dumps(report,indent=2)+'\n')

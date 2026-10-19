@@ -95,3 +95,11 @@ def test_complete_safe_checkpoint_restores_next_update_and_owned_rng():
     dict(policy_frequency=True),dict(learning_starts=-1),dict(kappa_init=0),dict(kappa_min=20),dict(radius=0),dict(alpha=-1),dict(q_lr=0)])
 def test_invalid_reference_recipe_is_rejected(overrides):
     with pytest.raises(ValueError):GACReferenceAgent(1,7,-np.ones(5),np.ones(5),replace(GACReferenceConfig(),**overrides))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='Requires a CUDA runtime')
+def test_cpu_agent_does_not_reseed_an_unrelated_visible_cuda_generator():
+    before=torch.cuda.get_rng_state().clone()
+    value=agent()
+    value.sample_actions(np.ones(7,np.float32),seed=123)
+    torch.testing.assert_close(torch.cuda.get_rng_state(),before,atol=0,rtol=0)
