@@ -33,6 +33,9 @@ Env critic 与 canonical critic 的对照进一步检验环境动作的非线性
 若筛选支持完整方法，后续用预先冻结的十个 fresh seed 做确认，扩展开发批次以外的
 OGBench 任务，再做 FQL 与 RoboMimic。原生算法配方和几何强基线需分别实现与标记，
 不能将本项目的 RLPD fork 直接当作原论文完整复现。
+原版 posthoc 已独立接入原论文 RLPD learner 配方，数值与真实短程工程验收通过，见
+[同配方适配](../reference/rlpd_baselines.md#原版-posthoc-在同一-rlpd-配方中的适配)；正式性能比较尚未执行。
+它准备排查 learner 配方依赖，不替代后续 FQL 跨算法检验。
 相关工作已包含 [GAC（ICLR 2026）](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html)
 与 [Action Space Design（CoRL）](https://proceedings.mlr.press/v270/esser25a.html)，
 因此单纯方向分解或改变动作空间不足以构成新颖性。论文论证取决于受控机制与跨任务性能。

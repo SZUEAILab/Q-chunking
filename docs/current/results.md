@@ -207,6 +207,24 @@ GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-refer
 不增加评估调用，不改变策略、训练更新或 RNG。已有短测缺少该新字段，明确标为旧工程格式，
 不冒充正式基线已经满足 episode 记录要求；正式运行必须通过严格计数验收。
 
+### 原版 posthoc 的同 RLPD 配方接入验收
+
+新增 H1 原版 tanh/log/sphere latent posthoc 的原论文 RLPD 配方入口，用于准备同 learner
+内的 native/posthoc 比较；来源与限制见[基线参考](../reference/rlpd_baselines.md#原版-posthoc-在同一-rlpd-配方中的适配)。
+重新核对六类 native 和六类 posthoc 潜动作案例，参数、优化器、计数器、RNG 与 loss 均通过，
+最大状态差为 0。posthoc 案例包括完整 256×256 / UTD20；另有 native 10 项、posthoc 16 项测试通过。
+首次合并进程的 LLVM 编译分配失败已保留，随后同样十二例改为独立 CPU 进程通过，未缩小案例。
+
+冻结源码 `e20834c` 的 106 文件快照在本地 GPU 0 完成真实 Cube-Triple task2 64 步运行，
+退出 0；完整 256×256、10-Q 随机 2-Q min target、entropy backup、UTD=20。
+实际执行 660 次 critic、33 次 actor、33 次温度更新，Adam 计数一致；step 0/64 实际评估
+episode 数为 1/1。全部动作和参数/优化器状态有限、边界合法；checkpoint 成功恢复，
+16 个验证状态的采样探针通过且 learner RNG 不变。
+
+该运行是工程验收，没有长程比较或成功率收益结论。记录在数据盘
+`control/posthoc_reference_20261019/`。原 72/16 运行发布包保持冻结，新适配没有插入原批次；
+同配方正式 posthoc 比较仍待独立设计与完整筛选结果。
+
 ### 动作与运行时间分析的准备
 
 首轮已登记的动作范数、协方差、边界占比和 wall time 由独立流式分析器补齐，定义与限制见

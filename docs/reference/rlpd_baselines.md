@@ -78,3 +78,45 @@ JAX_PLATFORMS=cpu python -m research.check_rlpd_reference \
 
 真实环境工程验收已完成 64 步、UTD=20，记录了 660 次 critic 与各 33 次 actor/温度更新，
 step 0/64 评估、可恢复 checkpoint 与有限动作；验收过程和解释边界见[当前结果](../current/results.md)。
+
+## 原版 posthoc 在同一 RLPD 配方中的适配
+
+仅将项目 fork 的 posthoc 与原论文配方的 native 相比，会混入 learner 差异。
+为准备同一 learner 配方内的比较，新增
+[`agents/rlpd_posthoc_reference.py`](../../agents/rlpd_posthoc_reference.py) 和
+[`main_rlpd_posthoc_reference.py`](../../main_rlpd_posthoc_reference.py)。它们只支持 H1、原版
+Cartesian D+1、tanh/log、参考半径 1、逐轴 clip、latent critic；没有用 direct 配方替换原方法。
+
+策略和 critic 都使用六维潜动作，环境仍接收五维动作；原 driver 用同一个 mapper 编码
+prior/online replay，并在交互与评估时执行 compose。新类继承原论文配方的更新函数，
+仅使用已拆出的共同初始化与校验函数构建六维网络，保留独立 Adam、随机 Q 子集 min target、
+更新后 EMA、UTD critic/actor/温度更新顺序及熵 backup。熵及 entropy backup 都在潜坐标
+中计算，默认目标 −3，也支持显式共同数值目标 −2.5；不能称为执行动作体积熵匹配。
+
+这属于本地 posthoc 方法适配，不是上游仓库提供的算法，也不是 FQL 等跨算法验证。
+原 native 入口继续拒绝 adapter，原 72 运行和 `2c2d0c3` 的 16 运行发布包均保持冻结；
+新增源码版本为 `e20834c`，尚未加入任一长程矩阵。
+
+[`research.check_rlpd_posthoc_reference`](../../research/check_rlpd_posthoc_reference.py) 在固定
+干净上游上重新核对六类 native 案例，并用上游自身的六维动作 learner 核对六类 posthoc
+潜动作案例。覆盖 UTD=1/20、熵 backup 开/关、Q 子集与全体、完整 256×256 / UTD20、
+以及共同数值熵目标；每例初始化后连续更新三次。参数、优化器状态、计数器、RNG 和 loss
+均通过核对，最大状态差为 0；另有 native 10 项和 posthoc 16 项行为测试。
+这些案例证明已覆盖输入下的更新一致性；环境 mapper 与真实 replay 接线另做工程验收。
+
+最初合并进程的数值检查以退出码 134 发生 LLVM 可执行内存分配失败，没有生成通过报告。
+保留该尝试后，将同样的十二个案例改为逐例独立 CPU 进程；网络、UTD、三次更新和容差
+不变，全部通过。现有资源观测未证明物理 RAM 是根因；不把进程隔离的成功当作根因确认。
+失败记录在数据盘 `control/posthoc_reference_20261019/numerical-attempt1/`，通过报告在
+`reports/action_adapter_validation_20261019/rlpd-posthoc-reference-equivalence.json`，包含逐例日志与退出码。
+
+源码 `e20834c` 的独立 106 文件快照在本地空闲 GPU 0 完成真实 Cube-Triple task2 工程运行：
+64 个环境步、UTD=20、完整 256×256 / 10-Q / 2-Q min / entropy backup，进程退出 0。
+实际 critic/actor/温度更新为 660/33/33，Adam 与对应 TrainState 计数一致；step 0/64 的
+实际 episode 数均为 1，success 计数与聚合一致。全部 64 条执行动作合法，参数和优化器
+状态有限；checkpoint 按同一冻结源码恢复，16 个固定验证状态的动作探针通过，未更新 RNG。
+控制器、源码、输入数据与运行版本绑定在数据盘
+`control/posthoc_reference_20261019/engineering-receipt.json`；没有改动原两个云端批次。
+
+该适配尚无长程成功率结果。同配方正式比较仍须冻结批次与分析，不能用数值核对或短测
+替代方法收益、确认实验或跨任务结论。

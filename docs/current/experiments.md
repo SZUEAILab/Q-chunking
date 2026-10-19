@@ -83,6 +83,11 @@ task/UTD/method 对照都作描述性报告，缺失配对显式显示，不用�
 正式基线每个评估点必须记录实际返回的 episode 数与成功次数，并核对聚合 success。
 GPU 预验收、配置、退出码、有限值、精确 critic/actor/温度更新次数和 checkpoint 通过后才纳入。
 
+原版 posthoc 现已另行接入同一原论文 RLPD learner 配方，见[适配范围与数值验证](../reference/rlpd_baselines.md#原版-posthoc-在同一-rlpd-配方中的适配)。
+它保持原版 tanh/log/sphere latent 方法，支持 H1、UTD=1/20 与显式共同数值熵目标；
+六维潜动作正则也进入 entropy backup。新源码 `e20834c` 与原两个批次分开，不改写已冻结
+的 72/16 运行或预先指定后续优胜配方。同配方 native/posthoc 的长程比较尚未登记和启动。
+
 ### 已登记的动作与时间次指标
 
 [`research.action_adapter_geometry`](../../research/action_adapter_geometry.py) 独立流式读取逐步
