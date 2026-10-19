@@ -236,30 +236,40 @@ class FQLReferenceAgent(flax.struct.PyTreeNode):
             config: Configuration dictionary.
         """
         config = dict(config)
+        cls._validate_learner_config(config)
+        if config.get("adapter_representation", "none") != "none":
+            raise ValueError("FQL native reference does not accept adapters.")
+        for name in ("env_action_dim", "policy_action_dim", "critic_action_dim"):
+            if name in config and config[name] != ex_actions.shape[-1]:
+                raise ValueError("FQL native action dimensions must match: " + name)
+            config[name] = ex_actions.shape[-1]
+        return cls._create_networks(seed, ex_observations, ex_actions, config)
+
+    @staticmethod
+    def _validate_learner_config(config):
         if (config.get("horizon_length", 1) != 1 or config.get("encoder") is not None
-                or config.get("adapter_representation", "none") != "none"
                 or config.get("use_integrated_ds", False)
                 or config.get("use_cartesian_l2_projection", False)
                 or config.get("use_fourier_features", False)
                 or config.get("weight_decay", 0.) != 0.
                 or config.get("actor_type", "distill-ddpg") != "distill-ddpg"
                 or config.get("num_qs", 2) != 2):
-            raise ValueError("FQL reference requires native, state-observation, H1 upstream architecture.")
+            raise ValueError("FQL reference requires state-observation, H1 upstream architecture.")
         if config["q_agg"] not in ("mean", "min"):
             raise ValueError("q_agg must be mean or min.")
         if (not isinstance(config["flow_steps"], int) or isinstance(config["flow_steps"], bool)
                 or config["flow_steps"] < 1):
             raise ValueError("flow_steps must be a positive integer.")
+
+    @classmethod
+    def _create_networks(cls, seed, ex_observations, ex_actions, config):
+        config = dict(config)
         if ex_observations.ndim == 1 and ex_actions.ndim == 1:
             ex_observations, ex_actions = ex_observations[None], ex_actions[None]
         if (ex_observations.ndim != 2 or ex_actions.ndim != 2
                 or ex_observations.shape[0] != ex_actions.shape[0]
                 or min(ex_observations.shape + ex_actions.shape) < 1):
             raise ValueError("Expected nonempty matching observation and action batches.")
-        for name in ("env_action_dim", "policy_action_dim", "critic_action_dim"):
-            if name in config and config[name] != ex_actions.shape[-1]:
-                raise ValueError("FQL native action dimensions must match: " + name)
-            config[name] = ex_actions.shape[-1]
         config["reference_upstream_commit"] = UPSTREAM_COMMIT
         rng = jax.random.PRNGKey(seed)
         rng, init_rng = jax.random.split(rng, 2)

@@ -18,6 +18,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from agents.fql_reference import FQLReferenceAgent, UPSTREAM_COMMIT, get_config
+from agents.fql_posthoc_reference import FQLPosthocReferenceAgent, get_config as posthoc_config
+from direction_speed.adapter import DirectionSpeedAdapter
 
 
 CASES = [
@@ -72,22 +74,33 @@ def assert_same(local, official):
     return maximum
 
 
-def run_case(official_class, case):
+def run_case(official_class, case, method='native'):
     rng = np.random.default_rng(20261028)
+    case = dict(case)
+    if method == 'posthoc':
+        case['action_dim'] = 6
     hidden = (512, 512, 512, 512) if case['full_width'] else (16, 16)
-    config = get_config().to_dict()
+    config = (get_config() if method == 'native' else posthoc_config()).to_dict()
     config.update(actor_hidden_dims=hidden, value_hidden_dims=hidden,
                   **{name: case[name] for name in ('q_agg', 'normalize_q_loss', 'flow_steps', 'alpha')})
     example_obs = np.zeros((2, 7), dtype=np.float32)
     example_actions = np.zeros((2, case['action_dim']), dtype=np.float32)
-    local = FQLReferenceAgent.create(20261028, example_obs, example_actions, config)
+    local_class = FQLReferenceAgent if method == 'native' else FQLPosthocReferenceAgent
+    local = local_class.create(20261028, example_obs, example_actions, config)
     official = official_class.create(20261028, example_obs, example_actions, dict(config))
     errors = [assert_same(local, official)]
+    action_minima = []
     for update in range(3):
         batch = dict(observations=jnp.asarray(rng.normal(size=(4, 7)), dtype=jnp.float32),
                      actions=jnp.asarray(rng.uniform(-.9, .9, (4, case['action_dim'])), dtype=jnp.float32),
                      next_observations=jnp.asarray(rng.normal(size=(4, 7)), dtype=jnp.float32),
                      rewards=jnp.asarray([-1., 0., -2., 1.]), masks=jnp.asarray([1., 0., 1., 0.]))
+        if method == 'posthoc':
+            env_actions = rng.uniform(-.9, .9, (4, 5)).astype('float32')
+            env_actions[0] = 0.
+            adapter = DirectionSpeedAdapter(speed_squash='tanh', speed_interpretation='log', speed_bound='sphere')
+            batch['actions'] = jnp.asarray(adapter.decompose(env_actions))
+        action_minima.append(float(np.asarray(batch['actions']).min()))
         key = jax.random.PRNGKey(850 + update)
         np.testing.assert_array_equal(local.sample_actions(batch['observations'], rng=key),
                                       official.sample_actions(batch['observations'], seed=key))
@@ -100,7 +113,7 @@ def run_case(official_class, case):
         assert set(left_info) == set(right_info)
         for name in left_info:
             np.testing.assert_allclose(left_info[name], right_info[name], rtol=3e-6, atol=3e-7, err_msg=name)
-    return dict(**case, hidden_dims=hidden, update_calls=3, train_state_step=int(local.network.step),
+    return dict(**case, method=method, replay_action_minimum=min(action_minima), hidden_dims=hidden, update_calls=3, train_state_step=int(local.network.step),
                 max_absolute_state_error=max(errors), status='passed')
 
 
@@ -109,16 +122,18 @@ def main():
     parser.add_argument('--upstream-root', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case-index', type=int, required=True, choices=range(len(CASES)))
+    parser.add_argument('--method', choices=('native', 'posthoc'), default='native')
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError('Preserve existing numerical evidence')
     if jax.default_backend() != 'cpu':
         raise ValueError('Run official equivalence checks on CPU')
     local_paths = [Path(sys.modules[FQLReferenceAgent.__module__].__file__), Path(__file__),
+                   Path('agents/fql_posthoc_reference.py'), Path('direction_speed/adapter.py'),
                    Path('utils/networks.py'), Path('utils/flax_utils.py')]
     input_hashes = {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() for path in local_paths}
     official, paths = load_upstream(args.upstream_root)
-    case = run_case(official, CASES[args.case_index])
+    case = run_case(official, CASES[args.case_index], args.method)
     for path, expected in input_hashes.items():
         if hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
             raise ValueError('Local source changed during numerical validation: ' + path)
@@ -132,7 +147,7 @@ def main():
                   local_train_state_sha256=hashlib.sha256(Path('utils/flax_utils.py').read_bytes()).hexdigest(),
                   oracle_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   jax=jax.__version__, flax=flax.__version__,
-                  scope='Native state-based learner initialization, sampling, BC-flow integration and three updates only. Not a driver, performance or posthoc transfer verification.')
+                  scope='State-based learner initialization, sampling, BC-flow integration and three updates only. Posthoc cases use encoded environment replay including zero actions; driver/execution mapping and task performance require separate verification.')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as handle:
         handle.write(json.dumps(report, indent=2) + '\n')
