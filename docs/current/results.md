@@ -90,6 +90,19 @@ TrainState=34，checkpoint 与配置哈希未变，没有重跑训练。
 已有动作几何监控已接续该 CPU 分析，仍等待原训练批次结束；正式 40 个 checkpoint 尚未分析。
 工程报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-checkpoint-policy-engineering-v2.json`。
 
+### 完整消融汇总的验收与等待状态
+
+终态配对汇总工具通过 20 项测试，覆盖原主比较家族、共同配置、真实 step 0、曲线指标复算、
+失败与缺失 seed、错误源码/退出码、删失时间、全零结果、输入哈希和拒绝覆盖。
+另用真实冻结的 72 身份配置、分析计划和控制器完成全缺失的合成验收：28 项比较均保留为
+不完整，没有生成部分组均值；六项原主比较身份保留，重复执行被拒绝。
+该合成验收只验证汇总链路，不描述正在运行的 72 条真实实验。
+
+独立本地监控已启动，等待首轮上游验收与终态报告；正式消融汇总尚未生成。
+计划和验收记录位于数据盘 `control/action_adapter_validation_20261019/screen-comparisons/`
+及 `comparison-contract-engineering/`；最终报告将写到
+`reports/action_adapter_validation_20261019/posthoc-screen-comparisons.json` 和同名 Markdown。
+
 ## Action-adapter 当前执行状态（2026-10-19）
 
 本分支已冻结 action-adapter 对比与消融的首轮筛选：九方法、两个任务、四配对 seed、

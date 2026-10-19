@@ -50,6 +50,27 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 该离线工具与已冻结的训练发布包分开版本化，不修改首轮 72 个运行。
 动作/价值诊断不是任务性能证据，结果缺失或失败不能当作零差值。
 
+### 终态配对比较的完整汇总
+
+[`research.posthoc_screen_comparisons`](../../research/posthoc_screen_comparisons.py) 在原批次
+验收并下载终态报告后，独立重算真实 0–1M 曲线的 AUC、endpoint、tail3 和 threshold/censoring。
+保留原六项主比较；另在训练启动后、尚未查看中途成功率时登记 22 项描述性次比较，
+分别是两个任务内各八项机制对照和三项 legacy/direct 配方对照。具体左右方法、问题与
+解释范围固定在批次 `screen-comparisons/` 的 SHA 绑定计划中，不根据结果方向更改。
+
+机制对照覆盖 env/latent、canonical/env、共同熵目标、projection/native 和 legacy/projection；
+共同熵目标相对 native 也单独报告。配方对照按三种 critic 接口分别比较 direct 与 legacy，
+不能称为只改变 log-speed 的消融。输入配置差异逐 seed 列出，不能仅凭组名声称因素隔离。
+
+每项保留四个训练 seed 的配对值，只有四对全部有效才生成组均值、中位数、正负配对数和
+描述性 percentile bootstrap 区间。枚举全部 `4^4=256` 个经验重采样以去掉 Monte Carlo
+波动；这不提供小样本覆盖率或多比较保证，也不把次分析升级为确认性检验。
+缺失与失败显式保留，不用可用子集估计完整四配对效应；阈值时间逐 seed 保留删失标记，
+不只对成功运行取平均。该工具依赖上游生命周期验收，不冒充再次读取原始日志或恢复模型。
+单独本地 CPU 监控在首轮终态后立即生成 JSON 和 Markdown 汇总，不必等待 reference 完成。
+
+### 原论文 RLPD 的独立参考配方
+
 原论文 RLPD learner 的独立配方移植已完成数值对照，见[基线来源与验证](../reference/rlpd_baselines.md)。
 它与项目 fork、FQL 作者的 SAC/RLPD 是不同配方；后续正式比较需单独冻结，报告 UTD、
 网络、目标聚合、熵备份和真实计算量，不能替换首轮方法组或称所有差异都来自动作表示。
