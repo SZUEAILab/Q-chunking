@@ -3,11 +3,12 @@ import json
 import jax
 import numpy as np
 import pytest
+from flax.core import freeze, unfreeze
 
 from agents.acrlpd import ACRLPDAgent, get_config
 from direction_speed.config import configure_direction_speed
 from research.action_adapter_diagnostics import (
-    file_digest, measure_aliases, observation_panel, reference_policy_actions, verify_training_source,
+    diagnose_run, file_digest, measure_aliases, observation_panel, reference_policy_actions, verify_training_source,
 )
 
 
@@ -45,6 +46,36 @@ def test_latent_critic_can_distinguish_behaviorally_identical_actions():
     assert record["max_executed_action_difference"] < 1e-6
     assert record["q_alias_abs_mean"] > 1e-5
     assert record["radial_q_derivative_rms"] > 1e-5
+
+
+def test_invariance_alone_does_not_hide_a_constant_zero_critic():
+    agent = agent_with_space("canonical")
+    params = unfreeze(agent.network.params)
+    params["modules_critic"] = jax.tree_util.tree_map(np.zeros_like, params["modules_critic"])
+    constant = agent.replace(network=agent.network.replace(params=freeze(params)))
+    observations = np.ones((8, 7), dtype=np.float32)
+    collapsed = measure_aliases(constant, observations)
+    assert collapsed["q_alias_abs_mean"] == collapsed["q_std"] == collapsed["q_abs_mean"] == 0.
+    assert collapsed["full_policy_q_gradient_norm_rms"] == collapsed["direction_q_gradient_norm_rms"] == 0.
+    nonconstant = measure_aliases(agent, observations)
+    assert nonconstant["q_alias_abs_mean"] < 1e-5
+    assert nonconstant["q_std"] > 1e-5 and nonconstant["full_policy_q_gradient_norm_rms"] > 1e-5
+
+
+def test_cartesian_auxiliary_control_is_not_a_direction_alias_test():
+    from types import SimpleNamespace
+    agent = SimpleNamespace(config=dict(adapter_representation="cartesian", adapter_execution_map="cartesian_aux"))
+    with pytest.raises(ValueError, match="redundant direction-speed"):
+        measure_aliases(agent, np.ones((8, 7), dtype=np.float32))
+
+
+def test_auxiliary_checkpoint_is_explicitly_not_applicable_before_restore(tmp_path):
+    (tmp_path/'flags.json').write_text('{}')
+    (tmp_path/'effective_agent_config.json').write_text(json.dumps(dict(adapter_execution_map='cartesian_aux')))
+    result = diagnose_run(tmp_path, np.ones((8, 7), dtype=np.float32), {})
+    assert result['status'] == 'not_applicable'
+    assert 'no redundant direction norm' in result['reason']
+    assert len(list(tmp_path.iterdir())) == 2
 
 
 def test_normalization_floor_cases_do_not_become_false_alias_evidence():

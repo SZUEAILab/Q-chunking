@@ -50,6 +50,12 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 该离线工具与已冻结的训练发布包分开版本化，不修改首轮 72 个运行。
 动作/价值诊断不是任务性能证据，结果缺失或失败不能当作零差值。
 
+首轮冻结摘要没有保存完整 Q 方差与全动作梯度尺度；其零差值只表示本面板未检出不一致，
+不能单独区分有用 critic 与常数 critic。后续工具版本补入 Q 均值、标准差、绝对均值、范围，
+以及全潜动作/方向 Q 梯度尺度，并显式排除没有方向范数冗余的 Cartesian 辅助头对照。
+这些上下文量仍不是价值误差校准，Q 标准差混合了面板中的状态与动作变化。
+原冻结工具 `2eb394d` 及接续绑定保持不变，新字段未自动加入首轮 56 个 checkpoint 的报告。
+
 ### 终态配对比较的完整汇总
 
 [`research.posthoc_screen_comparisons`](../../research/posthoc_screen_comparisons.py) 在原批次

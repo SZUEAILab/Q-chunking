@@ -42,6 +42,8 @@ def measure_aliases(agent, observations, *, seed=20261020, scale=0.5, actions=No
 
     if agent.config.get("adapter_representation") != "cartesian":
         raise ValueError("Radial alias test requires the D+1 Cartesian adapter")
+    if agent.config.get("adapter_execution_map", "direction_speed") != "direction_speed":
+        raise ValueError("Radial alias test requires a redundant direction-speed execution map")
     if not 0 < scale < 1:
         raise ValueError("Alias scale must lie strictly between zero and one")
     observations = jnp.asarray(observations)
@@ -84,6 +86,9 @@ def measure_aliases(agent, observations, *, seed=20261020, scale=0.5, actions=No
     radial_derivative = np.sum(raw_direction * gradient_direction, axis=-1)
     gradient_norm = np.linalg.norm(gradient_direction, axis=-1)
     radial_fraction = np.abs(radial_derivative) / np.maximum(direction_norm * gradient_norm, 1e-12)
+    q_context = q.astype(np.float64)
+    gradient_context = gradient.astype(np.float64)
+    direction_gradient_context = gradient_direction.astype(np.float64)
     record = dict(samples=len(observations), valid_alias_pairs=int(valid.sum()),
                   excluded_pairs=int((~valid).sum()), alias_scale=scale,
                   max_executed_action_difference=float(env_error.max()),
@@ -91,6 +96,11 @@ def measure_aliases(agent, observations, *, seed=20261020, scale=0.5, actions=No
                   value_gradient_only=True, diagnostic_seed=seed,
                   raw_direction_norm_mean=float(direction_norm.mean()),
                   raw_direction_norm_std=float(direction_norm.std()),
+                  q_mean=float(q_context.mean()), q_std=float(q_context.std()), q_abs_mean=float(np.abs(q_context).mean()),
+                  q_min=float(q_context.min()), q_max=float(q_context.max()),
+                  full_policy_q_gradient_norm_rms=float(np.sqrt(np.mean(np.sum(gradient_context**2, axis=-1)))),
+                  direction_q_gradient_norm_rms=float(np.sqrt(np.mean(np.sum(direction_gradient_context**2, axis=-1)))),
+                  q_context_scope="Joint state/action panel; not value-error calibration or pure within-state action variance",
                   finite_predictions_and_gradients=True)
     metrics = ("q_alias_abs_mean", "q_alias_abs_p95", "q_alias_relative_mean",
                "critic_feature_alias_abs_max", "radial_q_derivative_rms",
@@ -160,6 +170,8 @@ def diagnose_run(directory, observations, panel_identity):
     config_path = directory / "effective_agent_config.json"
     flags = json.loads(flags_path.read_text())
     config = json.loads(config_path.read_text())
+    if config.get("adapter_execution_map", "direction_speed") != "direction_speed":
+        return dict(status="not_applicable", reason="Execution map has no redundant direction norm", run_dir=str(directory))
     if config.get("adapter_representation", "none") != "cartesian":
         return dict(status="not_applicable", reason="Not a Cartesian D+1 adapter", run_dir=str(directory))
     checkpoint = directory / f"params_{flags['online_steps']}.pkl"
