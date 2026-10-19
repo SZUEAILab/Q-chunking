@@ -1103,6 +1103,48 @@ legacy mapper 在其全部动作的 decompose、以及 1024 个固定策略探�
 均为 0。零动作的 decompose 仍有差异：旧快照为零方向，当前实现回退到 north；已单独
 保存边界检查。快照不是旧训练进程实际执行源码的认证。
 
+**固定 target 下的方向范数反例（函数层面）。** 当前冻结筛选的 replay encoder 把 XYZ
+编码成单位方向；低于 epsilon 时回退到 north。因此在理想算术下，replay 的方向坐标
+满足 $\|u_i\|^2=1$，但六维 actor 的 tanh 样本没有这个约束。固定一组回归 target $y_i$，
+取任意基准函数 $Q_0$，记 $b$ 为旋转、夹爪等其余控制坐标，构造
+
+$$
+Q_\lambda(s,u,v,b)
+=Q_0(s,u,v,b)+\lambda(\|u\|^2-1),\qquad
+L_\lambda=\frac1N\sum_i(Q_\lambda(s_i,u_i,v_i,b_i)-y_i)^2.
+$$
+
+所有 replay 点上扰动都为零，所以对任意 $\lambda$，$L_\lambda=L_0$。
+然而取正缩放 $c$，使 $u$ 与 $cu$ 均位于合法策略范围且都高于归一化下限，则
+$g(u,v,b)=g(cu,v,b)$，而两点 Q 差相对基准改变了
+
+$$
+\big[Q_\lambda(s,cu,v,b)-Q_\lambda(s,u,v,b)\big]
+-\big[Q_0(s,cu,v,b)-Q_0(s,u,v,b)\big]
+=\lambda(c^2-1)\|u\|^2.
+$$
+
+同样，冗余径向导数相对基准改变 $2\lambda\|u\|^2$。这解释了为何已登记的等效动作
+Q 差与 $u\cdot\nabla_uQ$ 能诊断一种数据值监督无法直接辨识的方向；它不要求真实误差
+恰好是上述二次形式。Env/canonical 接口都先通过实际执行动作，因此不能以同样方式
+区分两个执行完全相同的潜动作，仍保留原策略与潜动作熵。
+
+浮点编码可令单位范数有误差。若 $\eta_i=\|u_i\|^2-1$ 满足 $|\eta_i|\le\delta$，
+记 $e_i=Q_0(s_i,u_i,v_i,b_i)-y_i$，则直接展开平方可得
+
+$$
+|L_\lambda-L_0|
+\le 2|\lambda|\delta\frac1N\sum_i|e_i|+\lambda^2\delta^2.
+$$
+
+该论证仅针对固定 target 的函数值回归；目标网络更新、完整 Bellman 固定点和策略访问
+分布不在等价主张内，也没有证明当前 MLP 可以精确实现此扰动或训练一定产生它。
+它更不推出 canonical 性能一定更高：实际影响的大小和符号由已冻结的训练与诊断检验。
+同一批次冻结 mapper 的 84 个源码文件已验 SHA，66 个合成动作（包括零与近零分支）
+的 float32/float64 回归界以及三档系数的缩放差、自动微分检查通过。没有读取任务结果、
+训练 critic 或与环境交互，记录为数据盘
+`reports/action_adapter_validation_20261019/posthoc-fixed-target-unidentifiability.json`。
+
 **潜坐标熵。** D+1 策略增加一个方向模长自由度；在常规分支放缩 `u` 不改变执行动作，
 却可能改变 latent log-prob。H1 的默认熵目标也从 baseline 的 −2.5 变成 −3，H5 则为
 −12.5/−15。因而潜动作熵和实际行为探索不能等同，已有
