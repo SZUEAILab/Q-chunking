@@ -102,6 +102,9 @@ Cube Triple/Double 的序列化验证先验分别有 18.46%/18.36% 动作范数�
 下完成 5120 次显式物理步进，分析进程退出 0。各条件完整起始积分状态与观测一致，
 1024 次相同 posthoc 动作重放的完整末状态精确相同；未更新模型，未分析 reward/success。
 控制周期是 50 ms，额外零 XYZ 条件保持相同 yaw/夹爪。
+另由固定 actor、状态和噪声重建完整控制量，与全部原始 XYZ 请求逐项核对；独立的
+纯物理回放进程对 4096 条原始记录的完整起点和末状态均精确复现。这 4096 次验证步
+单独计数，不混入原探针的 5120 步；控制量标记为重建，未改写为当时直接记录。
 
 相对零 XYZ 对照的位移向量范数，posthoc / 同 heads Cartesian 在噪声 0.2 下为
 17.159 / 7.893 mm，配对差 +9.266 mm、四个初始化 seed 全为正；噪声 1 下为
@@ -113,6 +116,7 @@ Cube Triple/Double 的序列化验证先验分别有 18.46%/18.36% 动作范数�
 两次工程 reset 检查发现部分控制/求解器缓存未由 seed 单独固定，其长程影响尚未测量。
 原始单步记录、状态/模型快照和报告位于数据盘
 `reports/action_adapter_validation_20261019/posthoc-physical-motion-probes.*`。
+独立回放验收为 `control/action_adapter_validation_20261019/physical-motion/saved-control-replay.json`。
 启动路径和工程序列化的两项错误均保存在 `control/action_adapter_validation_20261019/physical-motion/`；
 它们发生在正式物理探针开始前，没有重跑训练或筛选不利案例。
 
