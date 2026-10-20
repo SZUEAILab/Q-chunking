@@ -902,7 +902,7 @@ $$
 这带来三个理论影响：
 
 1. **没有普通 change-of-variables log-prob。** 映射是 $D+1\rightarrow D$，Jacobian 不是方阵，也没有唯一 inverse。
-2. **方向向量长度是不可观测自由度。** 模型可能把容量用在执行端会被丢弃的径向自由度上。
+2. **方向向量长度在执行层面冗余。** 它在参数更新中的作用还取决于 actor Jacobian 和损失，不能直接解释为无效参数梯度。
 3. **熵目标取决于声明的动作变量。** policy-coordinate 熵与 env-action 熵通常不同；前者可以是一个明确定义的优化目标，不能仅因映射不可逆就断言算法在数学上不成立。
 
 Spherical 与 stereographic 的 $D\to D$ 方向 codec 在避开图奇点且未触发执行裁剪的有效域内可逆，不包含 Cartesian 的冗余方向长度；执行裁剪仍可使整体映射多对一。其 `log_prob` 按实验定义仍是 compose 前 policy-coordinate density。Integrated DS 则把几何 Jacobian 纳入分布，并直接输出 env action。两者应作为不同的熵坐标消融，不应混称为同一个 env-action density。
@@ -1144,6 +1144,35 @@ $$
 的 float32/float64 回归界以及三档系数的缩放差、自动微分检查通过。没有读取任务结果、
 训练 critic 或与环境交互，记录为数据盘
 `reports/action_adapter_validation_20261019/posthoc-fixed-target-unidentifiability.json`。
+
+**径向动作导数不等于无效参数更新。** 固定状态与采样噪声，记策略样本
+$z=f_\theta(s,\epsilon)$、执行映射 $g(z)$。在可微且方向范数高于数值下限的分支，
+令 $v=(\lambda u,0,0)$ 是仅在三维方向上径向的 Q cotangent，则 $Dg\,v=0$。
+但 actor 的欧氏 Q 梯度方向为 $J^\top v$，其中 $J=D_\theta f_\theta$；其诱导的一阶执行响应为
+
+\[
+\delta a_{\rm env}=Dg\,J J^\top v.
+\]
+
+$J J^\top$ 一般不保持径向零空间，所以该响应未必为零。一个局部合法的确定性简例是
+$u=A\theta$，$A=\operatorname{diag}(2,1,1)$，$\theta=(0.2,0.4,0)$，
+$g(u)=0.5u/\|u\|$，$Q(u)=\tfrac12(\|u\|^2-1)$。此时
+$u=\nabla_uQ=(0.4,0.4,0)$，直接径向响应为零；经参数链后的响应为
+$(0.530330,-0.530330,0)$。改成等距的 $A=I$，相应响应又为零。
+float64 自动微分与 $10^{-7}$ 步长的有限差分核对通过；动作处于合法开区间，执行裁剪未激活。
+报告为数据盘 `control/posthoc_actor_radial_response_20261020/counterexample.json`。
+
+这只是反驳“动作径向比例等于浪费的 actor 更新比例”的存在性反例，不证明原网络
+实际使用该效应、该效应有益或 AUC 收益由它造成。上述方向不是 Adam 步；实际更新
+还受熵、优化器状态、步长和其他样本影响。参数空间分量经过 pullback 后也未必正交，
+分量范数比可以因抵消而超过 1，不能继续当作百分比解释。
+
+另行版本化的[参数链诊断](../../research/actor_radial_response.py)对固定状态/噪声的样本
+平均 Q 分解径向与剩余动作 cotangent，通过 VJP 拉回全部 actor 参数，再用 JVP 测量
+执行映射的一阶响应，同时核对熵项与归档 actor loss 的参数梯度。15 项合成/小网络检查
+在本地和云端冻结源码通过，覆盖零 critic、近零方向、等距控制及状态不变。
+全部 56 个真实 adapter checkpoint 的新诊断已按独立计划启动，见
+[执行范围](../current/experiments.md#actor-参数链的事后局部导数诊断2026-10-20)。旧 critic 报告保持不变。
 
 **潜坐标熵。** D+1 策略增加一个方向模长自由度；在常规分支放缩 `u` 不改变执行动作，
 却可能改变 latent log-prob。H1 的默认熵目标也从 baseline 的 −2.5 变成 −3，H5 则为

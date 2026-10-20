@@ -76,6 +76,33 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 这些上下文量仍不是价值误差校准，Q 标准差混合了面板中的状态与动作变化。
 原冻结工具 `2eb394d` 及接续绑定保持不变，新字段未自动加入首轮 56 个 checkpoint 的报告。
 
+### Actor 参数链的事后局部导数诊断（2026-10-20）
+
+原冻结 critic 56 项仍保留。新工具 `73e9a84` 另问：被动作执行层消去的径向 Q 梯度，
+经过 actor 参数链后是否仍有执行响应。固定首轮七个 adapter 方法、两个任务、四个
+训练 seed 的全部 56 个最终 checkpoint；复用旧 128 状态面板，噪声 key 固定 20261023，
+每状态一次重参数采样。分别计算样本平均 Q 的动作 cotangent、径向/剩余参数梯度、
+熵和归档 actor loss 对全部 actor 参数的梯度，并计算局部 JVP 执行响应。
+
+范数比不是浪费百分比，也不具有跨参数化不变性；两个参数分量可能抵消。单位方向的
+固定数值下限为 `max(1e-6,1e-6*total_q_actor_gradient_norm)`，低于下限只将相应单位响应
+标为未定义，原始量、样本和 checkpoint 全部保留。方向范数低于归一化下限的状态不作
+径向等价主张，其完整/剩余梯度仍保留。只允许当前 H1、普通 SAC、无 BC、无额外阶段
+损失的接口；不把这一诊断用到没有该方向冗余的辅助头对照。
+
+15 项解析反例、等距控制、真实小网络、零 critic 与接口拒绝检查在本地通过；同一测试
+在云端原 84 文件冻结源码上实际退出 0。56 项只读分析已在原实例启动，一次一个 worker，
+限定两个 CPU 核，backend=CPU；不新增环境步、优化器更新或 GPU 占用。仅传约 35 KB
+压缩诊断包，checkpoint 不传出挂载。每项保留独立进程真实退出和失败，不自动重跑或
+替换 seed；owner 实际等待 supervisor 退出后才写终态。独立本地收集进程已启用。
+
+完整计划、输入 checkpoint/config/flags/面板 SHA 与工具版本在数据盘
+`control/posthoc_actor_radial_response_20261020/plan.json`、`deployment-binding.json`；实际
+云端入口与收集进程在 `remote-started.json`、`watch-process.json`。终态输出为
+`reports/action_adapter_validation_20261019/posthoc-actor-radial-response.json`，与原
+`critic-invariance.json` 分开。该计划在首轮成绩解封后固定，只提供有限状态/噪声上的
+探索性局部导数，不是实际优化器步、学习改进或任务因果证据；现有训练和接续门槛不变。
+
 ### 终态配对比较的完整汇总
 
 [`research.posthoc_screen_comparisons`](../../research/posthoc_screen_comparisons.py) 在原批次
