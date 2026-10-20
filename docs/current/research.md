@@ -257,3 +257,13 @@ SAC 的 Q 和 log-prob 必须对应协议规定的同一动作变量。
 
 当前已知结果见[结果](results.md)，统一设计规则见[实验](experiments.md)。
 需要推导和实现细节时再看[方法参考](../reference/method.md)；早期探索见[历史记录](../archive/index.md)。
+
+### 独立辨别 RLPD 高 UTD 失败的配方因素
+
+已有诊断没有发现被检查的移植更新/数据接线错误，但未唯一识别 recipe 根因。新登记的
+[完整配对因子设计](experiments.md#rlpd-配方失败的独立全因子配对消融2026-10-20)
+同时交叉 UTD、TD entropy backup、同两 Q 的 min/mean 和 actor/critic 架构，使用两个
+开发任务与十个新种子。六项局部修复主对照及全交互分析均预先固定；现有 native/posthoc
+结果不拼入该矩阵。该批已登记但尚未启动，需要独立 GPU 工程和运行验收，保留既有队列。
+归因仅适用于所声明的因素水平；共同架构效应不区分 actor/critic、宽度/深度，target
+聚合效应不代表所有 Q target 设计。因子交互或多个有效修复不自动指认一个唯一原因。

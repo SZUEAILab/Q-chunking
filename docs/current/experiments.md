@@ -44,6 +44,11 @@ native UTD20 的独立结果后诊断已固定并执行：真实 batch/upstream 
 诊断记录为 `control/rlpd_utd20_diagnosis_20261020/posthoc-live-1792504626.json`；
 未读取中途成绩，也未改变训练配置、顺序、种子或后续接续门槛。
 
+2026-10-20 22:48（北京时间）同配方 posthoc 已完成首批 4/16（Triple UTD1），四个实际
+训练退出均为 0；四张卡已接续 Triple UTD20，约 3万—4万步。重新核对该发布包全部
+106 个源码及 runtime 哈希通过，八份已有 plan 的登记哈希保持不变，未解封整批成绩。
+现场证据为 `control/rlpd_recipe_factorial_20261020/existing-queue-verification-1792507707.json`。
+
 ## Action-adapter 冻结筛选
 
 批次为 `action_adapter_validation_20261019`，配置、源码摘要、工程尝试与平台记录放在
@@ -431,6 +436,71 @@ seed 10–13、UTD=1/20、每次 1M 步；与已冻结的 16 个 native 配对�
 真实短测已通过；正式运行仍须逐项验收实际 episode 计数、精确 TrainState/Adam 更新数
 和可恢复 checkpoint。不创建额外实例、不自动
 重试、覆盖、续跑或替换 seed。控制包和计划位于数据盘 `control/posthoc_reference_20261019/`。
+
+### RLPD 配方失败的独立全因子配对消融（2026-10-20）
+
+在原 native 结果及诊断已知后，另行冻结 `rlpd_recipe_factorial_20261020`，用于检验
+entropy backup、target 聚合和网络架构的单因素修复与交互。两个任务仍是既有开发任务；
+新种子支持独立配对训练，不升级为未接触任务的确认或保证存在唯一根因。
+
+| 因素 | 原水平 | 干预水平 | 保持的控制 |
+|---|---|---|---|
+| UTD | 1 | 20 | 每次交互后 actor、温度各更新一次；critic 按 UTD 更新 |
+| Entropy backup | 开 | 关 | 只切换 TD backup，actor 熵项、温度学习、target entropy=−2.5 保留 |
+| Target 聚合 | 随机两 Q 取 min | 相同随机两 Q 取 mean | 总 Q 数为 10、每次抽取数为 2，随机键消耗和 actor 的十 Q 均值保留 |
+| Actor/critic 架构 | 256×2 | 512×4 | 两个网络共同改变；其余优化器、学习率、critic LayerNorm 保持 |
+
+完整 `2×2×2×2` 共 16 单元，两个 task2、seeds 20310–20319，共 **320 次新训练**。
+每次 1M 步，合计 3.2 亿训练环境步，评估交互另计；原 16 个 native 和 16 个 posthoc
+均不填入新矩阵。容量因子是 actor/critic 的整体架构包，不能分离宽度、深度、初始化或
+哪一个网络的作用。Target 因子检验两 Q 的聚合，不等于项目十 Q mean，也不覆盖全部
+Q target 设计；tau=0.005 仍按每次 critic 更新使用，UTD 因子包含由此带来的 target 追踪节奏变化。
+
+所有单元使用 native 五维动作、H1、batch=256、每个 minibatch 为 128 prior + 128 online、
+三项学习率 3e−4、10 Q、无 BC、相同数据与 reward/mask 协议。每 task/seed 的 16 组
+实际前 5000 步 warmup 命令要求 SHA 相同；同架构内的八组还要求实际构造器捕获的
+actor/critic/target/temp/RNG 组件 SHA 一致。跨架构不要求参数相等，不据此声称完整模拟器
+状态或后续执行分布匹配。按 seed 预先轮转单元及任务顺序，四 lane 各 80 次。
+
+主指标是实际 0–1M/100k 网格的归一化 success AUC。六项主比较是两个任务各自在
+UTD20 下，以原 `backup-on / min / small` 为基线，分别只关 backup、只改 mean、只增大
+架构；全部十个配对、均值、中位数、正/零/负数均报告。20,000 次 paired percentile
+bootstrap 固定 seed20261031，99.1667% 区间对应六项主比较的 Bonferroni 名义覆盖，
+有限 seed 的 bootstrap 覆盖仅近似描述，不报精确 p 值或等效性。
+
+次分析保留每个 UTD 下 E/Q/C 的全部七项因子效应（包括二阶、三阶交互）、它们的
+UTD20−UTD1 差，以及 UTD20 的四项联合修复，共 50 个任务内描述对照；不追加推断区间。
+各单元保留完整十 seed 曲线、终点、末三点和右删失 time-to-50%。如果只有组合修复有效，
+须报告交互；如果某因素在两种 UTD 都有效，不能仅凭其 UTD20 收益称它为高 UTD 特有根因。
+多个因素有效时不强行挑出唯一原因；所有阴性结果也保留。
+
+全部 320 个运行真实终态、逐 case 的 source/case 绑定进程退出回执核对后才读取成绩。
+某任务的 160 单元面板须全部可用，并通过初始化/warmup 配对，才输出该任务组估计；
+失败不删 seed、不自动重跑、覆盖或替换。与已有各批次分开存储、使用同一已授权四卡实例，
+接续位置登记为既有 60 运行共同映射队列之后，没有收益方向门槛。
+
+独立入口为 [`main_rlpd_recipe_ablation.py`](../../main_rlpd_recipe_ablation.py)，
+新类为 [`agents/rlpd_recipe_ablation.py`](../../agents/rlpd_recipe_ablation.py)，没有改动原
+native/posthoc 类或入口。默认 min 路径与原参考更新的状态、optimizer、计数器、RNG、loss
+精确一致；mean 路径通过独立双 Q 公式和 terminal mask 检查。协议/终态分析器
+[`research/rlpd_recipe_study.py`](../../research/rlpd_recipe_study.py)还检查完整面板、跨 case
+退出回执复用、缺失/失败 seed、配对哈希和已知合成主效应/UTD 交互；合计 24 项测试通过。
+这些合成测试不是实验成绩。
+
+源码固定 `46b6c89d3cffa5d9969239fe8cde6ff1b3e57602` 的 106 个 Python 文件，plan SHA-256 为
+`25e2f68d8d1c902b54edb5ea4f68db19bdc79533a83a4d24b65a08ddd2515c77`。已检查 1691 份本地 flags、818 份既有云端 flags 和 8 份登记
+计划，新种子未冲突；只认证已检查记录。两个真实 observation 维度和两种完整架构已在 CPU
+完成实际初始化/参数量检查，同架构内四个 entropy/target 组合的状态组件一致，未训练。
+
+**当前状态为已登记、未 arm、未开始正式训练。** 较大架构的参数量约为原来的十倍；
+实际 4090 工程和运行时间仍须测量，不能把小网络或 CPU 测试当作正式 GPU 验收。
+冻结的 320 条完整命令均在隔离源码中通过实际 parser 与入口校验，环境/模型构造器
+被拦截，未训练。审计 harness 的 argv/cwd/动态 flag 重复登记三次失败及 r4 修订均保留，
+没有改动科学命令、源码或计划。证据在数据盘 `control/rlpd_recipe_factorial_20261020/`；
+启动前还须完成
+两个任务各 16 单元、共 32 次真实 4090 短测（64 步、UTD1/20 对应 33/660 次 critic
+及各 33 次 actor/温度更新）、实际构造器捕获、独立 checkpoint 恢复及另行绑定的
+运行控制器验收。既有 posthoc/FQL/GAC/梯度/共同映射的冻结方案和接续顺序保持不变。
 
 ### 已登记的动作与时间次指标
 

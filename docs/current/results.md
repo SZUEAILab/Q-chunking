@@ -615,6 +615,11 @@ Triple UTD20 的该 RMSE 均值反而略低于 UTD1，所以“所有 UTD20 都�
 最终汇总为 `diagnostic-summary-complete.json` / `.md`，逐 seed/mode 为
 `mode-32-seed-mode-cases.csv`，全部证据与失败由 `evidence-binding.json` 绑定。
 
+独立配方归因实验已完成[设计登记](experiments.md#rlpd-配方失败的独立全因子配对消融2026-10-20)：
+四个二水平因素、两任务、十新 seed，共 320 个独立运行，24 项工程/合成分析检查通过。
+当前未 arm、未开始科学训练，没有新配方成绩或唯一根因判断；原 native 零值和正在运行的
+posthoc 配方继续保留。不能把新入口的 CPU 验收当作容量因素或 target 因素有效的证据。
+
 ### 原版 posthoc 的同 RLPD 配方接入验收
 
 新增 H1 原版 tanh/log/sphere latent posthoc 的原论文 RLPD 配方入口，用于准备同 learner
@@ -644,6 +649,11 @@ TrainState/Adam、全部动作与冻结源码 API 恢复检查，没有重跑训
 没有完整长程结果，未据 native 成绩修改计划或启动门槛。现场核验为
 `control/posthoc_reference_20261019/live-process-verification-1792501388.json`；部署证明在数据盘
 `control/posthoc_reference_20261019/deployment-execution-proof.json`。
+
+2026-10-20 22:48 的独立技术复核确认：首批 Triple UTD1 四个 seed 均已通过完成验收，
+实际退出 0；Triple UTD20 四个训练分别使用 GPU 0–3 并推进到约 3万—4万步。
+106 个冻结源码与运行控制文件仍匹配。整批 16 运行尚未终态，继续保持成功率结果封存，
+新配方消融仅在独立目录登记，不改变这批训练或后续既有队列。
 
 ### 动作与运行时间分析的准备
 

@@ -91,6 +91,11 @@ UTD20 的局部任务进展也接近消失，不能只归因于评估随机性�
 已调参配方，详见[全部诊断与限制](../current/results.md#utd20-零结果的实现与配方排查2026-10-20)。
 不能根据失败结果在线改动当前 posthoc 配方或覆盖原 native 成绩。
 
+独立 [UTD×entropy×target×capacity 配对协议](../current/experiments.md#rlpd-配方失败的独立全因子配对消融2026-10-20)
+现已登记，使用新入口和十个新 seed 共 320 运行。它改变 target 时仍使用相同随机两 head，
+容量因子共同改变 actor/critic 架构；原两类参考实现及已有运行包不变。新批未 arm 或训练，
+不能填入性能或根因结论，也不替代正在执行的同配方 posthoc 16 运行。
+
 ## 原版 posthoc 在同一 RLPD 配方中的适配
 
 仅将项目 fork 的 posthoc 与原论文配方的 native 相比，会混入 learner 差异。
