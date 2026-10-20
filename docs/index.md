@@ -17,7 +17,7 @@
 - [FQL 参考学习器](reference/fql_baseline.md)：固定官方配方、数值对照与后续跨算法适配边界。
 - [GAC 基线来源](reference/gac_baseline.md)：固定官方代码、旧策略适配、数值一致范围和动作支持。
 - [数据集安装](reference/datasets.md)：OGBench、RoboMimic、LIBERO。
-- [论文工作稿](reference/paper_draft.md)：写作时查，不作为日常运行规则。
+- [当前 posthoc 英文工作稿](reference/paper_draft.md)：完整开发结果、机制推导与待完成证据；旧研究稿见历史归档。
 - [历史归档](archive/index.md)：已按主题合并的旧协议、结果和运维记录。
 - [图片](images/index.md)：主仓库保留的文档结果图。
 - [HF 数据](data/README.md)：精简评估、配置、统计和来源哈希。

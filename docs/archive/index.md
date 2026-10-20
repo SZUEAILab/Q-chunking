@@ -13,6 +13,7 @@
 | [机器人任务](robotics.md) | 支持约束、参数隔离和 moment-control 各次实验 |
 | [历史结果](results.md) | 原数值、seed/block、负结果、阶段报告 |
 | [历史运维](operations.md) | 调度细节、压力测试、迁移、发布和存储设计稿 |
+| [旧论文工作稿](historical_direction_speed_manuscript.md) | 保留原 MME、DS-FER 与时间控制正文；当前 posthoc 稿另维护 |
 | [旧研究与检查记录](research_history.md) | 原研究阶段、疑问、清单及旧通用协议 |
 
 精简前的原文另保存在数据盘 `archive/documentation-before-consolidation-20261019/source-documents.tar.gz`。
