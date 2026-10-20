@@ -21,6 +21,7 @@ import threading
 import time
 
 _context = threading.local()
+_event_mutex = threading.Lock()
 
 
 def digest(path):
@@ -49,9 +50,11 @@ def event(policy, name, **fields):
     path = Path(policy['admission_root'])/filename
     if not path.parent.is_dir():
         path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('a') as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
-        stream.write(json.dumps(dict(time=time.time(), event=name, **fields), allow_nan=False)+'\n')
+    with _event_mutex:
+        with path.open('a') as stream:
+            if not policy.get('single_writer_event_journal'):
+                fcntl.flock(stream, fcntl.LOCK_EX)
+            stream.write(json.dumps(dict(time=time.time(), event=name, **fields), allow_nan=False)+'\n')
 
 
 def load_policy(path, expected):
@@ -172,11 +175,15 @@ def admission(policy, gpu, identity, *, probe=resource_probe, foreign=foreign_co
     # Append-open can wait on a remote filesystem's write ownership before
     # flock is reached. Precreated, zero-byte files need no data writes.
     lock_mode = 'rb' if policy.get('read_only_precreated_lockfiles') else 'a'
+    mutex_root = Path(policy.get('admission_mutex_root', root))
+    mutex_root.mkdir(parents=True, exist_ok=True)
+    separate_mutex = mutex_root != root
+    mutex_mode = 'a' if separate_mutex else lock_mode
     lease = None
     while lease is None:
         if getattr(_context, 'stop', None) is not None and _context.stop.is_set():
             raise RuntimeError('Unlaunched admission cancelled after infrastructure incident')
-        with (root/f'gpu-{gpu}.lock').open(lock_mode) as mutex:
+        with (mutex_root/f'gpu-{gpu}.lock').open(mutex_mode) as mutex:
             # Never enter a blocking remote flock RPC: the shared backend can
             # strand its waiter even after other controllers release the file.
             try:
@@ -184,8 +191,14 @@ def admission(policy, gpu, identity, *, probe=resource_probe, foreign=foreign_co
             except BlockingIOError:
                 sleep(1)
                 continue
-            state = root/f'gpu-{gpu}-last-start.json'
+            state = mutex_root/f'gpu-{gpu}-last-start.json'
             last = read(state)['time'] if state.exists() else float('-inf')
+            # A separate M mutex never edits the live Q coordinator's files.
+            # Observe its latest start too; the 30s guarantee is per cohort,
+            # since the already-running Q process cannot observe M's mutex.
+            shared_state = root/f'gpu-{gpu}-last-start.json'
+            if separate_mutex and shared_state.exists():
+                last = max(last, read(shared_state)['time'])
             external = max(policy['reserved_external_slots'], foreign(policy)[gpu])
             if now()-last >= policy['stagger_seconds'] and probe(policy, gpu):
                 for index in slot_indices(policy, external, identity):

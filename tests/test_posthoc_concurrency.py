@@ -296,3 +296,43 @@ def test_contended_gpu_mutex_uses_nonblocking_probe_and_recovers(tmp_path, monke
             foreign=lambda _: [1]*4, sleep=sleeps.append):
         assert len(attempts) == 2 and sleeps == [1]
     assert [json.loads(line)['event'] for line in (tmp_path/'events.jsonl').read_text().splitlines()] == ['admitted', 'released']
+
+
+def test_isolated_mutex_keeps_shared_slot_cap_without_touching_live_coordinator(tmp_path):
+    root = tmp_path/'shared'; root.mkdir(); own = tmp_path/'local-mutex'
+    policy = dict(admission_root=str(root), admission_mutex_root=str(own), gpu_tasks=8,
+        reserved_external_slots=1, stagger_seconds=0, read_only_precreated_lockfiles=True)
+    for slot in range(8):
+        (root/f'gpu-0-slot-{slot}.lock').touch()
+    (root/'gpu-0.lock').touch()
+    r.write_once(root/'gpu-0-last-start.json', dict(time=0, pid=1234))
+    held = []
+    try:
+        # Preserve the live Q admission mutex and its five long-lived slots.
+        for name in ['gpu-0.lock', *[f'gpu-0-slot-{slot}.lock' for slot in range(3,8)]]:
+            stream = (root/name).open('rb'); r.fcntl.flock(stream, r.fcntl.LOCK_EX|r.fcntl.LOCK_NB); held.append(stream)
+        entered = []; maximum = [0]; active = [0]; guard = threading.Lock()
+        def work(i):
+            with r.admission(policy, 0, f'M:science:{i}', probe=lambda *_: True,
+                    foreign=lambda _: [1]*4, sleep=lambda _: time.sleep(.005)):
+                with guard:
+                    active[0] += 1; maximum[0] = max(maximum[0],active[0]); entered.append(i)
+                time.sleep(.05)
+                with guard:active[0] -= 1
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=3) as pool:list(pool.map(work, range(3)))
+        assert maximum[0] == 2 and sorted(entered) == [0,1,2]
+        assert r.read(root/'gpu-0-last-start.json') == dict(time=0, pid=1234)
+        assert r.read(own/'gpu-0-last-start.json')['identity'].startswith('M:science:')
+    finally:
+        for stream in held:stream.close()
+
+
+def test_single_writer_journal_serializes_threads_without_remote_flock(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    monkeypatch.setattr(r.fcntl, 'flock', lambda *_: pytest.fail('no remote journal flock'))
+    policy = dict(admission_root=str(tmp_path), single_writer_event_journal=True)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda i:r.event(policy, 'probe', index=i), range(40)))
+    rows = [json.loads(line) for line in next(tmp_path.glob('events-*.jsonl')).read_text().splitlines()]
+    assert sorted(row['index'] for row in rows) == list(range(40))
