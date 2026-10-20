@@ -80,6 +80,55 @@ AUC 均值都未超过 latent，env 下降 13.6 点；direct canonical 也下降
 `critic-invariance.json` 及 `figures/figure-receipt.json`。这仍是两开发任务、四 seed 的
 结果；官方 RLPD、FQL、GAC 和 fresh-seed/held-out 确认尚不能用这些数值替代。
 
+### Actor 参数链中的径向响应（2026-10-20）
+
+独立的事后探索性诊断已完成 56/56 个最终 checkpoint：七种 adapter、两个任务、
+seeds 10–13。实际 supervisor 退出 0，每项独立进程均退出 0；旧训练源码、checkpoint、
+config、flags 和固定状态面板的身份均通过核对。每项在旧的 128 个 validation-prior
+观测上使用固定噪声 key=20261023、每状态一次策略采样，共 7,168 个状态–采样项；
+没有低于方向范数下限的项。未新增环境步、优化器更新或 GPU 占用。
+
+令 $v$ 为样本平均 Q 对策略动作的径向 cotangent，$J$ 为策略采样对全部 actor 参数的
+Jacobian。直接动作响应 $Dg\,v$ 在全部 24 个 latent checkpoint 中最大为
+`5.11e-10`，但拉回参数再前推的响应 $Dg\,J J^\top v$ 在每个 latent checkpoint
+均非零，RMS 范围为 1.31447–38.73597。env/canonical 的径向参数梯度接近浮点零，
+对应响应最大分别为 `5.03e-7` / `4.18e-7`。因此，执行层的径向冗余没有使训练后
+latent actor 的该参数梯度分量自动成为执行动作的零方向。
+
+下表保留全部 14 组，每格为四个 seed 的均值。参数响应为五维执行动作导数的 RMS，
+定义为 $\sqrt{\operatorname{mean}_s\|\delta a_s\|_2^2}$；它不是实际更新后的动作或成功率。
+数值依赖参数化、Q 尺度及固定面板，不能将两类响应相除称为放大倍数或浪费比例。
+
+| 方法 | Triple 径向参数梯度范数 | Triple 参数响应 RMS | Double 径向参数梯度范数 | Double 参数响应 RMS |
+|---|---:|---:|---:|---:|
+| Legacy latent | 1.02269 | 3.96048 | 0.832248 | 3.76959 |
+| Legacy env | 4.87539e-8 | 2.95547e-7 | 2.26336e-8 | 7.92018e-8 |
+| Legacy canonical | 9.94001e-8 | 3.04170e-7 | 1.78311e-8 | 6.35326e-8 |
+| Direct latent | 1.03486 | 3.20746 | 0.742016 | 1.87040 |
+| Direct env | 2.58411e-8 | 8.62974e-8 | 1.88748e-8 | 4.48186e-8 |
+| Direct canonical | 1.78737e-8 | 7.99509e-8 | 1.22802e-8 | 3.81467e-8 |
+| Legacy common entropy | 1.09524 | 12.6602 | 0.805548 | 2.63946 |
+
+Legacy common entropy 的 Triple 参数响应四 seed 范围为 3.20943–38.73597，保留了高值，
+不把较高均值解释为更好策略。全部 24 个 latent 的单位参数方向响应有定义；全部
+32 个 env/canonical 的径向梯度低于事先固定的数值阈值，其单位方向响应保持“不定义”，
+没有补零或改用部分 seed 均值。逐 seed 数值与各组 min/max 均保存在完整报告。
+
+同一批次另外计算熵梯度和归档完整 actor loss 梯度，验证完整梯度等于“熵项减 Q 项”；
+重建误差范数在全部 56 项中最大为 `5.29e-7`，径向/剩余参数分解误差最大为 `5.12e-7`。
+原版 Triple 的平均 Q 参数梯度、熵梯度、完整 actor loss 梯度范数分别为
+1.80892、1.40639、1.41404；分量会相消，不能由范数推出更新贡献百分比。
+
+该结果将解析反例补充到真实训练网络，但不证明这些 Q 导数正确、对学习有益，或解释
+AUC 差。它是在首轮成绩已知后固定的局部导数次分析，只有一个固定状态/噪声面板，
+没有执行 Adam 步。候选性能检验仍是独立训练中的 actor-Q 径向 cotangent 干预，
+不能由 env/canonical 接口对照代替，也尚未实现或登记为新的训练队列。
+
+数据盘同目录的 `posthoc-actor-radial-response.json`、`posthoc-actor-radial-summary.json`
+及同名 Markdown 保存全部原始派生量和汇总；`actor-radial-evidence-binding.json`
+绑定计划、工具、输入与真实退出回执。旧 `critic-invariance.json` 和主筛选报告 SHA 未变。
+15 项云端冻结源码检查和 8 项汇总检查通过，详见[执行计划](experiments.md#actor-参数链的事后局部导数诊断2026-10-20)。
+
 ### 首轮全部运行的共同 warmup 命令核对
 
 在首轮成绩解封后，另外固定动作完整性核对计划，只读取 72 个已完成运行各自的前

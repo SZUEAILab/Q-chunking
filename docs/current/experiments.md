@@ -25,6 +25,12 @@ FQL 四个监控进程均已恢复。现场证据在该目录的 `formal-live-ve
 对应记录为原批次 `platform-observation-isolation-20261020/verification.json`，历史 owner
 进程与失败证据保持不变；该操作修订不改变训练发布包。
 
+2026-10-20 10:19（北京时间）的只读技术核验确认：native RLPD 已完成 4/16（Triple
+UTD=1 的全部四个 seed，真实退出均为 0），Triple UTD=20 的四个 seed 正在运行，
+调度 supervisor 仍存活；整批终态尚未产生，未读取该批收益/成功率。观察记录为
+`launch-recovery-r2/technical-progress-1792462764.json`。独立 actor 参数链分析已完成
+56/56，详见下方计划与[完整结果](results.md#actor-参数链中的径向响应2026-10-20)。
+
 ## Action-adapter 冻结筛选
 
 批次为 `action_adapter_validation_20261019`，配置、源码摘要、工程尝试与平台记录放在
@@ -91,16 +97,18 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 损失的接口；不把这一诊断用到没有该方向冗余的辅助头对照。
 
 15 项解析反例、等距控制、真实小网络、零 critic 与接口拒绝检查在本地通过；同一测试
-在云端原 84 文件冻结源码上实际退出 0。56 项只读分析已在原实例启动，一次一个 worker，
+在云端原 84 文件冻结源码上实际退出 0。56/56 项只读分析已在原实例完成，每项真实退出 0，
+supervisor 的真实退出 0 也已由 owner 观察；没有失败或科学重试。一次一个 worker，
 限定两个 CPU 核，backend=CPU；不新增环境步、优化器更新或 GPU 占用。仅传约 35 KB
 压缩诊断包，checkpoint 不传出挂载。每项保留独立进程真实退出和失败，不自动重跑或
-替换 seed；owner 实际等待 supervisor 退出后才写终态。独立本地收集进程已启用。
+替换 seed；owner 实际等待 supervisor 退出后才写终态。独立本地收集进程已核验完整终态。
+8 项汇总检查通过，全部 14 个四-seed 组均保留；单位响应未定义时不补零或计算部分均值。
 
 完整计划、输入 checkpoint/config/flags/面板 SHA 与工具版本在数据盘
 `control/posthoc_actor_radial_response_20261020/plan.json`、`deployment-binding.json`；实际
 云端入口与收集进程在 `remote-started.json`、`watch-process.json`。终态输出为
 `reports/action_adapter_validation_20261019/posthoc-actor-radial-response.json`，与原
-`critic-invariance.json` 分开。该计划在首轮成绩解封后固定，只提供有限状态/噪声上的
+`critic-invariance.json` 分开；完整数值见[参数链响应结果](results.md#actor-参数链中的径向响应2026-10-20)。该计划在首轮成绩解封后固定，只提供有限状态/噪声上的
 探索性局部导数，不是实际优化器步、学习改进或任务因果证据；现有训练和接续门槛不变。
 
 ### 终态配对比较的完整汇总
