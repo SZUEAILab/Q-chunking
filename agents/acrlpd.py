@@ -14,6 +14,7 @@ from direction_speed import DirectionSpeedAdapter
 from direction_speed.adapter import AUXILIARY_EXECUTION_MAPS, validate_auxiliary_control
 from direction_speed.postprocessors import L2BallProjectionPostprocessor
 from direction_speed.distributions import assemble_action_pipeline
+from direction_speed.actor_q_gradient import remove_direction_radial_q_gradient, validate_actor_q_gradient
 
 
 from functools import partial
@@ -279,7 +280,12 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
 
         dist = self.network.select("actor")(batch["observations"], params=grad_params)
         action_pi = dist.sample(seed=rng)
-        critic_action_pi = self._critic_action(action_pi)
+        # Keep the original action for entropy/BC/execution. This identity-forward
+        # intervention changes only the actor's sampled-Q derivative.
+        q_action_pi = action_pi
+        if self.config.get("adapter_actor_q_gradient", "full") == "remove_direction_radial":
+            q_action_pi = remove_direction_radial_q_gradient(q_action_pi)
+        critic_action_pi = self._critic_action(q_action_pi)
 
         # Actor loss.
         qs = self.network.select("critic")(batch["observations"], critic_action_pi)
@@ -598,6 +604,9 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
         critic_action_dim = config.get("critic_action_dim", observed_action_dim)
         config["action_dim"] = action_dim
         config["critic_action_dim"] = critic_action_dim
+        validate_actor_q_gradient(config)
+        if config.get("adapter_actor_q_gradient", "full") == "remove_direction_radial" and observed_action_dim != 6:
+            raise ValueError("Actor-Q radial intervention requires six-dimensional replay actions")
         if config["action_chunking"]:
             full_policy_dim = action_dim * config["horizon_length"]
             full_critic_actions = jnp.zeros(
@@ -741,6 +750,7 @@ def get_config():
             adapter_speed_squash="tanh",
             adapter_speed_interpretation="log",
             adapter_critic_space="latent",
+            adapter_actor_q_gradient="full",
             ds_regularizer="auto",
             ds_separate_alpha=False,
             ds_phase_regularization="none",
