@@ -168,6 +168,28 @@ def test_credentials_are_removed_and_proof_matches_frozen_verifier_contract(flow
     assert gac_runtime.verify_image(proof, spec, dict(prefix=c.spec['prefix']), dict(finished=100.))['status'] == 'image_verified'
 
 
+def test_actual_page_schema_null_source_fields_are_joined_to_strict_detail(flow,monkeypatch):
+    c, remote, platform, _ = flow
+    original=platform.images
+    def actual_pages(request,usable=False):
+        rows=original(request,usable=usable)
+        for row in rows:row.update(jobId=None,uploadType=None)
+        return rows
+    platform.images=actual_pages
+    c.tick();platform.records[0]['status']=2;platform.usable=True
+    assert c.tick()['stage']=='image_proof_published'
+    proof=owner.read(c.root/'image-ready.json')
+    assert proof['detail']['jobId']==c.spec['job_id'] and proof['detail']['uploadType']==4
+    assert proof['usable_record']['jobId'] is None and proof['usable_record']['uploadType'] is None
+    spec=dict(job_id=c.spec['job_id'],team_id=c.spec['team_id'],cluster_id=c.spec['cluster_id'],
+              environment_ready='ready',image_receipt='proof')
+    monkeypatch.setattr(gac_runtime,'digest',lambda path:'d'*64 if path=='ready' else 'proof-sha')
+    assert gac_runtime.verify_image(proof,spec,dict(prefix=c.spec['prefix']),dict(finished=100.))['status']=='image_verified'
+    # A list cannot compensate for missing source identity in the detail API.
+    detail=dict(proof['detail'],jobId=None)
+    with pytest.raises(ValueError):owner.verify_record(detail,proof['save_request'],usable=True)
+
+
 def test_save_or_launch_response_loss_never_causes_a_second_launch(flow):
     c, remote, platform = make_usable(flow); remote.fail_launch = True
     assert c.tick()['stage'] == 'reconciling_science_launch'

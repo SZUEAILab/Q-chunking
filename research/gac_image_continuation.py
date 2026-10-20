@@ -36,13 +36,20 @@ def safe_image(value):
     return {key: item for key, item in value.items() if key in IMAGE_FIELDS}
 
 
-def verify_record(record, request, *, usable=False):
-    expected = {key: request[key] for key in ('name', 'tag', 'teamId', 'clusterId', 'jobId')}
+def verify_record(record, request, *, usable=False, listing=False):
+    # The actual page API returns null jobId/uploadType, including for usable
+    # images. Require those source fields on detail; join the list by ID and
+    # reference without fabricating source metadata in its stored projection.
+    keys = ('name', 'tag', 'teamId', 'clusterId') if listing else ('name', 'tag', 'teamId', 'clusterId', 'jobId')
+    expected = {key: request[key] for key in keys}
     if any(record.get(key) != value for key, value in expected.items()):
         raise ValueError('Image identity differs from the prepared environment')
     if not isinstance(record.get('id'), str) or not re.fullmatch(r'[A-Za-z0-9_-]+', record['id']):
         raise ValueError('Image ID is absent or malformed')
-    if record.get('uploadType') != 4 or (usable and record.get('status') != 2):
+    if listing and record.get('jobId') not in (None, request['jobId']):
+        raise ValueError('Image list reports a different source job')
+    valid_type = record.get('uploadType') in (None, 4) if listing else record.get('uploadType') == 4
+    if not valid_type or (usable and record.get('status') != 2):
         raise ValueError('Image type or usable state differs')
     if type(record.get('status')) is not int:
         raise ValueError('Image state must be a scalar status code')
@@ -152,7 +159,7 @@ class Continuation:
                 raise ValueError('Multiple images match the single saved version')
             if not matches:
                 return dict(stage='reconciling_image_save')
-            candidate = safe_image(matches[0]); verify_record(candidate, request)
+            candidate = safe_image(matches[0]); verify_record(candidate, request, listing=True)
             response_path = self.root/'save-response.json'
             response_id = read(response_path).get('image_id') if response_path.exists() else None
             if response_id is not None and response_id != candidate['id']:
@@ -168,7 +175,7 @@ class Continuation:
                 return dict(stage='waiting_for_usable_image_list', image_id=detail['id'])
             if len(usable) != 1:
                 raise ValueError('Duplicate image in usable list')
-            verify_record(usable[0], request, usable=True)
+            verify_record(usable[0], request, usable=True, listing=True)
             if any(usable[0][key] != detail[key] for key in ('id', 'name', 'tag', 'path')):
                 raise ValueError('Image detail and usable-list reference differ')
             proof = dict(format='gac-saved-image-v1', status='usable', source_job_id=self.spec['job_id'],
