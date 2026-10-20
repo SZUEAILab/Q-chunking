@@ -1122,9 +1122,9 @@ Cartesian 62.01%，但 success AUC 为 18.13% 对 21.15%，300k 成功率为 52.
 
 ### 10.1 实验设置
 
-当前 action-adapter 筛选使用 OGBench Cube-Triple task2 与 Cube Double task2、四个配对训练 seed、每项 1M 步和每点 50 个评估 episodes，保留真实 step 0。Project ACRLPD 每次更新混合一半固定先验与一半在线 replay；同配方 critic 消融保持 actor、数据、预算与熵目标。另有独立外部 RLPD 配方比较，网络和 UTD 不同，须单列计算量。当前尚无这些长程运行的新性能结果。十个 fresh seed 属于后续确认设计，不得写成首批已完成的重复数；历史原版常用 100 episodes，其指标与评估协议另列。
+本轮 action-adapter 筛选使用 OGBench Cube-Triple task2 与 Cube Double task2、四个配对训练 seed、九种方法、每项 1M 步，保留真实 step 0。72/72 个运行已于 2026-10-20 验收完成，性能和全部配对差见[冻结筛选结果](../current/results.md#冻结筛选的完整结果2026-10-20)。每点评估配置为 50 episodes，但冻结驱动未记录实际返回的 episode 计数，不能称为已独立核验的观测次数。Project ACRLPD 每次更新混合一半固定先验与一半在线 replay；同配方 critic 消融保持 actor、数据、预算与熵目标。独立外部 RLPD 配方的 16 个运行尚未全部完成，网络和 UTD 不同，须单列计算量。十个 fresh seed 属于后续确认设计，不得写成首批已完成的重复数；历史原版常用 100 episodes，其指标与评估协议另列。
 
-我们报告 success-rate AUC、末段成功率和达到预设成功率所需的环境交互数。跨任务结果使用 IQM 和 95% 分层 bootstrap 置信区间，并报告 performance profile 与 probability of improvement。所有超参数、原始 CSV、环境版本和数据哈希将公开。
+本轮报告 success-rate AUC、终点成功率和全部逐 seed 配对差；两个开发任务、四 seed 的结果仅作描述。跨任务确认阶段拟报告 IQM、95% 分层 bootstrap 置信区间、performance profile 与 probability of improvement，统计方案需在 fresh 训练前固定，不能写成本批次已经完成的确认分析。超参数、原始 CSV、环境版本和数据哈希将随可复现产物公开。
 
 ### 10.2 先导结果
 

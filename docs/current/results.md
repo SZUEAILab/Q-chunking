@@ -270,20 +270,20 @@ TrainState=34，checkpoint 与配置哈希未变，没有重跑训练。
 该短程检查只验收恢复、共同噪声采样和分析链路，不提供训练后机制或性能结论。
 
 最终分析计划固定原筛选的 40 个 native/原版 checkpoint，见[次分析设计](experiments.md#训练后策略的固定状态次分析)。
-已有动作几何监控已接续该 CPU 分析，仍等待原训练批次结束；正式 40 个 checkpoint 尚未分析。
+已有动作几何监控已接续该 CPU 分析；原 72 运行已完成，但该分析链仍等待独立 native RLPD 批次验收，正式 40 个 checkpoint 尚未分析。
 工程报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-checkpoint-policy-engineering-v2.json`。
 
-### 完整消融汇总的验收与等待状态
+### 完整消融汇总的工程验收与完成状态
 
 终态配对汇总工具通过 20 项测试，覆盖原主比较家族、共同配置、真实 step 0、曲线指标复算、
 失败与缺失 seed、错误源码/退出码、删失时间、全零结果、输入哈希和拒绝覆盖。
 另用真实冻结的 72 身份配置、分析计划和控制器完成全缺失的合成验收：28 项比较均保留为
 不完整，没有生成部分组均值；六项原主比较身份保留，重复执行被拒绝。
-该合成验收只验证汇总链路，不描述正在运行的 72 条真实实验。
+该合成验收只验证汇总链路，不提供真实训练性能。
 
-独立本地监控已启动，等待首轮上游验收与终态报告；正式消融汇总尚未生成。
+首轮上游验收后，正式 28 项消融汇总已生成且全部完成，完整结果见[本页首节](#冻结筛选的完整结果2026-10-20)。
 计划和验收记录位于数据盘 `control/action_adapter_validation_20261019/screen-comparisons/`
-及 `comparison-contract-engineering/`；最终报告将写到
+及 `comparison-contract-engineering/`；最终报告保存于
 `reports/action_adapter_validation_20261019/posthoc-screen-comparisons.json` 和同名 Markdown。
 
 ### FQL native/posthoc 的数值与真实接线验收
