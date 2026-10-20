@@ -80,6 +80,21 @@ AUC 均值都未超过 latent，env 下降 13.6 点；direct canonical 也下降
 `critic-invariance.json` 及 `figures/figure-receipt.json`。这仍是两开发任务、四 seed 的
 结果；官方 RLPD、FQL、GAC 和 fresh-seed/held-out 确认尚不能用这些数值替代。
 
+### 首轮全部运行的共同 warmup 命令核对
+
+在首轮成绩解封后，另外固定动作完整性核对计划，只读取 72 个已完成运行各自的前
+5,000 行 `env.csv`。源码 `ccab449` 的相应分支使用原始五维 Cartesian uniform 动作，
+不经过策略映射。两个任务 × 四训练 seed 的八组中，每组九种方法的五维 float32 动作
+序列 SHA 均一致；总计检查 360,000 条已有日志行，未新增环境步、训练或评估。
+全部身份、flags、驱动源码和上游终态报告也绑定 SHA，未读取本次核对不需要的收益字段。
+
+这支持首轮共同随机 warmup 的动作命令相同，排除用“前 5,000 步执行了不同映射”解释
+方法差异。动作日志不证明完整模拟器状态相同，也不匹配 5,000 步后策略的执行分布；
+因此仍不能排除初始策略行为对后续学习的影响。这个检查是成绩已知后的完整性次分析，
+不升级为预注册机制效应。计划与工具在数据盘 `control/posthoc_warmup_audit_20261020/`，
+全部八组、72 个输入身份与前缀哈希见
+`reports/action_adapter_validation_20261019/posthoc-warmup-prefix.json`。
+
 ## 原版 posthoc 的统一重算（2026-10-19）
 
 从当前固定 HF revision `a16bfe8` 重新读取 200 次 Cube-Triple 原版运行：五任务、H1/H5、

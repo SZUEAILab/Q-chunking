@@ -134,9 +134,19 @@ TrainState=34，step 0/64 各观测到 2 个完整非视频 episode。逐任务�
 与早期 Cartesian auxiliary 一致，前 32 步 warmup 动作逐项相同，后 32 步策略动作均在
 单位球内；prior 原始五维动作仍包含球外样本。四份原始数据 SHA、141 个冻结 Python
 文件和 24 项工程产物已核对并绑定。记录为数据盘
-`control/posthoc_projection_control_20261020/readiness.json`；这只覆盖 CPU 工程，没有该新
-对照的 GPU 或长程性能结果。首次 EGL 导入失败及 warmup 范围误判的验收失败均保留；
-修订 validator 后重新读取同一 Triple checkpoint，再首次运行 Double，没有重跑训练。
+`control/posthoc_projection_control_20261020/readiness.json`；该记录只覆盖 CPU 工程。
+首次 EGL 导入失败及 warmup 范围误判的验收失败均保留；修订 validator 后重新读取同一
+Triple checkpoint，再首次运行 Double，没有重跑训练。
+
+相同冻结训练源 `311d7af` 又在本机 GPU 0（RTX 6000 Ada）完成单任务 Cube Double 的
+三组映射短测：direction-speed、Cartesian auxiliary、projection auxiliary 各 64 步。
+GPU 上 90 项相关检查及 3 个 subtest 通过；三个真实驱动、三个独立恢复验证和测试进程
+均观察到退出 0。每组 33 次更新、TrainState=34、step 0/64 各实际 2 个非视频 episode。
+三组可序列化参数/优化器/RNG 初始化与前 32 步 warmup 命令哈希一致；它们的映射配置、
+物理模拟器状态和初始执行分布不能据此称为相同。源文件 141 项未变，证据绑定 37 个
+工程产物。本次只使用本机 GPU 0，不占用云端队列；记录在数据盘
+`control/posthoc_projection_gpu_local_20261020/readiness.json` 和 `evidence-binding.json`。
+新增六维投影对照尚无 4090 验收或长程性能结果，正式科学矩阵仍未冻结。
 
 ### 执行映射因果对照的实现准备
 

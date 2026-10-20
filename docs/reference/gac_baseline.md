@@ -57,7 +57,23 @@ Gaussian 噪声下，核对旧移植的采样值、方向/浓度梯度、浓度�
 
 报告为数据盘 `reports/action_adapter_validation_20261019/gac-reference-audit.json`；
 可复核脚本及初次失败记录位于 `control/action_adapter_validation_20261019/`。
-官方 PDF 下载未完成，部分文件不用于证据；本次数值审查以固定官方代码为依据。
+此前官方 PDF 下载未完成，部分文件未用于上述审查；该次数值结果仍以固定官方代码
+为依据。2026-10-20 已获取完整 PDF 并核对相关方法页，范围见下节。
+
+## 论文公式与发布代码的核对（2026-10-20）
+
+完整[正式论文 PDF](https://proceedings.iclr.cc/paper_files/paper/2026/file/e58fa42d4b7a798eef8d0d75098f87ad-Paper-Conference.pdf)
+的 §3.2–3.5、物理第 5–7 页已提取并目视核对。Eq.(2) 在混合后重新归一化，权重为
+`sigmoid(kappa)`；固定发布代码没有最后归一化，且权重为
+`sigmoid(0.5*min(kappa,20))`。论文 Eq.(6) 另有自适应逐坐标幅值扩展。
+
+对固定正交单位方向/噪声、kappa=2、radius=1 的纯 CPU 输入，实际官方采样函数在
+float32/64 均给出约 0.778958 的范数，按论文 Eq.(2) 计算为 1。这是公式/代码边界核对，
+没有创建 actor、环境或训练，不提供任务性能证据。报告在数据盘
+`control/posthoc_literature_audit_20261020/gac-paper-code-boundary.json`；PDF 和五页视觉
+核对的 SHA 记录在同目录 `sources.json`、`method-page-review.json`。
+当前冻结 32 运行明确检验完整 released-code 配方；论文公式及幅值扩展的性能仍未验证。
+原矩阵保持冻结，旧 GAC-paper 标签也不因此升级为完整论文学习器复现。
 
 ## 独立官方配方学习器（2026-10-19）
 
