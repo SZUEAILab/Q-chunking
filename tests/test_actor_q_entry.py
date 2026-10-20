@@ -1,6 +1,8 @@
 import hashlib
 from pathlib import Path
 from types import SimpleNamespace
+import os
+import sys
 
 import flax.serialization
 import jax
@@ -41,3 +43,18 @@ def test_source_binding_requires_all_registered_files_and_safe_paths(tmp_path):
     assert entry.verify_source(root,binding)['source_commit']==SOURCE
     (root/'file2.py').write_text('changed')
     with pytest.raises(ValueError,match='learner changed'):entry.verify_source(root,binding)
+
+
+def test_wrapper_restores_constructor_argv_and_working_directory_after_driver_error(tmp_path,monkeypatch):
+    import agents.acrlpd as learner
+    source=Path(learner.__file__).resolve().parents[1]
+    case=tmp_path/'case.json';write_once(case,dict(index=0,seed=29,method='full',argv=['python','main_online.py','--seed=29']))
+    old=learner.ACRLPDAgent.__dict__['create'];argv=sys.argv;before=Path.cwd()
+    monkeypatch.setattr(entry,'verify_source',lambda *_:None)
+    def driver(path,run_name):
+        assert Path.cwd()==source and sys.argv==[str(source/'main_online.py'),'--seed=29']
+        raise RuntimeError('Preserved driver error')
+    monkeypatch.setattr(entry.runpy,'run_path',driver)
+    with pytest.raises(RuntimeError,match='Preserved driver error'):
+        entry.run(case,source,tmp_path/'binding',tmp_path/'initial.json','4090')
+    assert learner.ACRLPDAgent.__dict__['create'] is old and sys.argv is argv and Path.cwd()==before

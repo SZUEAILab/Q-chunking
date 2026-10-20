@@ -1,6 +1,7 @@
 """Observe the frozen driver's actual initialization without changing its state."""
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import runpy
 import sys
@@ -56,13 +57,14 @@ def run(case_path, source, binding, output, expected_device):
     import agents.acrlpd as module
     if Path(module.__file__).resolve() != source/'agents/acrlpd.py':
         raise ValueError('Learner imported outside the frozen release')
-    descriptor = ACRLPDAgent.__dict__['create']; previous = sys.argv
+    descriptor = ACRLPDAgent.__dict__['create']; previous = sys.argv; previous_directory = Path.cwd()
     ACRLPDAgent.create = classmethod(observe_creation(descriptor.__func__, case, output, binding, expected_device=expected_device))
     sys.argv = [str(source/'main_online.py'), *case['argv'][2:]]
+    os.chdir(source)
     try:
         runpy.run_path(str(source/'main_online.py'), run_name='__main__')
     finally:
-        ACRLPDAgent.create = descriptor; sys.argv = previous
+        ACRLPDAgent.create = descriptor; sys.argv = previous; os.chdir(previous_directory)
 
 
 def main():
