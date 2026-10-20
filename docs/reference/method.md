@@ -1176,6 +1176,26 @@ float64 自动微分与 $10^{-7}$ 步长的有限差分核对通过；动作处�
 误差尺度。它支持该局部路径在真实网络中存在，不证明收益贡献，完整逐组数值和限制见
 [参数链结果](../current/results.md#actor-参数链中的径向响应2026-10-20)。旧 critic 报告保持不变。
 
+**仅干预 actor-Q 反向路径。** `db861f3` 新增
+[`adapter_actor_q_gradient`](../../direction_speed/actor_q_gradient.py)，默认 `full`。
+设 $h=u/\|u\|$，`remove_direction_radial` 对 actor 查询 Q 的动作使用恒等前向，
+但将方向三维的反向 cotangent 改成 $(I-hh^\top)\nabla_u Q$；幅值和其他两维保持原梯度。
+方向范数不超过执行层的 $10^{-6}$ 下限时保留完整梯度，避免将非径向等价分支错误投影。
+实现通过对称的自定义 JVP/VJP 规则，只包住 actor 的 sampled-Q 输入，不包住熵、
+执行采样、critic replay loss 或 target 查询。它是显式 surrogate 梯度实验，
+不是恒等前向或日志 loss 数值的普通导数，也不主张恢复无偏策略梯度。
+
+在共同参数、batch 和噪声下，前向动作、Q、正则和 loss 数值相同；参数梯度满足
+$\nabla_\theta L_{\rm cut}-\nabla_\theta L_{\rm full}=J^\top v$。
+独立数值核对覆盖两种速度配方，一次真实 Adam 更新确认仅 actor 参数及其优化器
+矩发生差异，critic、target critic、温度参数及相应优化器矩相同。
+这只是共同起点的路径隔离；后续策略、采集数据、critic 和温度可因干预的后果而分化，
+不能宣称完整训练轨迹中这些量始终相同。省略配置键与显式 `full` 的更新逐元素一致。
+当前入口限 H1、六维 Cartesian adapter、五维执行动作、latent critic、普通无 BC SAC，
+不支持 env/canonical、辅助头映射或额外阶段/矩控制。两条件本地 GPU driver 短测
+已通过，后续 40 运行计划已冻结但尚未启动，仍需 4090 工程及控制器验收，
+范围见[执行记录](../current/experiments.md#actor-q-径向梯度干预的实现准备2026-10-20)。
+
 **潜坐标熵。** D+1 策略增加一个方向模长自由度；在常规分支放缩 `u` 不改变执行动作，
 却可能改变 latent log-prob。H1 的默认熵目标也从 baseline 的 −2.5 变成 −3，H5 则为
 −12.5/−15。因而潜动作熵和实际行为探索不能等同，已有

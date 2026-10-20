@@ -122,7 +122,8 @@ Legacy common entropy 的 Triple 参数响应四 seed 范围为 3.20943–38.735
 该结果将解析反例补充到真实训练网络，但不证明这些 Q 导数正确、对学习有益，或解释
 AUC 差。它是在首轮成绩已知后固定的局部导数次分析，只有一个固定状态/噪声面板，
 没有执行 Adam 步。候选性能检验仍是独立训练中的 actor-Q 径向 cotangent 干预，
-不能由 env/canonical 接口对照代替，也尚未实现或登记为新的训练队列。
+不能由 env/canonical 接口对照代替。该干预现已实现并通过本地 GPU 工程验收，
+40 运行的独立训练计划已冻结、尚未启动，见[实现与方案](experiments.md#actor-q-径向梯度干预的实现准备2026-10-20)。
 
 数据盘同目录的 `posthoc-actor-radial-response.json`、`posthoc-actor-radial-summary.json`
 及同名 Markdown 保存全部原始派生量和汇总；`actor-radial-evidence-binding.json`

@@ -111,6 +111,58 @@ supervisor 的真实退出 0 也已由 owner 观察；没有失败或科学重�
 `critic-invariance.json` 分开；完整数值见[参数链响应结果](results.md#actor-参数链中的径向响应2026-10-20)。该计划在首轮成绩解封后固定，只提供有限状态/噪声上的
 探索性局部导数，不是实际优化器步、学习改进或任务因果证据；现有训练和接续门槛不变。
 
+### Actor-Q 径向梯度干预的实现准备（2026-10-20）
+
+源码 `db861f3` 新增 `--agent.adapter_actor_q_gradient=remove_direction_radial`，默认 `full`。
+它保持 actor-Q 查询的前向动作逐元素相同，仅对三维方向的反向 cotangent 去掉径向分量。
+幅值和其他控制量的 Q 梯度、原潜坐标熵、critic replay loss 与 target 查询均保留。
+方向范数不超过 `1e-6` 的分支保持完整梯度。这是显式 surrogate 梯度干预，不是
+日志 loss 数值的普通导数；共同起点的隔离也不保证后续采集数据或 critic 相同。
+
+84 项 CPU 梯度与相关回归检查通过。独立 VJP 参考核对 tanh/log 与 sigmoid/direct 的
+actor 参数梯度差；检查前向动作、Q、loss 相同，实际 Adam 一次更新只有 actor 参数及
+其优化器矩发生差异，其他模块和 RNG 相同；省略新配置键与显式 full 的更新完全一致。
+不支持的 critic/映射/维度、AWR/BC/阶段或矩控制被拒绝，避免混入其他干预。
+
+已固定 153 个 Python 文件在数据盘 `control/posthoc_actor_q_gradient_gpu_local_20261020/source`，
+本地 RTX 6000 Ada GPU 0 已完成两条件短测：Cube Double task2、工程 seed9820、各
+64 环境步、32 步共同 uniform warmup、512×4、10-Q、每点实际 2 个评估 episodes。
+只允许 CUDA device0、关闭预分配；不占用其他本地 GPU 或现有 4090 正式实验资源。
+每个训练和独立恢复进程记录真实退出，不自动重跑。该验收不是 4090 或长程性能证据，
+两项实际训练、两项独立恢复和一项 GPU 测试进程均真实退出 0；GPU 上 20 项检查通过。
+每条件实际 33 次联合更新、TrainState=34；恢复后参数与优化器状态有限，保存的 flags
+可以重建相同干预配置。两组可序列化参数/优化器/RNG 初始化 SHA 一致，前 32 个原始
+warmup 动作 SHA 一致；这不认证完整模拟器状态一致。两个有效配置只差
+`adapter_actor_q_gradient`；GPU 短测全部在本地完成。
+`readiness.json` 和 `evidence-binding.json` 绑定 37 个输入、输出和真实退出记录；
+原 56 项只读诊断的全部 18 个绑定文件也重新核验未变。现有各队列的技术门槛不变。
+
+工程验收后，另在数据盘 `control/posthoc_actor_q_ablation_20261020/plan.json` 固定
+40 个机制训练身份：上述 legacy tanh/log 配方的 full/cut、Triple/Double task2、
+seeds 20270–20279、每运行 1M、H1/UTD1、原潜坐标 target entropy=-3、50/50 prior/online。
+两组同时重跑，不与旧成绩拼接；10 个新 seed 在当时可用的 356 个本地和 800 个远端
+flags 中均未出现。此检查只认证现存记录，两个任务仍是已使用的开发任务，不是 held-out。
+计划 SHA 为 `0116e96c8ee634fd3567aab2caf59a22d2029f29e4a0ee336a6a7947e9ed737c`。
+
+预先固定两个任务各自的 cut−full success AUC 主比较，网格为真实 0–1M/100k，
+逐 seed 配对。每任务十对全部完整才汇总；报告全部差、均值、中位数和正/零/负数，
+20,000 次 paired bootstrap（seed20261025）的 97.5% 区间仅作有限 seed 的描述，
+两任务的名义 family coverage 使用 Bonferroni 约定，bootstrap 覆盖率仍是近似，
+不据此宣称精确检验或统计等效。终点、末三点与右删失 time-to-50% 是次指标。
+保留失败、不自动重跑/换 seed/覆盖；40 个运行全部终态后才读取成绩，不设性能启动门槛。
+
+该计划当前为 **frozen / not armed**：没有启动新科学训练。复用同一四卡 job，
+每卡最多一个新科学运行，仍需四卡 4090 上两任务/两条件短测及独立恢复、一次性
+控制器验收和现有科学队列结束后的空闲槽位；不改现有队列顺序，不另建实例。
+技术要求和全部 40 条 argv 已写入固定计划，后续部署/控制器另外版本化，不能改写计划。
+
+冻结源码和方案随后以 306,111 字节压缩包暂存到同一云端实例，release 为
+`/workspace/releases/posthoc-actor-q-ablation-db861f3c1217`。只有 153 个 Python 文件及方案/
+身份记录，没有传输数据集或 checkpoint。限定 CPU140/141、禁用 CUDA 的 20 项检查
+实际通过，子进程退出 0、源码哈希未变；该测试包括微型 Adam 核对，不是正式科学训练。
+记录为该新批次 `cloud-cpu-tests-receipt.json`，四类真实入口的 `--only_check_args`
+参数检查也已退出 0。40 个正式运行依然未启动，没有安装自动启动控制器。
+
 ### 终态配对比较的完整汇总
 
 [`research.posthoc_screen_comparisons`](../../research/posthoc_screen_comparisons.py) 在原批次
