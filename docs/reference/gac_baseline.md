@@ -366,13 +366,32 @@ FQL 沿用冻结的 16 运行技术门槛；云端工程另核对八类身份、
 环境目录均不存在，35 个科学文件 SHA 不变。证据为控制目录下的
 `scientific-controller-package.json`、`scientific-controller-cloud-receipt.json`。
 
-当前云端启动/终态工具已暂存，尚未启用。另有只负责环境准备的远端 owner 已启用，
+云端启动/终态工具已暂存，现由新增本地接续 owner 等待门槛后调用。另有只负责环境准备的远端 owner 已启用，
 真实 PID/命令/源码哈希和 `waiting_for_fql` 已核验；目标环境、环境控制与科学输出均未创建。
 该批次工具在本地、云端各通过七项检查，覆盖上游未完成、占用 GPU、已有环境/intent、
 非零退出和工程回执不完整；它只调用已冻结的环境入口，实际等待退出，不重试失败准备。
 证据为 `environment-owner-binding.json`、`environment-owner-cloud-receipt.json`、
-`environment-owner-live-verification.json`。镜像保存和科学启动接续仍待执行；
-新 CUDA 环境、GAC 镜像和 32 次百万步科学训练均未完成。
+`environment-owner-live-verification.json`。镜像保存和科学启动的本地接续已启用并验证
+等待 FQL；新 CUDA 环境、GAC 镜像和 32 次百万步科学训练均未完成。
+
+### 一次镜像保存和一次科学启动的本地接续
+
+操作源码 `d4c42c5` 及列表字段适配 `0bc033b` 在原 frozen 环境/科学控制器之外增加本地 owner，依次观察上游、
+云端八分支工程和 GPU 空闲，取得可用镜像后调用原科学 launch。其本机源和规格独立
+绑定，当前进程存活并停在 `waiting_for_fql`，没有提前创建环境、镜像或科学输出。
+[详细状态与边界](../current/experiments.md#gac-镜像与正式启动的持续接续2026-10-20)记录了真实预检和启动证据。
+
+镜像名称/版本绑定该次完整 engineering-ready 的 SHA；先登记唯一 intent，再提交一次
+保存请求。响应不明时只查询和对账，候选重复或来源不符时保留现场。只有详情和可用
+列表均为 status=2、来源 job/team/cluster 与环境吻合，才输出原 frozen controller 接受
+的 credential-free proof。真实列表未提供的 `jobId/uploadType` 保持为空，严格来源核验
+使用详情，不补造列表字段。科学 launch 也先登记 intent，未知响应只观察实际启动回执；
+失败不自动重跑。终态收集要求全部 32 运行、24 比较及观察到的 scheduler 退出。
+
+61 项接续检查及原 142 项回归通过，包括响应丢失、进程消失、源码/规格改变、旧镜像、
+不可用镜像、凭据剔除和禁止重复保存/启动；真实只读接口与云端 verifier 也已核验。
+证据在数据盘 `control/gac_image_continuation_20261020/arming-verification.json`。
+这不升级真实 GPU 工程、镜像保存或 GAC 任务表现的证据等级。
 
 ## 动作支持与后续对照
 

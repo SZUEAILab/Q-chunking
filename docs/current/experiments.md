@@ -350,7 +350,7 @@ Cube Double task2、seeds 10–13、两种 radius/执行配方、两种数据协
 
 四个 GPU lane 每个固定一个 seed、串行八个条件；XOR offsets 0/3/5/6 使每个队列位置的
 任务、数据协议、半径各 2/2，任意因素对覆盖全部四种组合。配置与调度表已生成并核验。
-独立云端启动控制器已生成并完成逻辑验收，当前未启用：等待既有 FQL 及上游技术终态，再复用当前四卡实例；完整离线
+独立云端启动控制器已生成并完成逻辑验收，新增本地接续 owner 已启用：等待既有 FQL 及上游技术终态，再复用当前四卡实例；完整离线
 依赖、云端四卡预验收、真实短测与独立核验、新镜像保存可用均为启动前条件，没有成功率
 方向门槛。数据与完整配置、24 项对照、来源和冻结哈希位于数据盘
 `control/gac_reference_comparison_20261019/`。该批次不替代 fresh-seed、held-out 或跨域确认。
@@ -368,7 +368,7 @@ Cube Double task2、seeds 10–13、两种 radius/执行配方、两种数据协
 镜像，owner 实际等待 supervisor 退出后才写终态。环境准备已有独立远端接续进程，
 实际 PID 与脚本哈希已核验，当前等待 FQL 完整终态及四卡空闲。它只提交一次环境准备，
 观察子进程退出后核对八类工程回执；失败保留原 attempt，不保存镜像或启动科学矩阵。
-镜像保存与科学启动的接续仍待执行。
+镜像保存与科学启动的本地接续现已启用，当前停在 waiting-for-FQL 门槛；实际镜像和科学训练仍未开始。
 62 项核心测试及本地真实 64 步 CUDA 工程通过，云端只验证了
 纯逻辑/模拟进程测试与全缺失汇总，范围见[工具验收](../reference/gac_baseline.md#四卡执行核心与完整配对汇总)。
 已有科学配置、32 个身份和当前队列保持冻结；正式 GAC 训练尚未启动。
@@ -377,6 +377,34 @@ Cube Double task2、seeds 10–13、两种 radius/执行配方、两种数据协
 `waiting_for_fql`，launch 入口按预期拒绝提前启动，科学输出及环境路径在检查前后均不存在。
 这些是门槛/逻辑证据，不代表 CUDA 安装、镜像已保存或科学实验已启动，详见
 [完整控制器范围](../reference/gac_baseline.md#完整云端启动与终态门槛)。
+
+### GAC 镜像与正式启动的持续接续（2026-10-20）
+
+源码 `d4c42c5`（实际列表字段适配 `0bc033b`）增加[接续逻辑](../../research/gac_image_continuation.py)、
+[本机 API/SSH 适配](../../research/gac_continuation_transport.py)及
+[本地 owner](../../research/gac_continuation_owner.py)。它使用已暂存的 frozen GAC controller，
+不修改训练、验证或科学矩阵。源绑定发布包已在本机独立目录启动；真实 PID/命令已核验，
+状态为 `waiting_for_fql`。已有远端环境 owner 继续负责一次环境准备，两个进程职责分开。
+
+接续顺序为 FQL 完整技术终态 → 云端八类 CUDA 工程全部验收 → GPU 空闲 → 保存镜像
+并同时核对详情及可用列表 → frozen controller 再验收所有门槛 → 首次启动 32 个科学运行。
+每次等待均核验依赖 owner 的实际进程；本地规格、代码和前端证据持续核对 SHA。
+API 使用前重新取得当前控制台主入口和三份已检查的前端源码，构建变化时留待检查；
+只读接口允许有界观察重试，保存镜像只提交一次。提交结果不明时仅查询该唯一版本，
+不重复 POST；科学启动结果不明时只观察原 source-bound started/terminal，不重复启动。
+镜像 proof 仅保留白名单字段，令牌和 SSH 私钥留在本机。真实列表的 `jobId/uploadType`
+为空，来源以详情严格核验，列表按 ID/版本/引用对账并保留原始空值；已用现有可用
+镜像真实验证两种列表。旧等待进程及绑定保存在 `before-list-schema-recovery/`，替换前
+确认没有保存/启动 intent，未改动训练进程。
+
+61 项新增检查及既有 142 项回归通过；来源绑定的实际云端 inspect、原任务 Running/
+团队/集群身份、镜像全状态及可用状态分页均通过真实只读预检。启用前后 35 个科学
+文件 SHA 完全一致，环境目录、镜像回执及 GAC 科学输出均不存在，未申请额外实例。
+本地记录位于数据盘 `control/gac_image_continuation_20261020/`：`owner-binding.json`、
+`owner-process.json`、`preflight.json`、`arming-verification.json`；状态为 `owner-r2/status.json`。
+正式终态后才下载 32 项运行记录及 24 项完整比较，保存到
+`reports/gac_reference_comparison_20261019/`。这项接续的启用不代表新环境、镜像或长程
+结果已经完成，也不表示已在新实例验证拉取；当前只复用原四卡实例。
 
 ## 批次最少登记什么
 

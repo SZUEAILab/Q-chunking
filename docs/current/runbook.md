@@ -126,6 +126,24 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 控制目录中带 synthetic 水印的版式检查图不能当作实验结果。
 需要查旧命令、压力测试和详细设计时见[历史运维记录](../archive/operations.md)。
 
+## GAC 接续观察
+
+本机持续 owner 的绑定、PID 与状态分别位于数据盘
+`control/gac_image_continuation_20261020/owner-binding.json`、`owner-process.json` 和
+`owner-r2/status.json`。查看状态前同时核对实际 `/proc/<pid>/cmdline`；状态文件单独存在
+不能证明进程存活。源绑定的只读检查为：
+
+```bash
+cd /data/chainpray/qc/control/gac_image_continuation_20261020/release-0bc033b312a2
+/home/ym/code/chainpray/qc/.venv/bin/python -m research.gac_continuation_owner inspect --spec continuation-spec.json
+```
+
+它只查询已绑定的远端控制器和 owner，不保存镜像或启动训练。`observation_unavailable`
+表示未取得观察结果，继续检查同一任务/进程；不能据此判断停止或重建实例。
+`needs_attention` 时保留全部 intent、失败记录及源绑定，先定位实际故障。未知提交只对账，
+不删除 intent、重发保存请求或重跑科学命令。环境、可用镜像及正式启动都有独立门槛，
+详见[接续范围](experiments.md#gac-镜像与正式启动的持续接续2026-10-20)。
+
 ## 最小维护检查
 
 ```bash
