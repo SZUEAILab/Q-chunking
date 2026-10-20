@@ -177,7 +177,13 @@ def admission(policy, gpu, identity, *, probe=resource_probe, foreign=foreign_co
         if getattr(_context, 'stop', None) is not None and _context.stop.is_set():
             raise RuntimeError('Unlaunched admission cancelled after infrastructure incident')
         with (root/f'gpu-{gpu}.lock').open(lock_mode) as mutex:
-            fcntl.flock(mutex, fcntl.LOCK_EX)
+            # Never enter a blocking remote flock RPC: the shared backend can
+            # strand its waiter even after other controllers release the file.
+            try:
+                fcntl.flock(mutex, fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError:
+                sleep(1)
+                continue
             state = root/f'gpu-{gpu}-last-start.json'
             last = read(state)['time'] if state.exists() else float('-inf')
             external = max(policy['reserved_external_slots'], foreign(policy)[gpu])

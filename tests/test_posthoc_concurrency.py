@@ -276,3 +276,23 @@ def test_verified_engineering_reconciliation_never_calls_driver(tmp_path, monkey
     else:
         with pytest.raises(ValueError,match='cannot be retried'):module.execute_case(spec,row,root,0,engineering=True)
         assert not calls
+
+
+def test_contended_gpu_mutex_uses_nonblocking_probe_and_recovers(tmp_path, monkeypatch):
+    policy = dict(admission_root=str(tmp_path), gpu_tasks=2, reserved_external_slots=1,
+        stagger_seconds=0, read_only_precreated_lockfiles=True)
+    for name in ['gpu-0.lock', 'gpu-0-slot-1.lock']:
+        (tmp_path/name).touch()
+    real_flock = r.fcntl.flock; attempts = []; sleeps = []
+    def contention_once(stream, flags):
+        if Path(stream.name).name == 'gpu-0.lock':
+            assert flags == r.fcntl.LOCK_EX|r.fcntl.LOCK_NB
+            attempts.append(flags)
+            if len(attempts) == 1:
+                raise BlockingIOError('shared backend busy')
+        return real_flock(stream, flags)
+    monkeypatch.setattr(r.fcntl, 'flock', contention_once)
+    with r.admission(policy, 0, 'M:engineering:1', probe=lambda *_: True,
+            foreign=lambda _: [1]*4, sleep=sleeps.append):
+        assert len(attempts) == 2 and sleeps == [1]
+    assert [json.loads(line)['event'] for line in (tmp_path/'events.jsonl').read_text().splitlines()] == ['admitted', 'released']
