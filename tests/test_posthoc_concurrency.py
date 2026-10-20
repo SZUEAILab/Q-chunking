@@ -139,3 +139,85 @@ def test_cancelled_unlaunched_admission_never_acquires_slot(tmp_path):
                 pytest.fail('must not run')
     finally:
         del r._context.stop
+
+
+def test_reference_shell_receipt_wrapper_and_training_child_are_one_gpu_workload(tmp_path):
+    policy = dict(cohorts={'Q': dict(control='/work/Q'), 'M': dict(control='/work/M')})
+    prefix = '/workspace/releases/posthoc-reference-e20834c88c10/'
+    job = ['--seed=10', '--run_group=reference_double_utd20']
+    cases = [['sh', '-c', 'python '+prefix+'posthoc_entry.py '+' '.join(job)],
+        ['python', prefix+'posthoc_entry.py', *job],
+        ['python', prefix+'source/main_rlpd_posthoc_reference.py', *job],
+        ['python', prefix+'posthoc_entry.py', '--seed=11', '--run_group=reference_double_utd20']]
+    for index, argv in enumerate(cases, 100):
+        p = tmp_path/str(index); p.mkdir(); (p/'cmdline').write_bytes(b'\0'.join(a.encode() for a in argv))
+        (p/'environ').write_bytes(b'CUDA_VISIBLE_DEVICES=0')
+    assert r.foreign_counts(policy, tmp_path) == [2, 0, 0, 0]
+
+
+def test_map_fills_only_unused_slots_before_q_terminal(tmp_path):
+    policy = dict(gpu_tasks=8, map_fill_only_unused_slots_until_q_terminal=True,
+        cohorts={'Q': dict(control=str(tmp_path))})
+    assert list(r.slot_indices(policy, 1, 'M:science:0')) == [1, 2]
+    assert list(r.slot_indices(policy, 1, 'Q:science:0')) == list(range(1, 8))
+    r.write_once(tmp_path/'continuation/terminal.json', {'status': 'complete'})
+    assert list(r.slot_indices(policy, 1, 'M:science:0')) == list(range(1, 8))
+
+
+@pytest.fixture
+def map_admission(tmp_path):
+    root = tmp_path/'Q'; qspec = tmp_path/'qspec.json'; r.write_once(qspec, {'plan_sha256': 'plan'})
+    policy = dict(cohorts={'Q': dict(control=str(root), spec=str(qspec), spec_sha256='spec')}, _sha='policy')
+    ready = root/'engineering-gpu-r1/ready.json'
+    r.write_once(ready, dict(status='complete', records=[{'status': 'complete'}]*4))
+    r.write_once(root/'science/launch.json', dict(plan_sha256='plan', spec_sha256='spec', engineering_ready_sha256=r.digest(ready)))
+    return policy, root
+
+
+def test_map_shared_admission_needs_engineering_not_favorable_q_outcomes(map_admission):
+    policy, root = map_admission
+    value = r.map_gate(policy, {}, lambda _: {'stage': 'waiting_for_existing_actor_q_queue'})
+    assert value['stage'] == 'upstream_terminal' and value['performance_threshold'] is None
+    assert value['scope'] == 'shared_independent_cohort_admission_not_Q_science_terminal'
+    assert not (root/'continuation/terminal.json').exists()
+    r.write_once(root/'science/runs/case-000.json', {'status': 'failed'})
+    assert r.map_gate(policy, {}, lambda _: {'stage': 'waiting'})['stage'] == 'waiting_for_primary_technical_incident_review'
+
+
+def test_map_admission_rejects_missing_or_drifted_engineering_proof(map_admission):
+    policy, root = map_admission; path = root/'science/launch.json'; value = r.read(path)
+    value['engineering_ready_sha256'] = 'other'; path.write_text(json.dumps(value))
+    with pytest.raises(ValueError): r.map_gate(policy, {}, lambda _: {'stage': 'waiting'})
+    (root/'engineering-gpu-r1/ready.json').unlink()
+    assert r.map_gate(policy, {}, lambda _: {'stage': 'waiting'})['stage'].startswith('waiting')
+
+
+@pytest.mark.parametrize('engineering_failure', [False, True])
+def test_parallel_map_engineering_is_once_and_failure_cannot_start_science(tmp_path, engineering_failure):
+    from types import SimpleNamespace
+    plan = {'cases': [dict(index=i, task='task', method='full', execution_map='map', seed=i) for i in range(60)]}
+    engineering = [dict(index=i, original_argv=['frozen', str(i)]) for i in range(6)]
+    seen = []; lock = threading.Lock()
+    def execute(spec, row, root, gpu, *, engineering=False):
+        with lock: seen.append((engineering, row['index'], tuple(row.get('original_argv', []))))
+        value = dict(row, gpu=gpu, returncode=0, status='failed' if engineering and engineering_failure and row['index']==0 else 'complete')
+        r.write_once(Path(root)/'runs'/f"case-{row['index']:03d}.json", value)
+        return value
+    spec = dict(control=str(tmp_path/'control'), reports=str(tmp_path/'reports'), _spec_sha256='spec')
+    Path(spec['control']).mkdir()  # Created by the real owner before supervise.
+    module = SimpleNamespace(check=lambda _: plan, gate=lambda _: {'stage': 'upstream_terminal'}, idle_gpus=lambda: True,
+        verify_data=lambda _: {'same': 'data'}, write_once=r.write_once, engineering_cases=lambda _: engineering,
+        execute_case=execute, technical=SimpleNamespace(validate_groups=lambda rows: None),
+        run_lanes=lambda rows, operation: ([operation(row, row['index']%4) for row in rows], []),
+        study=SimpleNamespace(PLAN_SHA='plan', collect=lambda _, rows: {'status': 'complete', 'count': len(rows)}),
+        common=SimpleNamespace(SOURCE='source'))
+    if engineering_failure:
+        with pytest.raises(RuntimeError, match='engineering failed'): r.supervise_map(module, spec)
+        assert not (Path(spec['control'])/'science').exists()
+        assert len(seen) == 6
+    else:
+        assert r.supervise_map(module, spec) == 0
+        assert r.read(Path(spec['reports'])/'matched-map-report.json')['count'] == 60
+        assert len(seen) == 66
+    assert sorted(item[1] for item in seen if item[0]) == list(range(6))
+    assert all(item[2] == ('frozen', str(item[1])) for item in seen if item[0])

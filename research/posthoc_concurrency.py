@@ -14,6 +14,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import threading
@@ -70,7 +71,7 @@ def foreign_counts(policy, proc_root=Path('/proc')):
     CUDA-visible processes consume capacity too. CPU observers are excluded.
     """
     managed = tuple(str(Path(c['control']))+'/' for c in policy['cohorts'].values())
-    counts = [0]*4
+    workloads = [set() for _ in range(4)]
     for process in proc_root.iterdir():
         if not process.name.isdigit():
             continue
@@ -86,12 +87,34 @@ def foreign_counts(policy, proc_root=Path('/proc')):
             # A leased engineering GPU validator is part of the same lease.
             if b'validate' in argv and any(a.decode(errors='replace').startswith(managed) for a in argv):
                 continue
+            arguments = [a.decode(errors='replace') for a in argv]
+            if len(arguments) >= 3 and arguments[1] == '-c':
+                arguments = shlex.split(arguments[2])
+            flags = dict(a[2:].split('=', 1) for a in arguments if a.startswith('--') and '=' in a)
+            # The original reference scheduler uses shell -> receipt wrapper ->
+            # training child. These are one GPU job, not three GPU contexts.
+            if (any(a.startswith('/workspace/releases/posthoc-reference-') for a in arguments)
+                    and 'seed' in flags and 'run_group' in flags):
+                identity = ('reference', flags['run_group'], flags['seed'])
+            else:
+                identity = ('pid', process.name)
             for token in visible.split(','):
                 if token.strip() in ('0', '1', '2', '3'):
-                    counts[int(token.strip())] += 1
+                    workloads[int(token.strip())].add(identity)
         except (OSError, ValueError):
             continue
-    return counts
+    return [len(group) for group in workloads]
+
+
+def slot_indices(policy, external, identity):
+    end = policy['gpu_tasks']
+    # Q r1 is already observing real children. Leave its occupied/pending
+    # slots 3..7 untouched; M can fill slots 1..2 without taking those away.
+    if identity.startswith('M:') and policy.get('map_fill_only_unused_slots_until_q_terminal'):
+        control = Path(policy['cohorts']['Q']['control'])
+        if not (control/'continuation/terminal.json').exists():
+            end = 3
+    return range(external, end)
 
 
 def resource_probe(policy, gpu):
@@ -124,7 +147,7 @@ def admission(policy, gpu, identity, *, probe=resource_probe, foreign=foreign_co
             last = read(state)['time'] if state.exists() else float('-inf')
             external = max(policy['reserved_external_slots'], foreign(policy)[gpu])
             if now()-last >= policy['stagger_seconds'] and probe(policy, gpu):
-                for index in range(external, policy['gpu_tasks']):
+                for index in slot_indices(policy, external, identity):
                     candidate = (root/f'gpu-{gpu}-slot-{index}.lock').open('a')
                     try:
                         fcntl.flock(candidate, fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -201,9 +224,73 @@ def primary_gate(policy):
         operational_policy_sha256=policy['_sha'], performance_threshold=None)
 
 
+def map_gate(policy, spec, original_gate):
+    evidence = original_gate(spec)  # Retain bound Q source/spec/owner integrity.
+    if evidence['stage'] == 'upstream_terminal':
+        return evidence
+    root = Path(policy['cohorts']['Q']['control'])
+    ready, launch = root/'engineering-gpu-r1/ready.json', root/'science/launch.json'
+    if not ready.exists() or not launch.exists():
+        return dict(stage='waiting_for_actor_q_engineering_and_admission')
+    eng, science = read(ready), read(launch)
+    if (eng.get('status') != 'complete' or len(eng.get('records', [])) != 4
+            or any(row.get('status') != 'complete' for row in eng['records'])
+            or science.get('plan_sha256') != read(policy['cohorts']['Q']['spec'])['plan_sha256']
+            or science.get('spec_sha256') != policy['cohorts']['Q']['spec_sha256']
+            or science.get('engineering_ready_sha256') != digest(ready)):
+        raise ValueError('Q engineering/science admission evidence differs')
+    for path in (root/'science/runs').glob('*.json'):
+        if read(path).get('status') in ('failed', 'needs_review'):
+            return dict(stage='waiting_for_primary_technical_incident_review')
+    return dict(stage='upstream_terminal', scope='shared_independent_cohort_admission_not_Q_science_terminal',
+        engineering_ready_sha256=digest(ready), science_launch_sha256=digest(launch),
+        operational_policy_sha256=policy['_sha'], performance_threshold=None)
+
+
+def supervise_map(module, spec):
+    """Same six engineering identities/validators, with parallel admission.
+
+    Scientific argv and collect are the original bound controller's. Only the
+    serial engineering loop and resource predecessor are operational changes.
+    """
+    plan = module.check(spec); evidence = module.gate(spec)
+    if evidence['stage'] != 'upstream_terminal' or not module.idle_gpus():
+        raise RuntimeError('Technical/shared-admission prerequisite changed')
+    control = Path(spec['control']); data = module.verify_data(spec)
+    eng = control/'engineering-gpu-r1'; eng.mkdir(exist_ok=False)
+    module.write_once(eng/'launch.json', dict(spec_sha256=spec['_spec_sha256'], gate=evidence, data=data))
+    cases = module.engineering_cases(plan)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        engineering = list(pool.map(lambda row: module.execute_case(spec, row, eng, row['index'] % 4, engineering=True), cases))
+    if any(row['status'] != 'complete' for row in engineering):
+        raise RuntimeError('4090 engineering failed; preserve attempts, no science launch')
+    module.technical.validate_groups([dict(row, driver_returncode=row['returncode']) for row in engineering])
+    if module.verify_data(spec) != data or not module.idle_gpus():
+        raise ValueError('Data/shared admission changed before science')
+    module.write_once(eng/'ready.json', dict(status='complete', spec_sha256=spec['_spec_sha256'],
+        cloud_4090_validation=True, tested_gpu_indices=sorted({row['gpu'] for row in engineering}), records=engineering))
+    science = control/'science'; science.mkdir(exist_ok=False)
+    module.write_once(science/'launch.json', dict(spec_sha256=spec['_spec_sha256'], plan_sha256=module.study.PLAN_SHA,
+        engineering_ready_sha256=digest(eng/'ready.json'), gate=evidence, data=data, started=time.time()))
+    _, errors = module.run_lanes(plan['cases'], lambda row, gpu: module.execute_case(spec, row, science, gpu))
+    records = []
+    for row in plan['cases']:
+        path = science/'runs'/f"case-{row['index']:03d}.json"
+        records.append(read(path) if path.exists() else dict(index=row['index'], task=row['task'], method=row['method'],
+            execution_map=row['execution_map'], seed=row['seed'], source_commit=module.common.SOURCE,
+            status='not_started', returncode=None, driver_exit_observed=False))
+    module.check(spec)
+    if module.verify_data(spec) != data:
+        raise ValueError('Dataset identity/stat changed during science')
+    result = module.study.collect(plan, records)
+    result.update(plan_sha256=module.study.PLAN_SHA, spec_sha256=spec['_spec_sha256'], lane_errors=errors)
+    module.write_once(Path(spec['reports'])/'matched-map-report.json', result)
+    return 0 if result['status'] == 'complete' and not errors else 2
+
+
 def install(policy, kind, module, spec):
     """Apply explicit runtime overrides in memory; imported files remain immutable."""
-    original_check, original_command = module.check, module.command
+    original_check, original_command, original_gate = module.check, module.command, module.gate
     original_environment, original_execute = module.environment, module.execute_case
     original_write = module.write_once
     def check(value):
@@ -252,6 +339,9 @@ def install(policy, kind, module, spec):
     module.idle_gpus = lambda: any(resource_probe(policy, gpu) for gpu in range(4))
     if kind == 'Q':
         module.gate = lambda _: primary_gate(policy)
+    elif policy.get('map_fill_only_unused_slots_until_q_terminal'):
+        module.gate = lambda value: map_gate(policy, value, original_gate)
+        module.supervise = lambda value: supervise_map(module, value)
 
 
 def main():
