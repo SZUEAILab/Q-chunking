@@ -244,8 +244,8 @@ Cartesian uniform cube 动作；投影约束只适用于 warmup 后的策略动�
 这构成未来三组映射设计的实现基础：Cartesian auxiliary、projection auxiliary、原版
 posthoc env。它检验共同 env 接口下的完整执行映射效应，不能直接替代原版 latent
 critic 内的机制估计，也不能把投影与原版的差异缩写成独立幅值头或单个分布矩。
-五维 native/projection 和完整 latent 方法仍应作为独立配方参照。正式科学矩阵与统计
-规则尚未冻结，本变更没有向当前训练队列追加运行。
+五维 native/projection 和完整 latent 方法仍应作为独立配方参照。该实现阶段尚未冻结
+正式科学矩阵或追加运行；其后固定的独立 60 运行协议见下节。
 
 60 项专项检查及 30 项相关回归（另 3 个 subtest）通过，覆盖共同完整初始化、采样与
 log-prob、辅助坐标的 Q 零导数与熵非零导数、raw replay 路由、真实 learner 更新、
@@ -270,7 +270,7 @@ GPU 上 90 项相关检查及 3 个 subtest 通过；三个真实驱动、三个
 执行分布不能据此称为相同。源文件 141 项未变，证据绑定 37 个
 工程产物。本次只使用本机 GPU 0，不占用云端队列；记录在数据盘
 `control/posthoc_projection_gpu_local_20261020/readiness.json` 和 `evidence-binding.json`。
-新增六维投影对照尚无 4090 验收或长程性能结果，正式科学矩阵仍未冻结。
+该阶段新增六维投影对照尚无 4090 验收或长程性能结果；后续协议不能被当作已完成结果。
 
 新增独立的实际初始化捕获验收使用冻结训练源 `db861f3`（153 个 Python 文件），不是
 向上述旧报告回填证据。工程 seed 9824 在本机 GPU 0（RTX 6000 Ada）完成两任务各三映射
@@ -287,7 +287,47 @@ checkpoint，六个训练各执行一次。来源、全量配对核查与工程�
 `control/posthoc_execution_map_capture_20261020/` 的 `readiness.json`、`pairing-audit.json`
 及 `evidence-binding.json`；工具见[验收实现](../../research/execution_map_validation.py)。
 这补齐本地实际初始化证据，不证明完整模拟器状态或初始执行分布匹配；尚无新六维
-投影的 4090 或百万步结果，也未冻结或追加其长程矩阵。已有 40 运行梯度干预计划 SHA 未变。
+投影的 4090 或百万步结果，未在捕获验收阶段追加长程运行。已有 40 运行梯度干预计划 SHA 未变。
+
+### 共同六维映射的独立长程协议（2026-10-20）
+
+上述工程完成后，另在数据盘 `control/posthoc_matched_map_study_20261020/plan.json` 固定
+60 个新训练身份：两开发任务 × direction-speed／Cartesian auxiliary／projection auxiliary
+× seeds 20290–20299。每次 1M 训练环境步，三组均新训练，不拼入旧成绩；评估交互另计。
+注册前核对 364 份本地及 800 份远端现有 flags，未发现这些 seed；它只认证已检查记录，
+两个任务仍是已有开发任务。协议在首轮成绩已知后登记，不能称为 untouched-task 确认。
+
+源码固定为 `db861f3` 的 153 个 Python 文件；六维 Gaussian/tanh actor、全部六维潜动作
+log-prob、target entropy=−3、五维 env critic/raw replay、512×4、十 Q 的 mean、UTD1、
+50/50 prior/online、无 entropy backup 和普通完整 actor-Q 梯度保持一致。三组仅执行映射
+及相应 pipeline 描述不同，每个 task/seed 都要求实际初始化与前 5000 步 warmup 命令 SHA
+一致。这个估计对象是共同 env 接口下的**完整映射学习效应**；不是独立幅值头、单个分布矩
+或原版 latent-Q 方法的纯因果效应，也不保证初始执行分布或完整模拟器状态匹配。
+
+四项主比较为两任务各自的 direction-speed−Cartesian auxiliary、direction-speed−projection
+auxiliary，另保留每任务 projection−Cartesian 的两项次比较。主指标为真实 0–1M/100k 网格
+success AUC；十个配对和该任务全部三映射面板完整、初始化／warmup／配置匹配后才出组估计。
+报告全部曲线、十个配对差、均值、中位数、正／零／负数。20,000 次 paired percentile
+bootstrap 每项使用同一 seed20261028 生成十配对的重采样索引，98.75% 区间仅作有限 seed 描述；
+四项主比较采用 Bonferroni 名义 family coverage，bootstrap 覆盖率仍近似，不报精确 p 值
+或等效性。终点、末三点和右删失 time-to-50% 为次指标，次比较不附新增推断区间。
+
+评估 key=20261027，step 0 起每 100k、每点实际完成 50 个非视频 episode；每运行要求
+995001 次更新、TrainState=995002 和独立 checkpoint 恢复。60 次全部真实终态前不读成绩；
+失败／零值保留、不自动重跑、替换 seed 或覆盖。若某任务三映射面板不完整，不计算该任务
+的部分 seed／部分方法组均值，仍保存所有身份、可用曲线和失败原因，不据此改变启动条件。
+
+冻结计划 SHA 为 `0b03d10bafadb9fa3431194fe3c56f6804604d3e8be4aefd9921e39e84ca5f82`。
+注册核查修正了继承摘要中 critic 维度误写为 6 的问题；实际命令原本即 env critic，全部
+argv、seed、预算和统计规则未改，原版保留在 `registration-r1/`，从未启动训练。
+[汇总工具](../../research/execution_map_study.py)的 51 项专项检查通过；真实冻结文件验收和
+全缺失合成 fixture 也通过，后者不是科学结果。工具默认先核对全部真实进程退出回执及
+case/source 绑定，才读取任一成绩；不复用其他 case 的退出回执或旧指标缓存。
+
+本轮只固定科学协议并完成汇总工具，**尚未部署、arm 或开始这 60 次正式训练**。运行工具
+需另行版本化，等待既有 40 运行梯度干预的技术终态、四卡空闲和两任务三映射的 4090 短测。
+仅复用现有四卡 job、每卡一个任务，不创建额外实例，也不设成绩方向门槛。既有队列和
+40 运行计划 SHA 保持不变。
 
 ### 执行映射因果对照的实现准备
 
