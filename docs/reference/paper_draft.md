@@ -51,6 +51,14 @@ L_\pi(\theta)=\mathbb E_{s,\xi}
 
 where $\chi$ is the declared critic interface and $\overline Q$ is the mean of ten critics. The default numerical target entropy is −2.5 for native/projection and −3 for the adapter. A separate original-posthoc arm uses −2.5. Equal numerical targets across different coordinate spaces do not match the induced execution entropy.
 
+The primary posthoc comparisons and paired ablations use the learner recipe adopted in
+[Q-chunking Appendix C.2](https://arxiv.org/html/2507.07969v2#A3.SS2): UTD1, four
+512-wide hidden layers, a ten-head mean target, and no TD entropy backup. This alignment of
+key learner settings does not certify a complete reproduction of the original experiments.
+The separate released-RLPD recipe comparison and UTD20 recipe-factor study are supplementary
+sensitivity diagnostics. Frozen runs, failed attempts, and statistical protocols are retained;
+zero-baseline comparisons cannot substitute for the primary performance evidence.
+
 The development learner is a project RLPD-style fork: actor/critic networks have four layers of width 512, target values aggregate ten Q heads by their mean, entropy is absent from the TD backup, UTD is one, and prior/online samples are mixed equally. It is distinct from the [released RLPD recipe](rlpd_baselines.md), including its network size, target aggregation and update schedule. No development-screen result below is labeled an official RLPD reproduction.
 
 ### 2.3 Collection and initialization controls

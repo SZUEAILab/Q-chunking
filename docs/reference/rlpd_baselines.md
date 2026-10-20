@@ -6,6 +6,15 @@ Action-adapter 的首轮 72 运行使用项目 ACRLPD，保持原方法与 criti
 另提供独立的原论文 RLPD learner 配方入口，用于补充外部算法比较。两者的差异不能归因于
 动作表示，外部基线成绩也不能替代完整 adapter 的同配方对照。
 
+## Q-chunking 原文配方与研究优先级（2026-10-21）
+
+[Q-chunking 附录 C.2](https://arxiv.org/html/2507.07969v2#A3.SS2) 的公共表设 UTD=1、
+512×4、RLPD ensemble=10；调参段明确采用不使用 CDQ、不使用 entropy backup 的配方。
+作者代码使用 10-Q mean target。该配方作为当前 posthoc 比较/消融主线的 learner 依据，
+不等同于下表原作者默认 256×2、随机两头 min、backup-on 的独立参考移植。
+UTD20 来自原 RLPD 的公开参考命令，只作为补充诊断；原仓库 AntMaze/Adroit 也显式
+关闭 backup，不能把 backup-on 称作所有原 RLPD 实验的统一设置。冻结批次均保留。
+
 ## 三种来源分别标注
 
 | 项目 | 本项目 ACRLPD 冻结筛选 | 原论文 RLPD 配方移植 | FQL 作者的 SAC/RLPD 实现 |

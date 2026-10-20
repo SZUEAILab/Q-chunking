@@ -5,6 +5,29 @@
 一批实验（代码中叫 `cohort`）共同回答一个问题。先冻结设计，再启动训练。
 本文件是日常实验规则；旧协议中的“推荐”“待做”不是新实验的启动指令。
 
+## 主线与补充诊断的优先级（2026-10-21）
+
+用户明确将 Q-chunking 原文采用的 UTD=1 配方作为 posthoc 对比和消融主线：actor/critic
+512×4、10-Q mean target、无 entropy backup、50/50 prior/online。论文依据为
+[附录 C.2 / Table 2 及 RLPD 调参说明](https://arxiv.org/html/2507.07969v2#A3.SS2)。
+首轮 72 项及已登记 Q40 actor-Q、M60 共同映射实验沿用该 learner 配方；各自的动作表示、
+critic 接口、熵坐标及证据边界仍按原协议解释，不能因配方相同便宣称完全复现原论文。
+原版 legacy/native、简单 projection 与 direct 变体均保留，优先分析完整配对消融及负结果。
+
+另一个 256×2、随机两头 min、entropy backup 开启的 released-RLPD 配方批次 C16
+仍保留 UTD1/20 全部身份并按原队列运行。其 UTD1 也不能标为 Q-chunking 主配方；UTD20
+只作补充诊断。320 项全因子计划及源码保持冻结，定位为参考配方失败/敏感性的补充研究，
+不是主线必需的性能结论。M60 结束后先完成主线结果、配对消融和证据缺口审查，再按技术
+门槛推进该补充研究；不因成绩方向改变冻结运行、挑选 seed 或加入有利性能启动门槛。
+FQL/GAC 的既有跨算法队列和所有现有 owner/锁/失败证据保持原样。
+
+2026-10-21 04:47（北京时间）只读核验 C16：8/16 complete 且实际 exit=0，分别为
+Triple UTD1/20 各四个 seed；Double UTD1 四卡运行，seed10–13 为 780k/760k/790k/665k；
+Double UTD20 四项尚待启动。整批尚无 terminal/scheduler exit，不解封成功率。
+冻结训练源 106 个 Python 与 runtime、八个既有计划哈希均通过；M60 owner 仍存活并等待 Q40。
+证据位于数据盘 `control/action_adapter_continuation_schedule_20261020/priority-update-c16-20261021.json`
+及 `priority-update-m60-20261021.json`。此处状态为时间点快照，不替代实时检查。
+
 ## 当前执行状态（2026-10-20）
 
 首轮 72/72 全部通过真实退出、完整曲线、预算、checkpoint 与身份验收；28 项固定比较、

@@ -183,7 +183,13 @@ JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES='' .venv/bin/python -m pytest tests/test_
 `control/rlpd_recipe_factorial_20261020/` 已冻结 320 运行协议、106 文件新源码、精确命令和
 终态分析契约；[设计与统计规则](experiments.md#rlpd-配方失败的独立全因子配对消融2026-10-20)
 另行维护。该批当前没有启动 owner，没有 arm 或提交正式训练，也未上传训练快照；
-不属于已有自动接续任务。登记的接续位置是既有 60 运行共同映射队列之后。
+已纳入本机条件接续安排，但没有训练 owner 或 GPU arm。登记的最早接续位置是既有
+60 运行共同映射队列之后。2026-10-21 用户将 Q-chunking UTD1 配方下的 posthoc 对比及
+消融设为主线，UTD20 为补充；M60 之后先完成主线结果、配对消融及证据缺口审查，再按
+原技术门槛接续未改动的 320 项补充研究，不以有利成绩作为门槛。主线/参考配方区别见
+[实验记录](experiments.md#主线与补充诊断的优先级2026-10-21)。本机调度入口为数据盘
+`control/action_adapter_continuation_schedule_20261020/tick.py`，当前指令及后续优先级以同目录
+`continuation-prompt.txt` 为准；不得将调度指令登记当成训练已执行。
 两任务各 16 单元的 32 份 4090 工程命令已经准备，仍须实际 GPU 验收、初始化捕获、
 恢复验证和独立运行控制器验收后才能 arm。已有 posthoc/FQL/GAC/Q40/M60 的控制器继续使用
 各自原发布包；不能把新设计的登记回执当作云端已运行的证据。
