@@ -82,6 +82,15 @@ Triple UTD1/20 和 Double UTD20 均为零，Double UTD1 平均 AUC=72.4、终点
 每点实际 50 episode、全部 seed 和零结果保留；完整结果与验收边界见
 [当前结果](../current/results.md#原论文-rlpd-native-的完整结果2026-10-20)。
 
+## 高 UTD 失败的诊断边界
+
+独立 native 16 运行完成后，真实 prior + 短程 replay 的 H1 batch 接线及完整网络
+UTD1/20 更新再次与固定上游逐步一致。当前未发现 learner 移植错误；训练日志显示
+UTD20 的局部任务进展也接近消失，不能只归因于评估随机性。固定验证状态 TD 诊断
+在 Double 恶化、Triple 未普遍恶化，未唯一识别根因。上游通用配方也不是 Cube 的
+已调参配方，详见[全部诊断与限制](../current/results.md#utd20-零结果的实现与配方排查2026-10-20)。
+不能根据失败结果在线改动当前 posthoc 配方或覆盖原 native 成绩。
+
 ## 原版 posthoc 在同一 RLPD 配方中的适配
 
 仅将项目 fork 的 posthoc 与原论文配方的 native 相比，会混入 learner 差异。

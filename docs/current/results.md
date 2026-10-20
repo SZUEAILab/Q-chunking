@@ -549,6 +549,72 @@ r2 仅修复只读观察器，没有重跑、覆盖或替换科学运行。
 证据解释失败，也不能从有限值推断 critic 正确或稳定。以上为两开发任务、四 seed 的描述性结果，
 尚不能证明 posthoc 在 released learner 上的收益，更不能归因于独立幅度头或径向梯度。
 
+### UTD20 零结果的实现与配方排查（2026-10-20）
+
+在 native 整批终态后另行固定只读诊断，原 16 次零值、命令、源码与 posthoc 的既定对照
+均不变。当前证据未发现 learner 更新或 H1 batch 接线偏离固定上游；它提高了“通用配方
+在这些 Cube 任务上不合适”的可信度，但没有完成配方因素的因果分解。
+
+**实现与数据核对。** 从原 `2c2d0c3` 发布包独立解出 90 个 Python 文件并逐一验 SHA；
+本地四份数据文件与冻结云端数据 SHA 全部一致。两个真实任务分别构造 64 步工程 replay，
+从 AST 提取并执行冻结 driver 的原始 batch 拼接表达式。完整 256×256 网络、batch=256、
+每个 UTD minibatch 均为 128 prior + 128 online；两任务 × UTD1/20 共四例，各连续更新三次，
+参数、optimizer 状态、计数器、RNG 和 loss 与未改动的固定上游代码最大状态差为 0。
+UTD20 实际每次调用只执行 20 次 critic、1 次 actor、1 次温度更新，没有多更新 actor，
+也没有只取一个 minibatch 或 prior/online 混合比例变化的证据。
+
+完整 prior 的 reward/mask 按原始 qpos 与固定 task2 目标位置独立重算，一致；在线工程
+逐步核对 pre-action reward 与返回的 success。Cube singletask 的上游配置确为 `success_timing=pre`，
+并非 prior/online 奖励错位。Triple 的 300 万条 prior 中没有完整成功，只有 −3/−2/−1；
+Double 的 100 万条中有 581 条 reward=0、mask=0，其他为 −2/−1。没有将奖励误读成
+全零或把全部 mask 设为零，但 Triple 的先验不能提供完整成功，必须依赖在线发现。
+原始全部 16 份环境日志逐行验收共 1600 万步；选定的 fatal/NaN/Traceback 标记计数均为 0，
+这个有限标记扫描不等于证明所有模拟器异常均不存在。
+
+**训练行为与 critic 诊断。** 下表完整保留每组四个 seed；“至少一块到位”由原有每步
+reward 高于全未完成值（Triple −3、Double −2）定义，不是 episode 成功率。
+每任务另固定 512 个 prior-validation 状态，所有 16 个原终点 checkpoint 只读恢复，
+未更新 optimizer 或修改其 RNG。soft TD RMSE 是原熵 backup 方程的一步一致性量，
+不是原在线 replay 上的误差、Monte Carlo Q 校准或泛化误差真值。
+
+| 任务 | UTD | 最后 10 万步至少一块到位的步占比 % | 固定验证状态 soft TD RMSE：均值 / 中位数 |
+|---|---:|---:|---:|
+| triple2 | 1 | 52.7895 | 1.9996 / 1.9596 |
+| triple2 | 20 | 0.6755 | 1.8055 / 1.8392 |
+| double2 | 1 | 49.7910 | 2.4756 / 2.5031 |
+| double2 | 20 | 0.1380 | 9.6068 / 4.5338 |
+
+![全部 16 个 native 的奖励阶段与固定验证状态诊断](../images/rlpd_utd_diagnosis_20261020.png)
+
+UTD20 在两任务最后 10 万步的局部目标进展都接近零，故不能只把结果归为最终评估偶然失误。
+Double UTD20 四个 seed 的 held-out soft TD RMSE 均高于配对 UTD1；seed12 为 26.4344，
+其余三例为 5.1366、2.9250、3.9310，异常值完整保留。它的 ensemble 分歧与随机两 Q min
+相对十 Q 均值的 gap 也增大，但不能由此认定 min target 是原因。
+Triple UTD20 的该 RMSE 均值反而略低于 UTD1，所以“所有 UTD20 都因 TD loss 爆炸而失败”
+不符合数据。固定状态采样的动作绝对值 ≥0.99 的坐标占比在 UTD20 两任务均更高，
+这是终点策略行为线索，不是导致学习失败的证据。
+
+**配方边界。** 当前默认 256×2、两 Q min、entropy backup 来自上游通用/locomotion 配方，
+不是已调好的 OGBench Cube 基准。上游 [README 的固定版本](https://github.com/ikostrikov/rlpd/blob/c90fd4baf28c9c9ef40a81460a2e395092844f88/README.md)
+对 Antmaze、Adroit 都关闭 entropy backup，采用三层网络，Antmaze 另改为单 Q target。
+这些差异支持继续检验高 UTD 与 backup/目标保守性/容量的交互，不能证明照搬其中一个
+设置就会在 Cube 成功。现有结果更支持排查配方与数据分布的适配；尚未唯一识别原因。
+后续因素比较须作为独立新批次、预先固定并重做完整配对，不能改动运行中的 posthoc
+或者用调好后的 native 与旧 posthoc 做不匹配比较。
+
+全部逐 seed 诊断、四个真实数据 oracle、失败记录及脚本在数据盘
+`control/rlpd_utd20_diagnosis_20261020/`，主要汇总为 `diagnostic-summary.json` 和
+`diagnostic-16-seeds.csv`。首次只读脚本的 metadata/渲染/日志路径错误保留；修订只针对
+诊断观察器，原科学运行没有重跑。额外工程模型是独立 CPU 内存副本，其更新不计入原实验。
+**评估方式补查已完成。** 全部 16 个 checkpoint 各完成随机策略与确定性 mode 各 5 个
+非视频 episode，共 160 个实际 episode、101944 步、0 optimizer 更新。UTD20 的两任务
+在两种方式下都为 0/20；Triple UTD1 两种方式也都为 0/20，Double UTD1 则各为 20/20。
+每组所有四个 seed 保留，诊断未观察到 fatal 标记，mode 与随机方式的起始 observation
+哈希一致。使用原评估的前五个 reset/sampling seed，不是新的独立确认；五 episode
+不能替换原 50 episode 指标。该补查没有找到“只是随机评估掩盖已学会策略”的证据。
+最终汇总为 `diagnostic-summary-complete.json` / `.md`，逐 seed/mode 为
+`mode-32-seed-mode-cases.csv`，全部证据与失败由 `evidence-binding.json` 绑定。
+
 ### 原版 posthoc 的同 RLPD 配方接入验收
 
 新增 H1 原版 tanh/log/sphere latent posthoc 的原论文 RLPD 配方入口，用于准备同 learner

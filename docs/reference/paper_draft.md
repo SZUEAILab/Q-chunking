@@ -214,7 +214,28 @@ The 12 runs outside Cube Double UTD1 have zero success at every recorded evaluat
 
 All 20 frozen external-recipe contrasts are reported in the terminal summary. For example, Double UTD1 native is 12.1 AUC points below the project-screen native. These contrasts change the entire learner recipe and do not isolate the posthoc representation. Native completion alone therefore does not establish a posthoc advantage under the released learner. This cohort remains a descriptive study on two development tasks and four seeds.
 
-### 6.2 Pending matched and prospective evidence
+### 6.2 Post-outcome implementation and recipe diagnosis
+
+A separate CPU diagnostic used the frozen native source, full 256×256 networks, actual prior data and 64-step engineering replay per task. Executing the frozen driver's batch-construction expression preserves 128 prior and 128 online samples in every minibatch. All four task×UTD cases agree with the pinned, unmodified upstream learner over three update calls, with maximum state difference zero, including optimizer state, counters and RNG. Reward/mask recomputation from the original qpos agrees with the loaded prior; online engineering rewards agree with the environment's pre-action success timing. This provides bounded evidence against an update or input-bridge error, not proof that every historical training input was correct.
+
+The Triple prior has no full-success transition among three million rows; Double has 581 reward-zero/mask-zero rows among one million. All sixteen existing environment logs retain one million consecutive steps. Partial-goal occupancy is the fraction of steps with reward above the all-unfinished value, not episode success. The held-out diagnostic uses 512 fixed prior-validation states per task and the original soft Bellman target without updating the saved agents.
+
+| Task | UTD | Last 100k: partial-goal step % | Held-out soft TD RMSE: mean / median |
+|---|---:|---:|---:|
+| triple2 | 1 | 52.7895 | 1.9996 / 1.9596 |
+| triple2 | 20 | 0.6755 | 1.8055 / 1.8392 |
+| double2 | 1 | 49.7910 | 2.4756 / 2.5031 |
+| double2 | 20 | 0.1380 | 9.6068 / 4.5338 |
+
+![All native training-stage and held-out consistency diagnostics](../images/rlpd_utd_diagnosis_20261020.png)
+
+Double UTD20 has higher held-out soft TD RMSE in all four seed pairs; seed 12 is 26.4344 and is retained. Triple UTD20 has slightly lower mean RMSE despite negligible partial-goal occupancy. Thus a universal TD-loss-explosion explanation is unsupported. One-step prior Bellman consistency does not establish Q calibration or identify the cause of poor online control.
+
+The reference uses the released general recipe, not a tuned OGBench baseline. The pinned upstream README changes network depth and disables entropy backup for Antmaze and Adroit, and changes the target subset for Antmaze. This motivates separate checks of recipe suitability; it does not establish which choice caused these failures. Existing native outcomes and the running matched posthoc cohort remain unchanged. The post-outcome diagnostics and preserved observer repairs are stored under `/data/chainpray/qc/control/rlpd_utd20_diagnosis_20261020/`. Any future recipe tuning requires a separately frozen, matched comparison.
+
+A separate completed check evaluates every terminal checkpoint for five stochastic and five deterministic-mode episodes (160 episodes total). Both UTD20 task groups remain 0/20 under either mode; Triple UTD1 is also 0/20, while Double UTD1 is 20/20 under both. These seeds overlap the original evaluation protocol, so the check is descriptive and does not replace the original fifty-episode curves. It provides no evidence that stochastic evaluation alone hid an already successful UTD20 policy.
+
+### 6.3 Pending matched and prospective evidence
 
 The following comparisons have no complete paired performance result. They reuse the authorized four-GPU allocation in the established queue; engineering acceptance is separate from scientific evidence.
 
@@ -231,7 +252,7 @@ The RLPD port preserves its distinct critic/actor update ratio, random two-Q min
 
 ## 7. Related work and scope of the estimator claim
 
-[Efficient Online Reinforcement Learning with Offline Data](https://proceedings.mlr.press/v202/ball23a.html) motivates the strong RLPD comparison. Its released learning recipe is kept distinct from our project's development fork. The native reference cohort is complete; its pending matched posthoc comparison determines whether the observed gain survives that change of learner.
+[Efficient Online Reinforcement Learning with Offline Data](https://proceedings.mlr.press/v202/ball23a.html) motivates the independent released-recipe RLPD comparison. Its released learning recipe is kept distinct from our project's development fork. The native reference cohort is complete; its pending matched posthoc comparison determines whether the observed gain survives that change of learner.
 
 [Action Space Design in Reinforcement Learning for Robot Motor Skills](https://proceedings.mlr.press/v270/esser25a.html) studies task-dependent effects of action-space choice, including initialization and behavior. Our common warmup and parameter controls do not establish a new initialization-matching technique or remove this alternative explanation. [Beyond Distributions: Geometric Action Control](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html) provides direct geometric-action prior work and a competing algorithm. We do not claim the first use of normalized directions or amplitude-related action control.
 

@@ -35,6 +35,15 @@ FQL 四个监控进程均已恢复。现场证据在该目录的 `formal-live-ve
 独立 actor 参数链分析已完成 56/56，详见
 [完整结果](results.md#actor-参数链中的径向响应2026-10-20)。
 
+native UTD20 的独立结果后诊断已固定并执行：真实 batch/upstream 四项一致性、
+16 个 checkpoint 的固定 prior TD/Q 统计、1600 万行旧环境日志，以及单独的 mode 评估补查。
+诊断限 CPU，不改变原训练配方、结果或同配方 posthoc 接续；详见
+[诊断结果](results.md#utd20-零结果的实现与配方排查2026-10-20)。
+2026-10-20 21:57（北京时间）再次核验同配方 posthoc：四个真实训练分别占 GPU 0–3，
+首批 Triple UTD1 已推进至 60万—63.5万／100万步，尚无整批 16 运行终态。
+诊断记录为 `control/rlpd_utd20_diagnosis_20261020/posthoc-live-1792504626.json`；
+未读取中途成绩，也未改变训练配置、顺序、种子或后续接续门槛。
+
 ## Action-adapter 冻结筛选
 
 批次为 `action_adapter_validation_20261019`，配置、源码摘要、工程尝试与平台记录放在
