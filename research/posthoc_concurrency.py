@@ -64,6 +64,25 @@ def load_policy(path, expected):
     return policy
 
 
+def receipt_job_identity(process, proc_root):
+    """Find an index-addressed receipt runner through its shell/child chain."""
+    for _ in range(8):
+        try:
+            arguments = [x.decode(errors='replace') for x in (process/'cmdline').read_bytes().split(b'\0') if x]
+            if len(arguments) >= 3 and arguments[1] == '-c':
+                arguments = shlex.split(arguments[2])
+            for index, value in enumerate(arguments):
+                if (value.startswith('/workspace/releases/')
+                        and Path(value).name in ('posthoc_runner.py', 'fql_runner.py', 'base_runtime.py')
+                        and arguments[index+1:index+2] == ['run'] and len(arguments) > index+2):
+                    return ('receipt-job', value, int(arguments[index+2]))
+            parent = next(row.split(':', 1)[1].strip() for row in (process/'status').read_text().splitlines() if row.startswith('PPid:'))
+            process = proc_root/parent
+        except (OSError, ValueError, StopIteration):
+            return None
+    return None
+
+
 def foreign_counts(policy, proc_root=Path('/proc')):
     """CUDA-visible live processes outside the two leased cohorts.
 
@@ -93,7 +112,10 @@ def foreign_counts(policy, proc_root=Path('/proc')):
             flags = dict(a[2:].split('=', 1) for a in arguments if a.startswith('--') and '=' in a)
             # The original reference scheduler uses shell -> receipt wrapper ->
             # training child. These are one GPU job, not three GPU contexts.
-            if (any(a.startswith('/workspace/releases/posthoc-reference-') for a in arguments)
+            receipt_identity = receipt_job_identity(process, proc_root)
+            if receipt_identity is not None:
+                identity = receipt_identity
+            elif (any(a.startswith('/workspace/releases/posthoc-reference-') for a in arguments)
                     and 'seed' in flags and 'run_group' in flags):
                 identity = ('reference', flags['run_group'], flags['seed'])
             else:

@@ -221,3 +221,16 @@ def test_parallel_map_engineering_is_once_and_failure_cannot_start_science(tmp_p
         assert len(seen) == 66
     assert sorted(item[1] for item in seen if item[0]) == list(range(6))
     assert all(item[2] == ('frozen', str(item[1])) for item in seen if item[0])
+
+
+def test_actual_index_addressed_reference_process_tree_counts_once(tmp_path):
+    policy = dict(cohorts={'Q': dict(control='/work/Q'), 'M': dict(control='/work/M')})
+    runner = '/workspace/releases/posthoc-reference-e20834c88c10/posthoc_runner.py'
+    cases = [(100, 1, ['sh', '-c', 'python '+runner+' run 12']),
+        (101, 100, ['python', runner, 'run', '12']),
+        (102, 101, ['python', runner.replace('runner', 'entry'), '--seed=10', '--run_group=double_utd20']),
+        (103, 1, ['python', runner, 'run', '13'])]
+    for pid, parent, argv in cases:
+        p = tmp_path/str(pid); p.mkdir(); (p/'cmdline').write_bytes(b'\0'.join(a.encode() for a in argv))
+        (p/'environ').write_bytes(b'CUDA_VISIBLE_DEVICES=0'); (p/'status').write_text(f'PPid:\t{parent}\n')
+    assert r.foreign_counts(policy, tmp_path) == [2, 0, 0, 0]
