@@ -78,8 +78,11 @@ class L2BallProjectionPostprocessor:
 
     def compose_jax(self, policy_actions: jnp.ndarray) -> jnp.ndarray:
         spatial = policy_actions[..., : self.spatial_dims]
-        norm = jnp.linalg.norm(spatial, axis=-1, keepdims=True)
-        scale = jnp.minimum(1.0, self.max_norm / jnp.maximum(norm, self.eps))
+        # Clamp before sqrt: norm(0) has an undefined derivative even when a
+        # later maximum masks its value. The projection is the identity here.
+        squared_norm = jnp.sum(jnp.square(spatial), axis=-1, keepdims=True)
+        safe_norm = jnp.sqrt(jnp.maximum(squared_norm, self.eps**2))
+        scale = jnp.minimum(1.0, self.max_norm / safe_norm)
         return jnp.concatenate(
             (spatial * scale, policy_actions[..., self.spatial_dims :]), axis=-1
         )

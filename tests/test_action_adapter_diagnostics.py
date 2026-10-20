@@ -62,9 +62,10 @@ def test_invariance_alone_does_not_hide_a_constant_zero_critic():
     assert nonconstant["q_std"] > 1e-5 and nonconstant["full_policy_q_gradient_norm_rms"] > 1e-5
 
 
-def test_cartesian_auxiliary_control_is_not_a_direction_alias_test():
+@pytest.mark.parametrize('mapping', ['cartesian_aux', 'cartesian_projection_aux'])
+def test_cartesian_auxiliary_control_is_not_a_direction_alias_test(mapping):
     from types import SimpleNamespace
-    agent = SimpleNamespace(config=dict(adapter_representation="cartesian", adapter_execution_map="cartesian_aux"))
+    agent = SimpleNamespace(config=dict(adapter_representation="cartesian", adapter_execution_map=mapping))
     with pytest.raises(ValueError, match="redundant direction-speed"):
         measure_aliases(agent, np.ones((8, 7), dtype=np.float32))
 

@@ -156,8 +156,8 @@ flags.DEFINE_enum(
 flags.DEFINE_enum(
     "ds_adapter_execution_map",
     "config",
-    ["config", "direction_speed", "cartesian_aux"],
-    "Adapter execution: direction-speed mapping or six-dimensional Cartesian auxiliary control.",
+    ["config", "direction_speed", "cartesian_aux", "cartesian_projection_aux"],
+    "Adapter execution: direction-speed, Cartesian auxiliary, or projected Cartesian auxiliary mapping.",
 )
 flags.DEFINE_enum(
     "ds_regularizer",

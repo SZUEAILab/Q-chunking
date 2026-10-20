@@ -8,7 +8,7 @@ from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from direction_speed.adapter import DirectionSpeedAdapter
+from direction_speed.adapter import AUXILIARY_EXECUTION_MAPS, DirectionSpeedAdapter
 from direction_speed.distributions.factory import (
     ActionPipelineRecipe,
     resolve_pipeline_recipe,
@@ -127,7 +127,7 @@ def configure_direction_speed(
     # --- adapter DS ---
     execution_map = (config.get("adapter_execution_map", "direction_speed")
                      if ds_adapter_execution_map == "config" else ds_adapter_execution_map)
-    if execution_map == "cartesian_aux" and (mode is not DirectionSpeedMode.ADAPTER or agent_name != "acrlpd"):
+    if execution_map in AUXILIARY_EXECUTION_MAPS and (mode is not DirectionSpeedMode.ADAPTER or agent_name != "acrlpd"):
         raise ValueError("Cartesian auxiliary control requires ACRLPD adapter mode")
     config["adapter_execution_map"] = execution_map
     adapter = DirectionSpeedAdapter(
@@ -160,7 +160,7 @@ def configure_direction_speed(
         if critic_space == "canonical" and agent_name != "acrlpd":
             raise ValueError("Canonical adapter critic is only implemented for ACRLPD.")
         config["adapter_critic_space"] = critic_space
-        if execution_map == "cartesian_aux" and critic_space != "env":
+        if execution_map in AUXILIARY_EXECUTION_MAPS and critic_space != "env":
             raise ValueError("Cartesian auxiliary control requires the env critic")
     else:
         config["adapter_representation"] = "none"

@@ -19,6 +19,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from direction_speed.postprocessors import L2BallProjectionPostprocessor
 from direction_speed.specs import (
     DirectionRepresentation,
     RadialBound,
@@ -30,6 +31,7 @@ from direction_speed.speed import AdapterSpeedPipeline
 
 EPS = 1e-6
 DEFAULT_DIR_DIMS = 3
+AUXILIARY_EXECUTION_MAPS = ("cartesian_aux", "cartesian_projection_aux")
 
 
 @jax.custom_jvp
@@ -336,9 +338,11 @@ def _decompose_chunked(
 class DirectionSpeedAdapter:
     """Policy/environment codec, including an explicit auxiliary-head control.
 
-    ``cartesian_aux`` drops coordinate 3 at execution and lifts environment
-    actions with a zero placeholder there. Its training interface is restricted
-    to an env critic without BC; the placeholder is not an observed BC label.
+    The auxiliary controls drop coordinate 3 at execution; the projection
+    variant also projects XYZ onto the unit ball. Their placeholder lift is
+    only for dimensional bookkeeping, and is not an inverse outside the ball.
+    Training is restricted to an env critic without BC: raw environment replay
+    stays unchanged and the placeholder is not an observed BC label.
     """
 
     representation: DirectionRepresentation | str = DirectionRepresentation.CARTESIAN
@@ -361,9 +365,9 @@ class DirectionSpeedAdapter:
         object.__setattr__(self, "speed_bound", RadialBound(self.speed_bound))
         if self.eps <= 0.0:
             raise ValueError("eps must be positive")
-        if self.execution_map not in ("direction_speed", "cartesian_aux"):
+        if self.execution_map not in ("direction_speed", *AUXILIARY_EXECUTION_MAPS):
             raise ValueError("Unknown adapter execution map")
-        if self.execution_map == "cartesian_aux" and (
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS and (
             self.representation is not DirectionRepresentation.CARTESIAN
             or self.speed_squash is not SpeedSquash.TANH
             or self.speed_interpretation is not SpeedInterpretation.LOG
@@ -387,8 +391,8 @@ class DirectionSpeedAdapter:
     def decompose(self, env_actions: np.ndarray) -> np.ndarray:
         if env_actions.ndim == 0 or env_actions.shape[-1] < DEFAULT_DIR_DIMS:
             raise ValueError("env_actions must have at least three action dimensions")
-        if self.execution_map == "cartesian_aux":
-            # A representative lift, not an observed auxiliary action or BC label.
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS:
+            # A placeholder lift, not an observed auxiliary action or BC label.
             return np.concatenate(
                 [env_actions[..., :3], np.zeros_like(env_actions[..., :1]), env_actions[..., 3:]], axis=-1
             )
@@ -410,8 +414,11 @@ class DirectionSpeedAdapter:
                 f"policy_actions requires at least {minimum_dim} dimensions for "
                 f"{self.representation.value}"
             )
-        if self.execution_map == "cartesian_aux":
-            return np.clip(np.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1), -1., 1.)
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS:
+            actions = np.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1)
+            if self.execution_map == "cartesian_projection_aux":
+                actions = L2BallProjectionPostprocessor().compose(actions)
+            return np.clip(actions, -1., 1.)
         return _compose_numpy(
             policy_actions,
             self.eps,
@@ -429,7 +436,7 @@ class DirectionSpeedAdapter:
         return self.compose(policy_actions)
 
     def decompose_jax(self, env_actions: jnp.ndarray) -> jnp.ndarray:
-        if self.execution_map == "cartesian_aux":
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS:
             return jnp.concatenate(
                 [env_actions[..., :3], jnp.zeros_like(env_actions[..., :1]), env_actions[..., 3:]], axis=-1
             )
@@ -443,8 +450,11 @@ class DirectionSpeedAdapter:
         )
 
     def compose_jax(self, policy_actions: jnp.ndarray) -> jnp.ndarray:
-        if self.execution_map == "cartesian_aux":
-            return jnp.clip(jnp.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1), -1., 1.)
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS:
+            actions = jnp.concatenate([policy_actions[..., :3], policy_actions[..., 4:]], axis=-1)
+            if self.execution_map == "cartesian_projection_aux":
+                actions = L2BallProjectionPostprocessor().compose_jax(actions)
+            return jnp.clip(actions, -1., 1.)
         return _compose_jax(
             policy_actions,
             self.eps,
@@ -459,7 +469,7 @@ class DirectionSpeedAdapter:
     ) -> np.ndarray:
         if horizon_length < 1:
             raise ValueError("horizon_length must be at least 1")
-        if self.execution_map == "cartesian_aux":
+        if self.execution_map in AUXILIARY_EXECUTION_MAPS:
             actions = env_actions.reshape(env_actions.shape[0], horizon_length, -1)
             return self.decompose(actions).reshape(actions.shape[0], -1)
         return _decompose_chunked(
@@ -474,7 +484,7 @@ class DirectionSpeedAdapter:
 
 def validate_auxiliary_control(config):
     """Limit the new map intervention to its implemented H1 SAC/env interface."""
-    if config.get("adapter_execution_map", "direction_speed") != "cartesian_aux":
+    if config.get("adapter_execution_map", "direction_speed") not in AUXILIARY_EXECUTION_MAPS:
         return
     expected = dict(agent_name="acrlpd", adapter_representation="cartesian", adapter_critic_space="env",
                     adapter_speed_squash="tanh", adapter_speed_interpretation="log", ds_speed_bound="sphere",

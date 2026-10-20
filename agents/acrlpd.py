@@ -11,7 +11,7 @@ from flax import linen as nn
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from rlpd_networks import Ensemble, StateActionValue, MLP
 from direction_speed import DirectionSpeedAdapter
-from direction_speed.adapter import validate_auxiliary_control
+from direction_speed.adapter import AUXILIARY_EXECUTION_MAPS, validate_auxiliary_control
 from direction_speed.postprocessors import L2BallProjectionPostprocessor
 from direction_speed.distributions import assemble_action_pipeline
 
@@ -588,7 +588,7 @@ class ACRLPDAgent(flax.struct.PyTreeNode):
             config: Configuration dictionary.
         """
         validate_auxiliary_control(config)
-        if config.get("adapter_execution_map") == "cartesian_aux" and ex_actions.shape[-1] != 5:
+        if config.get("adapter_execution_map") in AUXILIARY_EXECUTION_MAPS and ex_actions.shape[-1] != 5:
             raise ValueError("Cartesian auxiliary control requires five-dimensional replay actions")
         rng = jax.random.PRNGKey(seed)
         rng, init_rng = jax.random.split(rng, 2)

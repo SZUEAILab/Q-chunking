@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from direction_speed.adapter import DirectionSpeedAdapter
+from direction_speed.adapter import AUXILIARY_EXECUTION_MAPS, DirectionSpeedAdapter
 from direction_speed.distributions.integrated import IntegratedDirectionSpeedNormal
 from direction_speed.distributions.mixed_squash import MixedSquashNormal
 from direction_speed.distributions.tangent import TangentDirectionSpeedNormal
@@ -130,8 +130,8 @@ class AdapterPipelineRecipe(ActionPipelineRecipe):
 
     @property
     def components(self):
-        postprocessor = ("DirectionSpeedAdapter[cartesian_aux,ignored_coordinate=3]"
-                         if self.adapter.execution_map == "cartesian_aux" else
+        postprocessor = (f"DirectionSpeedAdapter[{self.adapter.execution_map},ignored_coordinate=3]"
+                         if self.adapter.execution_map in AUXILIARY_EXECUTION_MAPS else
                          "DirectionSpeedAdapter["
                          f"{self.adapter.representation.value},"
                          f"speed={self.adapter.speed_interpretation.value}]")

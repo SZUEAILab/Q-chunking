@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -37,3 +38,22 @@ def test_projection_reshapes_action_chunks_and_matches_jax():
     np.testing.assert_allclose(np.linalg.norm(actual[0, :3]), 1.0)
     np.testing.assert_allclose(actual[1], chunk.reshape(2, 5)[1])
     np.testing.assert_allclose(actual_jax, actual, rtol=1e-6, atol=1e-6)
+
+
+def test_zero_and_small_actions_have_identity_jacobian():
+    projector = L2BallProjectionPostprocessor()
+    for value in (0., 1e-10, .2):
+        action = jnp.full(5, value)
+        np.testing.assert_allclose(jax.jacrev(projector.compose_jax)(action), np.eye(5), atol=1e-6)
+
+
+def test_outside_jacobian_is_tangent_projection_and_forward_matches_numpy():
+    projector = L2BallProjectionPostprocessor()
+    action = np.array([.8, -.9, .7, -.25, .75], np.float32)
+    radius = np.linalg.norm(action[:3]); direction = action[:3] / radius
+    expected = np.eye(5)
+    expected[:3, :3] = (np.eye(3) - np.outer(direction, direction)) / radius
+    np.testing.assert_allclose(jax.jacrev(projector.compose_jax)(jnp.asarray(action)), expected, atol=2e-7)
+    samples = np.random.default_rng(4).uniform(-1, 1, (128, 5)).astype(np.float32)
+    samples[0] = 0.
+    np.testing.assert_allclose(projector.compose_jax(jnp.asarray(samples)), projector.compose(samples), atol=2e-7)
