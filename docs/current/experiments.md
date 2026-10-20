@@ -25,11 +25,15 @@ FQL 四个监控进程均已恢复。现场证据在该目录的 `formal-live-ve
 对应记录为原批次 `platform-observation-isolation-20261020/verification.json`，历史 owner
 进程与失败证据保持不变；该操作修订不改变训练发布包。
 
-2026-10-20 10:19（北京时间）的只读技术核验确认：native RLPD 已完成 4/16（Triple
-UTD=1 的全部四个 seed，真实退出均为 0），Triple UTD=20 的四个 seed 正在运行，
-调度 supervisor 仍存活；整批终态尚未产生，未读取该批收益/成功率。观察记录为
-`launch-recovery-r2/technical-progress-1792462764.json`。独立 actor 参数链分析已完成
-56/56，详见下方计划与[完整结果](results.md#actor-参数链中的径向响应2026-10-20)。
+2026-10-20 20:44:36（北京时间）native RLPD 已完成 16/16，实际训练与调度退出均为 0；
+完整曲线、每点实际 50 episode、冻结命令/源码、更新计数及 checkpoint 哈希通过只读验收。
+三个 task×UTD 组为完整零结果，Double UTD1 平均 AUC 为 72.4、终点为 99%；
+详见[完整 native 结果](results.md#原论文-rlpd-native-的完整结果2026-10-20)。
+几何分析已完成 88/88，终点策略诊断已完成 40/40。
+同配方 posthoc 在 20:57 启动；21:03 核验调度器与四个真实训练进程存活，
+尚无完整配对成绩。后续 FQL/GAC/梯度干预/共同映射按原技术门槛接续。
+独立 actor 参数链分析已完成 56/56，详见
+[完整结果](results.md#actor-参数链中的径向响应2026-10-20)。
 
 ## Action-adapter 冻结筛选
 
@@ -413,9 +417,10 @@ seed 10–13、UTD=1/20、每次 1M 步；与已冻结的 16 个 native 配对�
 分批执行，记录环境与时长；这不证明长程轨迹逐位相等，也不是 fresh-seed 确认。
 
 接续监控等待原 72 运行、16 个 native，以及 critic、动作几何、终点策略和配对汇总四类
-分析完整验收后，复用同一 Running 四卡实例，每卡一个任务。门槛只依赖技术完整性与
-身份核验，不按成功率或比较方向决定是否启动。远程仍须通过 UTD1/20 真实短测、实际
-episode 计数、精确 TrainState/Adam 更新数和可恢复 checkpoint；不创建额外实例、不自动
+分析完整验收后，复用同一 Running 四卡实例，每卡一个任务；此门槛已于 20:57 通过并启动。
+门槛只依赖技术完整性与身份核验，不按成功率或比较方向决定是否启动。远程 UTD1/20
+真实短测已通过；正式运行仍须逐项验收实际 episode 计数、精确 TrainState/Adam 更新数
+和可恢复 checkpoint。不创建额外实例、不自动
 重试、覆盖、续跑或替换 seed。控制包和计划位于数据盘 `control/posthoc_reference_20261019/`。
 
 ### 已登记的动作与时间次指标

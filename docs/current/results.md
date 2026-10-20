@@ -320,8 +320,51 @@ TrainState=34，checkpoint 与配置哈希未变，没有重跑训练。
 该短程检查只验收恢复、共同噪声采样和分析链路，不提供训练后机制或性能结论。
 
 最终分析计划固定原筛选的 40 个 native/原版 checkpoint，见[次分析设计](experiments.md#训练后策略的固定状态次分析)。
-已有动作几何监控已接续该 CPU 分析；原 72 运行已完成，但该分析链仍等待独立 native RLPD 批次验收，正式 40 个 checkpoint 尚未分析。
+正式终点策略分析现已完成 40/40 个 eligible checkpoint，CPU 分析退出 0，未执行 optimizer 更新。
+完整报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-final-policy-probes.json`；
+这是固定状态上的终点策略诊断，不是新增训练或机制因果检验。
 工程报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-checkpoint-policy-engineering-v2.json`。
+
+### 训练后策略的完整固定状态结果（2026-10-20）
+
+冻结的 40 个 eligible checkpoint 均完成恢复与 CPU 采样；另 32 个不属于本次原版映射
+分析的 checkpoint 明确记为 not-applicable，没有冒充为缺失或额外样本。每任务使用同一
+先验验证集中的固定 128 个状态、每状态 64 份共同标准 Gaussian 噪声；40 份恢复记录均为
+995001 次训练更新、TrainState=995002。分析没有环境交互、optimizer 更新或 learner RNG 改变。
+以下完整十组均值采用原噪声倍率 1；每组保留全部四个种子。
+
+| Task / method | Mean XYZ norm | Within-state radius SD | Within-state XYZ covariance trace |
+|---|---:|---:|---:|
+| triple2 / Native | 1.338446 | 0.118393 | 0.133003 |
+| triple2 / Original posthoc / latent Q | 1.346353 | 0.156101 | 0.214822 |
+| triple2 / Original / env Q | 1.475933 | 0.110536 | 0.110418 |
+| triple2 / Original / canonical Q | 1.226905 | 0.118772 | 0.097494 |
+| triple2 / Original / target entropy −2.5 | 1.327747 | 0.165189 | 0.234886 |
+| double2 / Native | 1.320970 | 0.131125 | 0.190640 |
+| double2 / Original posthoc / latent Q | 1.486933 | 0.144138 | 0.321003 |
+| double2 / Original / env Q | 1.465405 | 0.117821 | 0.141214 |
+| double2 / Original / canonical Q | 1.354835 | 0.115712 | 0.115658 |
+| double2 / Original / target entropy −2.5 | 1.501237 | 0.161455 | 0.367328 |
+
+Triple 原版 posthoc−native 的平均范数差仅 +0.007907，四个配对中 2 正 2 负；
+状态内半径 SD 差 +0.037708、XYZ 协方差 trace 差 +0.081819，二者均为 4/4 正。
+Double 对应差为 +0.165963、+0.013014、+0.130363，三者均为 4/4 正。
+在全部四个冻结噪声倍率 0.2/0.5/1/2 下，两任务的半径 SD 和条件 XYZ trace 差都保留 4/4 正；
+Triple 的均值范数差在倍率 2 变为 −0.065481，4/4 负。
+
+同一训练后 posthoc actor 保留所有 heads 和噪声、只换成 Cartesian 执行时，Triple 的
+posthoc−Cartesian 平均范数差在倍率 1 为 −0.026404（4/4 负），条件 XYZ trace 差却为
++0.035724（4/4 正）；Double 的两差为 +0.152203、+0.131723（均 4/4 正）。
+因此现有结果不支持“posthoc 在所有已训练策略上只是动作更大”这一统一解释，且平均幅度
+与同状态下的随机动作分散程度必须区分。后者是固定先验状态上的条件动作统计，不能等同于
+实际在线访问分布、探索覆盖、任务有效性或性能增益来源。相同 heads 的即时执行反事实
+也不是重新训练后的效果；这些差值为结果已知后的描述性汇总，不增加显著性或因果主张。
+
+原始完整报告为 `posthoc-final-policy-probes.json`；新增 `final-policy-summary.json`、
+`final-policy-288-seed-cases.csv`、`final-policy-72-case-means.csv` 保留全部任务、五方法、
+四种噪声倍率和同 heads 反事实，不只保留倍率 1。输入和脚本绑定见数据盘
+`control/posthoc_final_policy_summary_20261020/`。汇总脚本两次只读字段断言失败与最终 r3
+修复均保留，失败时尚无输出、没有重新采样或运行训练；最终汇总逐项复核十组既有均值。
 
 ### 完整消融汇总的工程验收与完成状态
 
@@ -450,14 +493,14 @@ step 0/64 评估和训练日志完整，参数有限，实际执行 660 次 crit
 
 数值报告为数据盘 `reports/action_adapter_validation_20261019/rlpd-reference-equivalence.json`，
 GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-reference-engineering-revalidation.json`。
-这只验证移植与工程链路；尚无该外部配方的长程 OGBench 性能结果。
+上述数值与短测只验证移植及工程链路；完整长程结果见下节。
 两个任务 × 四配对 seed × UTD=1/20 的 16 运行配置及独立执行包已冻结，放在
 `control/action_adapter_reference_20261019/`。接续监控已启动：原 72 运行完整验收、原环境
 仍为 Running 且独立远程工程检查通过后，复用同一 4 卡实例执行；每卡先运行一个任务。
 2026-10-20 云端首次工程短测因显式 config 参数顺序退出，原失败记录保留；独立操作
 恢复通过 UTD1/20 真实 GPU 短测及实际 episode 计数，08:32（北京时间）首次启动正式
-16 运行。四个训练进程已核验分别使用 GPU 0–3；尚无本批次完整性能结果，未加入原
-72 运行，也未申请额外实例。源码、配置值和科学预算均保持冻结。
+16 运行。该批次随后完整完成，未加入原 72 运行，也未申请额外实例。
+源码、配置值和科学预算均保持冻结。
 
 独立控制器通过 13 项测试，覆盖真实 episode/success 计数、缺失网格、有效配方、全部动作
 边界、精确 optimizer 更新数、非有限 optimizer 状态、重复输出、失败退出码、禁止自动重跑及
@@ -465,6 +508,46 @@ GPU 复核记录为 `control/action_adapter_validation_20261019/local-rlpd-refer
 新的评估观察器只读取原评估返回的 trajectories，为每个评估点写出实际 episode 数和成功次数；
 不增加评估调用，不改变策略、训练更新或 RNG。已有短测缺少该新字段，明确标为旧工程格式，
 不冒充正式基线已经满足 episode 记录要求；正式运行必须通过严格计数验收。
+
+### 原论文 RLPD native 的完整结果（2026-10-20）
+
+独立批次于北京时间 20:44:36 完成：16/16 实际训练退出均为 0，调度器退出为 0。
+训练源码固定为 `2c2d0c3054aebf6025f13a0836c12feeff2ab776`。每组完整保留 seeds 10–13，
+每次 1M 环境步；AUC 是实际 0–1M、间隔 100k 的 11 点归一化梯形面积，按百分点报告。
+每个评估点实际返回 50 个 episode，成功次数与原始 CSV 一致。
+
+| 任务 | UTD | 平均 AUC（百分点） | 终点成功率 % | Tail-3 成功率 % |
+|---|---:|---:|---:|---:|
+| Cube Triple task2 | 1 | 0.000 | 0.0 | 0.000 |
+| Cube Triple task2 | 20 | 0.000 | 0.0 | 0.000 |
+| Cube Double task2 | 1 | 72.400 | 99.0 | 99.333 |
+| Cube Double task2 | 20 | 0.000 | 0.0 | 0.000 |
+
+![原论文 RLPD native 全部 16 条曲线与四组均值](../images/rlpd_native_reference_curves_20261020.png)
+
+Double UTD1 的逐 seed AUC 为 69.2、74.0、68.2、78.2，终点为 96%、100%、100%、100%。
+其余三组的全部 12 个运行、132 个评估点均为零；这些是完整零结果，不是缺失数据。
+所有运行的 actor 与温度各更新 995001 次；critic 在 UTD1 更新 995001 次，在 UTD20
+更新 19900020 次。target critic 的 TrainState step=0 表示未对其执行 optimizer，
+不表示没有 Polyak target 更新。
+
+独立只读验收重新核对 90 个训练源码、9 个运行控制文件、16 份原始记录/命令/有效配置、
+11 点曲线、实际 episode/success 计数和 AUC，并在服务器上重新哈希全部 checkpoint
+（共 218124304 bytes）。有限状态及 optimizer 计数以冻结的逐运行恢复验收为依据，
+没有另作第二次反序列化。首次审计因观察器字段名错误退出，原脚本、日志与退出码保留；
+r2 仅修复只读观察器，没有重跑、覆盖或替换科学运行。
+
+原始报告为数据盘 `reports/action_adapter_reference_20261019/reference-report.json`，SHA-256
+`683f17ecc1d3b85061e926e22f33ae6b28ff58ec6de0f099ac6cc1c7c768596a`。
+同目录的 `reference-summary.md`、`reference-16-seeds.csv`、`reference-four-means.csv` 和
+`reference-20-comparisons.csv` 保存完整结果，`terminal-reference-evidence-binding-20261020.json`
+绑定原报告、审计、全部表图、脚本和本次文档版本；验收在
+`control/action_adapter_reference_20261019/terminal-audit-20261020-r2/technical-acceptance.json`。
+既定 20 项 external-recipe 比较全部保留，但改变了整个 learner 配方，不能据此分离 posthoc 效应。
+例如 Double UTD1 比项目 native 的平均 AUC 低 12.1 点；UTD20 在两任务上均未学成。
+已有训练日志的 loss、Q、entropy 与 temperature 均为有限值，因此目前没有 NaN/Inf
+证据解释失败，也不能从有限值推断 critic 正确或稳定。以上为两开发任务、四 seed 的描述性结果，
+尚不能证明 posthoc 在 released learner 上的收益，更不能归因于独立幅度头或径向梯度。
 
 ### 原版 posthoc 的同 RLPD 配方接入验收
 
@@ -482,7 +565,7 @@ episode 数为 1/1。全部动作和参数/优化器状态有限、边界合法�
 
 该运行是工程验收，没有长程比较或成功率收益结论。记录在数据盘
 `control/posthoc_reference_20261019/`。原 72/16 运行发布包保持冻结，新适配没有插入原批次；
-同配方正式 posthoc 比较已另行冻结，仍待原批次和分析终态。
+同配方正式 posthoc 比较已另行冻结，并在原批次及技术分析完成后接续。
 
 新批次为两个任务 × 四个相同训练 seed × UTD1/20，共 16 次原版 posthoc，复用独立基线的
 16 个 native。四项配方内方法比较及四项描述性交互预先固定，不能当作十个 fresh seed
@@ -490,8 +573,10 @@ episode 数为 1/1。全部动作和参数/优化器状态有限、边界合法�
 TrainState/Adam、全部动作与冻结源码 API 恢复检查，没有重跑训练。
 控制器与分析门槛通过 30 项测试；完整包解开后，26 项核心测试和 30 项运行测试合计
 56 项通过，106 个源码、14 个控制文件及全部外层成员哈希核对通过。
-接续监控已启动，等待原 72/16 运行及四类分析完成；16 次新正式训练尚未开始，
-尚无该同配方 posthoc 的长程性能结果。部署证明在数据盘
+2026-10-20 20:57（北京时间）同配方 16 运行正式启动。21:03 的只读进程核验确认
+调度器及四个真实 `posthoc_entry.py` 训练进程存活，训练源码为 `e20834c`；
+没有完整长程结果，未据 native 成绩修改计划或启动门槛。现场核验为
+`control/posthoc_reference_20261019/live-process-verification-1792501388.json`；部署证明在数据盘
 `control/posthoc_reference_20261019/deployment-execution-proof.json`。
 
 ### 动作与运行时间分析的准备
@@ -505,7 +590,9 @@ TrainState/Adam、全部动作与冻结源码 API 恢复检查，没有重跑训
 post-warmup 动作；其协方差与均值另用直接 batch 计算核对一致。修改 seed 合约的负控被
 冻结配置哈希拒绝，未生成结果，也没有新增训练。工程报告在数据盘
 `reports/action_adapter_validation_20261019/engineering-action-geometry.json`。
-正式 72+16 个运行的几何统计仍待训练完成；这些工程检查不提供新的性能或机制结论。
+正式几何分析现已完成原筛选 72/72 及独立 native 16/16，共 88 个运行。
+两个批次各自的 `action-geometry.json` 与控制目录的 `geometry-summary.json` 保存结果；
+这些记录补齐既定动作/时间次指标，不单独证明机制或学习因果。
 
 ## 当前可以说什么
 
@@ -656,7 +743,7 @@ step 0/64 各 2 个已完成非视频 episode 均核验通过，成功次数与�
 ## 下一步
 
 首轮 72 运行、28 项固定比较、critic 与 actor 参数链诊断均已完成。当前优先完成独立
-RLPD native/posthoc、FQL、GAC 的冻结比较及 40 运行 fresh-seed 梯度干预；共同六维映射
+RLPD posthoc（native 16/16 已完成）、FQL、GAC 的冻结比较及 40 运行 fresh-seed 梯度干预；共同六维映射
 的 60 运行长程协议、终态汇总工具和独立接续已固定；接续已部署并等待上述 40 运行的
 技术终态，新批次 4090 工程和正式训练尚未启动，不能填入性能结果；详见
 [新协议](experiments.md#共同六维映射的独立长程协议2026-10-20)。后续仍需开发任务以外的

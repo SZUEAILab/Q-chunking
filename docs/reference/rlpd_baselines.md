@@ -77,7 +77,10 @@ JAX_PLATFORMS=cpu python -m research.check_rlpd_reference \
 数值一致只证明已覆盖设置下的 learner 移植；成功率、调参公平性与长程稳定性须由正式实验验证。
 
 真实环境工程验收已完成 64 步、UTD=20，记录了 660 次 critic 与各 33 次 actor/温度更新，
-step 0/64 评估、可恢复 checkpoint 与有限动作；验收过程和解释边界见[当前结果](../current/results.md)。
+step 0/64 评估、可恢复 checkpoint 与有限动作。随后独立 native 长程批次已完成 16/16：
+Triple UTD1/20 和 Double UTD20 均为零，Double UTD1 平均 AUC=72.4、终点=99%。
+每点实际 50 episode、全部 seed 和零结果保留；完整结果与验收边界见
+[当前结果](../current/results.md#原论文-rlpd-native-的完整结果2026-10-20)。
 
 ## 原版 posthoc 在同一 RLPD 配方中的适配
 
@@ -123,5 +126,6 @@ prior/online replay，并在交互与评估时执行 compose。新类继承原�
 交互对照及技术接续条件见[当前实验](../current/experiments.md#原论文-rlpd-的独立参考配方)。
 同一实例的 native 与 posthoc 分批运行，来源核验与数值一致不证明两段长程轨迹逐位相同。
 发布包的 106 个源码、14 个控制文件通过哈希核对，解包后 56 项核心/运行测试通过；
-监控已接续原实例，但仍等待原 72/16 运行及既有分析完成，新正式训练尚未启动。
+原 72/16 运行及技术分析现已完成，同配方 posthoc 在 2026-10-20 20:57（北京时间）
+接续原四卡实例启动；21:03 核验调度器与四个真实训练进程存活。完整长程配对结果尚未产生。
 不能用数值核对或短测替代方法收益、确认实验或跨任务结论。

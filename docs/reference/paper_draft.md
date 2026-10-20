@@ -4,7 +4,7 @@
 
 ## Abstract
 
-Post-hoc action maps change the actions executed by an environment while leaving several choices about policy regularization and critic inputs open. We study these choices in off-policy manipulation learning. A completed development screen comprises nine methods, two OGBench cube task-2 environments, four paired training seeds and one million online transitions per run. The original direction–amplitude posthoc recipe improves normalized success AUC over the native policy by 23.875 percentage points on Cube Triple, but by only 0.400 points on Cube Double. A simple L2 projection has higher mean AUC than the original recipe on both tasks. Critic interfaces that enforce equality across execution-equivalent latent actions eliminate measured Q aliasing, yet do not improve the original recipe's mean AUC. An exploratory analysis of 56 final checkpoints shows that a radial Q component annihilated directly by the execution map can still change executed actions after pullback through actor parameters. These observations motivate a separately frozen, fresh-seed training intervention on that gradient path. Comparisons using a released RLPD recipe, FQL and GAC, the intervention's training outcomes, and held-out-task validation are incomplete. The current evidence establishes task-dependent development results and a local derivative effect; it does not establish a general performance advantage or the causal source of the posthoc gain.
+Post-hoc action maps change the actions executed by an environment while leaving several choices about policy regularization and critic inputs open. We study these choices in off-policy manipulation learning. A completed development screen comprises nine methods, two OGBench cube task-2 environments, four paired training seeds and one million online transitions per run. The original direction–amplitude posthoc recipe improves normalized success AUC over the native policy by 23.875 percentage points on Cube Triple, but by only 0.400 points on Cube Double. A simple L2 projection has higher mean AUC than the original recipe on both tasks. Critic interfaces that enforce equality across execution-equivalent latent actions eliminate measured Q aliasing, yet do not improve the original recipe's mean AUC. An exploratory analysis of 56 final checkpoints shows that a radial Q component annihilated directly by the execution map can still change executed actions after pullback through actor parameters. These observations motivate a separately frozen, fresh-seed training intervention on that gradient path. A separate 16-run released-recipe native RLPD cohort is complete: only Cube Double at UTD1 learns the task, while the other three task/UTD groups have zero recorded success. Its matched posthoc comparison, FQL and GAC comparisons, the intervention's training outcomes, and held-out-task validation remain incomplete. The current evidence establishes task-dependent development results and a local derivative effect; it does not establish a general performance advantage or the causal source of the posthoc gain.
 
 ## 1. Introduction
 
@@ -174,13 +174,53 @@ The env/canonical responses are at floating-point scale (largest individual RMS 
 
 Reconstructing the complete actor loss, including entropy, agrees with the original implementation to a maximum error of $5.283\times10^{-7}$, and the Q-gradient decomposition error is at most $5.114\times10^{-7}$. This validates the diagnostic's local accounting. It does not measure Adam's actual update or show that radial inconsistency improves or harms long-run success. The fresh-seed intervention in Section 3.3 is designed to test that learning consequence separately.
 
-## 6. Evidence that remains incomplete
+### 5.5 Final-policy conditional action geometry
 
-The following cells have no completed performance result and are intentionally not filled with development-screen values. They reuse the authorized four-GPU allocation in the established queue; engineering acceptance is separate from scientific evidence.
+The registered secondary diagnostic completed all 40 eligible checkpoints (native and four original-map variants), retaining four seeds per group. The other 32 screen checkpoints are outside this diagnostic's registered scope. Each task uses a shared panel of 128 prior-validation states and 64 common Gaussian draws per state. Restored checkpoints retain 995001 training updates; the CPU analysis performs no updates or environment interactions. The table reports all ten group means at the original noise multiplier of one.
+
+| Task / method | Mean XYZ norm | Within-state radius SD | Within-state XYZ covariance trace |
+|---|---:|---:|---:|
+| triple2 / Native | 1.338446 | 0.118393 | 0.133003 |
+| triple2 / Original posthoc / latent Q | 1.346353 | 0.156101 | 0.214822 |
+| triple2 / Original / env Q | 1.475933 | 0.110536 | 0.110418 |
+| triple2 / Original / canonical Q | 1.226905 | 0.118772 | 0.097494 |
+| triple2 / Original / target entropy −2.5 | 1.327747 | 0.165189 | 0.234886 |
+| double2 / Native | 1.320970 | 0.131125 | 0.190640 |
+| double2 / Original posthoc / latent Q | 1.486933 | 0.144138 | 0.321003 |
+| double2 / Original / env Q | 1.465405 | 0.117821 | 0.141214 |
+| double2 / Original / canonical Q | 1.354835 | 0.115712 | 0.115658 |
+| double2 / Original / target entropy −2.5 | 1.501237 | 0.161455 | 0.367328 |
+
+For original posthoc minus native, Cube Triple's mean norm difference is only +0.007907 (two positive and two negative seed pairs), while within-state radius SD and XYZ covariance trace differences are +0.037708 and +0.081819 (four positive pairs each). Cube Double's corresponding differences are +0.165963, +0.013014 and +0.130363, all with four positive pairs. All four frozen noise multipliers (0.2, 0.5, 1, 2) retain four positive radius-SD and XYZ-trace differences on both tasks. Triple's norm difference becomes −0.065481 at multiplier two, with four negative pairs.
+
+A same-head instantaneous execution counterfactual also separates magnitude from dispersion: at multiplier one, replacing the Triple posthoc map with Cartesian execution increases mean norm by 0.026404 while reducing within-state XYZ trace by 0.035724; both directions hold in all four seeds. For Double, posthoc has larger norm and trace than that counterfactual. Thus a uniformly larger executed magnitude is not a sufficient description of these trained policies. These are descriptive fixed-panel action statistics, not online visitation, coverage, task effectiveness or a causal attribution of learning success. The same-head counterfactual does not estimate the result of retraining. All scales, seeds and counterfactuals are retained; derived contrasts introduce no new significance claim.
+
+## 6. Released-recipe baseline and remaining comparisons
+
+### 6.1 Complete native reference cohort
+
+All 16 native runs of the released-recipe RLPD port completed one million environment transitions, with actual driver and scheduler exits of zero. Each task/UTD group retains all four seeds (10–13). AUC uses the actual eleven-point 0–1M / 100k grid. Every evaluation records 50 returned episodes and integral success counts.
+
+| Task | UTD | Mean AUC | Final success % | Tail-3 success % |
+|---|---:|---:|---:|---:|
+| Cube Triple task2 | 1 | 0.000 | 0.0 | 0.000 |
+| Cube Triple task2 | 20 | 0.000 | 0.0 | 0.000 |
+| Cube Double task2 | 1 | 72.400 | 99.0 | 99.333 |
+| Cube Double task2 | 20 | 0.000 | 0.0 | 0.000 |
+
+![All 16 released-recipe native curves and group means](../images/rlpd_native_reference_curves_20261020.png)
+
+The 12 runs outside Cube Double UTD1 have zero success at every recorded evaluation; they are complete zero outcomes, not missing data. Double UTD1 seed AUCs are 69.2, 74.0, 68.2 and 78.2, with final success 96%, 100%, 100% and 100%. All retained training-log scalars are finite, which does not explain the zero outcomes or certify Q calibration. Each run performs 995001 actor and temperature updates; critic updates are 995001 at UTD1 and 19900020 at UTD20.
+
+All 20 frozen external-recipe contrasts are reported in the terminal summary. For example, Double UTD1 native is 12.1 AUC points below the project-screen native. These contrasts change the entire learner recipe and do not isolate the posthoc representation. Native completion alone therefore does not establish a posthoc advantage under the released learner. This cohort remains a descriptive study on two development tasks and four seeds.
+
+### 6.2 Pending matched and prospective evidence
+
+The following comparisons have no complete paired performance result. They reuse the authorized four-GPU allocation in the established queue; engineering acceptance is separate from scientific evidence.
 
 | Question | Frozen comparison | Evidence status at this revision |
 |---|---|---|
-| Does the result hold under a released RLPD learning recipe? | Native 16 runs and original posthoc 16 runs; two tasks, four paired seeds, UTD 1/20 | Native cohort running; posthoc queued; complete paired performance unavailable |
+| Does the result hold under a released RLPD learning recipe? | Native 16 runs and original posthoc 16 runs; two tasks, four paired seeds, UTD 1/20 | Native 16/16 complete; matched posthoc training started; complete paired performance unavailable |
 | Does the complete map transfer to another learner? | FQL native/posthoc, 16 runs, 1M offline plus 1M online transitions | Engineering validated; long-run comparison pending |
 | Is the method competitive with a geometric-action algorithm? | Released-code GAC, 32 runs, radii 1/2.5 crossed with online-only/prior-balanced protocols | Source and protocol frozen; full comparison pending |
 | Does the radial actor-Q path affect learning? | Full/cut 40 runs on ten fresh seeds | Protocol and runtime frozen; training not started |
@@ -191,7 +231,7 @@ The RLPD port preserves its distinct critic/actor update ratio, random two-Q min
 
 ## 7. Related work and scope of the estimator claim
 
-[Efficient Online Reinforcement Learning with Offline Data](https://proceedings.mlr.press/v202/ball23a.html) motivates the strong RLPD comparison. Its released learning recipe is kept distinct from our project's development fork. The incomplete native/posthoc reference cohorts determine whether the observed gain survives that change of learner.
+[Efficient Online Reinforcement Learning with Offline Data](https://proceedings.mlr.press/v202/ball23a.html) motivates the strong RLPD comparison. Its released learning recipe is kept distinct from our project's development fork. The native reference cohort is complete; its pending matched posthoc comparison determines whether the observed gain survives that change of learner.
 
 [Action Space Design in Reinforcement Learning for Robot Motor Skills](https://proceedings.mlr.press/v270/esser25a.html) studies task-dependent effects of action-space choice, including initialization and behavior. Our common warmup and parameter controls do not establish a new initialization-matching technique or remove this alternative explanation. [Beyond Distributions: Geometric Action Control](https://proceedings.iclr.cc/paper_files/paper/2026/hash/e58fa42d4b7a798eef8d0d75098f87ad-Abstract-Conference.html) provides direct geometric-action prior work and a competing algorithm. We do not claim the first use of normalized directions or amplitude-related action control.
 
@@ -210,7 +250,7 @@ This is only the valid-branch direction marginal with respect to sphere surface 
 
 ## 8. Limitations and claim readiness
 
-The completed evidence uses only two development tasks and four training seeds. Cube Double has a final-success ceiling. The original evaluation logs cannot independently certify episode counts, and the project learner differs materially from the released RLPD recipe. The projection baseline differs in dimension and regularization. Direct amplitude changes multiple factors. A zero-alias critic need not be calibrated, and a local gradient response need not predict an optimizer or learning outcome. The actor diagnostic was designed after screen outcomes were known.
+The completed evidence uses only two development tasks and four training seeds. Cube Double has a final-success ceiling. The project-screen evaluation logs cannot independently certify episode counts; the separate native reference cohort does record 50 returned episodes per evaluation. The project learner differs materially from the released RLPD recipe. The projection baseline differs in dimension and regularization. Direct amplitude changes multiple factors. A zero-alias critic need not be calibrated, and a local gradient response need not predict an optimizer or learning outcome. The actor diagnostic was designed after screen outcomes were known.
 
 Historical posthoc results remain supplementary provenance, not independent confirmation of this study. A separate reanalysis of 200 old runs retained all task1–5/H1/H5 settings and their zero results. Those files do not independently certify the historical process exits, executed source or evaluation RNG, and their observed 100k–1M AUC must not be pooled with this screen's actual 0–1M grid. Earlier synthetic, MME and temporal-control results are preserved in the historical manuscript without being presented as evidence for the current robot method.
 
@@ -225,8 +265,11 @@ The completed screen is bound to training source `ccab449959475494450942578a4742
 | All 72 runs, grids and updates | `screen-report.json`, `screen-per-seed.csv`, `screen-method-means.csv` | Completed development performance |
 | All fixed pairwise comparisons | `posthoc-screen-comparisons.json` | Six original plus 22 later-fixed descriptive comparisons |
 | Original critic diagnostics | `critic-invariance.json` | Published augmented report, distinct from the original raw remote report |
+| Final-policy conditional geometry | `posthoc-final-policy-probes.json`, `final-policy-summary.json`, `final-policy-288-seed-cases.csv`, `final-policy-72-case-means.csv` | All registered 40 checkpoints; four frozen noise scales; no learning intervention |
 | Local actor-parameter analysis | `posthoc-actor-radial-response.json`, `posthoc-actor-radial-summary.json` | Post-outcome exploratory derivatives, no training steps |
 | Provenance and plots | `terminal-screen-evidence-binding.json`, `actor-radial-evidence-binding.json`, `figures/figure-receipt.json` | Source/report/checkpoint bindings |
+
+The separate native reference cohort is bound to training source `2c2d0c3054aebf6025f13a0836c12feeff2ab776`. Its raw report at `/data/chainpray/qc/reports/action_adapter_reference_20261019/reference-report.json` has SHA-256 `683f17ecc1d3b85061e926e22f33ae6b28ff58ec6de0f099ac6cc1c7c768596a`. The same directory contains `reference-summary.json`, all 16 seed rows, all four means, all 20 external-recipe contrasts and `figures-r2/figure-receipt.json`. Independent read-only acceptance is recorded under `/data/chainpray/qc/control/action_adapter_reference_20261019/terminal-audit-20261020-r2/`. It rechecks original evaluations, source/runtime bindings and all checkpoint bytes; finite states and optimizer counts use the frozen per-case validator records, rather than a second independent deserialization. The first observer field-name failure and its observer-only repair are retained.
 
 The prospective actor-Q protocol is frozen at `/data/chainpray/qc/control/posthoc_actor_q_ablation_20261020/plan.json`, SHA-256 `0116e96c8ee634fd3567aab2caf59a22d2029f29e4a0ee336a6a7947e9ed737c`, with training source `db861f3c1217c642d8138453630f8a2b8f275219`. Runtime versioning and engineering repairs are recorded separately and do not overwrite the plan or failed engineering evidence. The current four-GPU queue does not gate later scientific cohorts on favorable performance.
 
