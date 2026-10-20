@@ -125,3 +125,6 @@
 - [stage_speed_cap_pilot.png](stage_speed_cap_pilot.png)
 - [synthetic_stage_task.png](synthetic_stage_task.png)
 - [tangent_vs_sph_stereo.png](tangent_vs_sph_stereo.png)
+
+- [posthoc_screen_curves_20261020.png](posthoc_screen_curves_20261020.png)
+- [posthoc_screen_auc_pairs_20261020.png](posthoc_screen_auc_pairs_20261020.png)

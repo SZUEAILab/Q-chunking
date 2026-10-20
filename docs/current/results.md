@@ -2,8 +2,83 @@
 
 [文档入口](../index.md)
 
-更新：2026-10-19。本页汇总已有记录，不作为实时训练监控。性能解释主要来自此前已分析报告，
+更新：2026-10-20。本页汇总已有记录，不作为实时训练监控。性能解释主要来自此前已分析报告，
 新归档中的运行完整性检查不自动升级为科学结论。
+
+## 冻结筛选的完整结果（2026-10-20）
+
+`action_adapter_validation_20261019` 的 72/72 个运行已完成：两个开发任务、seeds 10–13、
+九种方法、每次 1M 在线步、H1。所有真实进程退出码为 0，完整 step 0–1M 评估网格、
+原始环境日志、最终 checkpoint、有限参数、源码与配置身份均通过验收；每次实际 joint
+optimizer 更新为 995001。训练源码固定为 `ccab449959475494450942578a474294f55f5520`。
+全部运行终态后才读取成功率。50 episodes 是配置值，冻结驱动未记录实际返回的 episode
+计数，此限制保留；不能用后续增加的计数功能倒推本批次已经核验。
+
+下表 AUC 为 success 在真实 0–1M 网格上的梯形积分除以 1M，再乘 100；endpoint 为
+1M 成功率百分比。每项为全部四个训练 seed 的均值，不能与下文历史 100k–1M AUC 混算。
+
+| 方法 | Triple task2 AUC | Triple endpoint | Double task2 AUC | Double endpoint |
+|---|---:|---:|---:|---:|
+| Native | 6.125 | 37.5 | 84.500 | 100.0 |
+| L2 projection | 37.250 | 94.0 | 87.175 | 99.5 |
+| Legacy latent（原版） | 30.000 | 86.0 | 84.900 | 100.0 |
+| Legacy env | 16.400 | 73.0 | 84.950 | 100.0 |
+| Legacy canonical | 29.400 | 80.0 | 84.550 | 100.0 |
+| Direct latent | 47.000 | 93.0 | 84.950 | 100.0 |
+| Direct env | 16.700 | 68.0 | 85.625 | 99.5 |
+| Direct canonical | 33.225 | 83.5 | 85.300 | 100.0 |
+| Legacy common entropy（−2.5） | 30.075 | 85.5 | 85.350 | 100.0 |
+
+![完整 72 运行的逐 seed 曲线与方法均值](../images/posthoc_screen_curves_20261020.png)
+
+全部六项原主比较及 22 项训练启动后、成绩查看前固定的描述性次比较均完成，不删掉
+不利比较。四 seed 只支持开发阶段描述，不作确认性显著结论。
+
+| 关键配对 AUC 差（百分点） | Triple 均值；正配对 | Double 均值；正配对 |
+|---|---:|---:|
+| 原版 − native | +23.875；4/4 | +0.400；2/4 |
+| Projection − native | +31.125；4/4 | +2.675；4/4 |
+| 原版 − projection | −7.250；1/4 | −2.275；1/4 |
+| Legacy canonical − latent | −0.600；3/4 | −0.350；1/4 |
+| Legacy env − latent | −13.600；0/4 | +0.050；2/4 |
+| Direct canonical − latent | −13.775；1/4 | +0.350；2/4 |
+| Direct env − latent | −30.300；0/4 | +0.675；2/4 |
+| Legacy common entropy − 原版 | +0.075；2/4 | +0.450；2/4 |
+| Direct latent − 原版 | +17.000；4/4 | +0.050；2/4 |
+
+![全部 28 项固定比较的逐 seed AUC 差](../images/posthoc_screen_auc_pairs_20261020.png)
+
+原版在 Triple 的优势复现，四个配对差为 +26.6、+23.9、+18.4、+26.6 点；Double
+只有很小的均值差，native 与原版终点都为 100%，存在明显的终点天花板。共同数值熵
+目标仍保留 Triple 的收益（相对 native +23.950 点、4/4 正配对），削弱了“仅由默认
+−3/−2.5 差异造成”的解释；+0.075 的小均值差不构成统计等效，也未排除潜坐标熵作用。
+
+简单投影在两个任务的均值都高于原版，独立幅值头的必要性尚未成立。Direct latent 在
+Triple 均值最高，但它同时改变 squash 与执行支持；其相对原版的改善不能称为单独
+log-speed 消融。Direct 与 projection 的均值排序可报告，二者没有登记为本批次的主要
+或次要配对检验，不能事后升级为确认结论。未来机制训练需将容量与正则匹配的投影
+加入核心对照；当前六维 Cartesian 辅助头实现还不足以回答相对投影的价值。
+
+### 训练后 critic 诊断及反证
+
+56/56 个 adapter 最终 checkpoint 的冻结诊断均完成。每个 checkpoint 在 128 个固定
+validation-prior 状态上分别使用策略条件和共同 Gaussian 面板；每个面板的 128 对
+执行等价动作全部有效，无近零排除。原版 Triple 的策略条件 Q alias 绝对差均值为
+0.709731，相对差为 0.006245；径向 Q 导数 RMS 为 1.382977。报告中
+`radial_q_gradient_fraction_mean=0.758608` 是三维 post-squash 方向子向量内的平均绝对
+余弦，不是“76% 的 actor 梯度浪费”，不含熵、网络链式导数或完整参数梯度。
+
+Legacy env/canonical 在该面板的 alias 差为 0，符合其接口构造，但二者在 Triple 的
+AUC 均值都未超过 latent，env 下降 13.6 点；direct canonical 也下降 13.775 点。
+因此“冗余不一致存在”有实测支持，“消除该不一致必然提高性能”被本开发结果反驳。
+零 alias 不证明 critic 有效或校准；冻结摘要未记录全 Q 方差及完整动作梯度尺度。
+诊断只涉及 ensemble-mean Q，不是完整 actor loss 的归因。
+
+终态输入、逐 seed 数值、全部 28 项比较、56 项诊断和图表的 SHA 绑定见数据盘
+`reports/action_adapter_validation_20261019/terminal-screen-evidence-binding.json`；同目录
+保存 `screen-per-seed.csv`、`screen-method-means.csv`、`posthoc-screen-comparisons.json`、
+`critic-invariance.json` 及 `figures/figure-receipt.json`。这仍是两开发任务、四 seed 的
+结果；官方 RLPD、FQL、GAC 和 fresh-seed/held-out 确认尚不能用这些数值替代。
 
 ## 原版 posthoc 的统一重算（2026-10-19）
 
@@ -238,8 +313,8 @@ direct-canonical H5 128 步，以及 native 64 步完整运行验收均退出 0�
 现已分配并进入 Running，四张 RTX 4090 的真实 SSH/GPU 探针已通过。
 平台返回配置为 4×4090、56 CPU、448 GiB 内存、标价 4 算力点/小时，不限时长。
 该页面不是实时监控。部署、critic、基线和动作几何四个监控进程已恢复。
-远程工程验收全部通过，72 组正式筛选已启动；首次进程核验看到 8 条活动训练，
-分别位于四张卡，每卡两条。当前尚无这 72 个长程运行的完整性能结果。
+远程工程验收后启动 72 组筛选；首次进程核验看到 8 条活动训练，分别位于四张卡。
+2026-10-20 已全部完成并验收，完整性能与限制见本页顶部的冻结筛选结果。
 
 配置、原始工程尝试、源码/数据 SHA-256、等待进程状态及后续验收记录统一放在数据盘
 `control/action_adapter_validation_20261019/`；生成报告放在 `reports/action_adapter_validation_20261019/`。
@@ -292,7 +367,7 @@ legacy-canonical 的两个真实 64 步 checkpoint 均复核为 33 次更新、T
 按定义工作。它没有证明成功率、样本效率或总 actor 梯度改善；此处不包含熵梯度，64 步结果
 不用于筛选优胜方法。原始报告与配对身份核对保存在数据盘
 `reports/action_adapter_validation_20261019/engineering-critic-invariance-v2.json` 和
-`engineering-invariance-comparison.json`。72 次长程筛选的性能结果仍待平台执行。
+`engineering-invariance-comparison.json`。72 次长程筛选现已完成，完整性能见本页顶部。
 
 ### 原论文 RLPD 配方的独立验收
 
