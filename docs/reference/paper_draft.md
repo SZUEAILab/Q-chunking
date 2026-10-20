@@ -36,7 +36,7 @@ heads 下概率受到很强限制；同八个冻结 actor 的解析界和有限�
 | 原 posthoc | Cube-Triple task1–5，H1/H5，各十配对 seed | task1–4 的八组平均 observed-AUC 差均为正，task5 两组为零；完整方法值得优先复现 |
 | 2026-09-25 critic 消融 | sigmoid/direct，cube/sphere，task2 H1，各四 seed、500k | 该 direct 配方对 critic 接口敏感；不能转用于六月 tanh/log 配方的因果解释 |
 | 本分支冻结筛选 | 两任务、四 seed、九方法、1M，72/72 验收 | Triple 原版−native +23.875 AUC 点，Double +0.400；projection 两任务均值高于原版；不是确认实验 |
-| 外部 RLPD 配方 | 独立的 16 运行、UTD=1/20 | learner 数值核对通过；接续工程遇配置解析顺序错误，隔离恢复验收中；正式性能尚缺 |
+| 外部 RLPD 配方 | 独立的 16 运行、UTD=1/20 | learner 数值核对通过；配置解析故障隔离修复、两种 UTD 工程验收后已首次启动 16 运行；完整性能尚缺 |
 | 同 RLPD 配方的原版 posthoc | 新增独立 16 运行，配对既有 16 个 native，UTD=1/20 | 十二类数值核对和真实 GPU 短测通过，批次已冻结接续；长程结果尚缺，不是 fresh-seed 确认 |
 | 跨算法与完整强基线 | FQL native/posthoc 16 运行；GAC 两 radius/两数据协议 32 运行 | 设计和工具已冻结，不能用尚未执行的正式比较主张跨算法优势或超过 GAC |
 | 执行映射因果对照 | 共同六维 actor、潜动作正则与五维 env critic，只改变执行映射 | 双任务 CPU、单任务 GPU 短测及实际评估计数已核验；尚无新长程因果效应 |

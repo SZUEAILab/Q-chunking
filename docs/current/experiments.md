@@ -12,9 +12,18 @@
 官方 native RLPD 接续的首个 GPU 工程短测因 `--agent.field` 早于显式 `--agent` 而在
 解析阶段退出，正式 16 运行尚未因此启动。失败日志、receipt 和原 launch lock 保留。
 独立 `launch-recovery-r2` 只修复操作包装的参数顺序，保持训练源码、16 个命令的参数值、
-种子与预算；重新验收 UTD1/20 工程后才允许首次正式启动。同类 posthoc 包装在启动前
-作相同操作修订，旧部署及绑定保存在 `config-order-amendment-r2`，科学协议不变。
-这不是科学运行重试；后续 FQL/GAC 继续按原技术完整性门槛等待，不根据成绩决定启动。
+种子与预算；UTD1/20 工程现已分别通过 33/660 次 critic、各 33 次 actor/温度更新、
+实际 episode 计数与 checkpoint 验收。2026-10-20 08:32（北京时间）首次启动正式 16 运行，
+已核验四个真实训练进程分别使用 GPU 0–3，每卡一个任务。RLPD、几何诊断、posthoc、
+FQL 四个监控进程均已恢复。现场证据在该目录的 `formal-live-verification.json` 和
+`observer-recovery/verification.json`。同类 posthoc 包装在启动前作相同操作修订，旧部署
+及绑定保存在 `config-order-amendment-r2`，科学协议不变。
+这不是科学运行重试；后续 posthoc/FQL/GAC 继续按原技术完整性门槛等待，不根据成绩决定启动。
+参数修复新增 7 项测试通过，posthoc 操作层 30 项回归通过；两个 UTD 的实际冻结 posthoc
+入口仅解析参数的本地验收也通过，未训练。平台只读 API 的重试事件另外写入观察日志，
+不再覆盖已完成的主批次阶段；合成 GET 重试和 POST 不重试均验证，无外部请求。
+对应记录为原批次 `platform-observation-isolation-20261020/verification.json`，历史 owner
+进程与失败证据保持不变；该操作修订不改变训练发布包。
 
 ## Action-adapter 冻结筛选
 
