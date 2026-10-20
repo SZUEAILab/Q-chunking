@@ -85,14 +85,23 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 ### 当前 UTD1 主线的共享槽位
 
 已启用[并发部署修订](experiments.md#utd1-主线的并发部署修订2026-10-21)：Q40/M60
-通过外置操作适配器使用每卡最多8个总槽（为C/F/GAC原队列保留1槽），同卡错峰30秒。
+通过外置操作适配器使用每卡最多8个总槽（为C/F/GAC原队列保留1槽），两个协调器各自同卡错峰30秒；共用槽位锁约束总任务数。
 原科学发布包与plan不改；不得重启原训练或直接重跑已有arm命令。原等待owner已经保留
 快照并被操作owner接替，当前 started.json 包含 operational_policy_sha256 与 supersedes。
-新的真实 owner/spec/policy 绑定在数据盘 `control/posthoc_concurrency_20261021/owner-adoption.json`。
+Q40 的真实 owner/spec/policy 绑定在数据盘 `control/posthoc_concurrency_20261021/owner-adoption.json`；
+M60 最新绑定为同目录 `mapping-owner-adoption-r6.json`，各次退役的协调记录均保留。
 完整只读查询：`python3 /data/chainpray/qc/control/posthoc_concurrency_20261021/observe.py`。
 只检查旧控制器的 gate 会仍显示旧串行依赖；实际接纳门槛以已哈希的外置policy为准。
-共同映射仍等待Q40终态，但不再等待全部GPU空闲，而是在共享总槽内接纳；原4/6项工程与
-独立恢复必须通过。显式操作修订不等于改变科学身份，不允许删除原intent或重新提交已有case。
+共同映射核对Q40原四项工程及科学接纳绑定后即可独立补充空槽，不等待Q40科学终态或整卡
+空闲；原4/6项工程与独立恢复必须通过。M60 使用本机接纳互斥及共用槽位锁，以避开共享
+存储的持续阻塞式互斥等待；不修改既有Q40进程或其锁文件。M60仅复核已完成工程，余下
+身份首次执行。两个协调器之间不承诺严格30秒错峰；资源测量应报告这一部署条件。
+显式操作修订不等于改变科学身份，不允许删除原intent或重新提交已有case。
+
+Q40 的存活 owner 不能单独证明剩余身份继续接纳。定时器同时核对真实 science receipt
+与活跃 driver；若已启动项全部真实验收退出、仍有未启动身份且无活跃 driver，触发技术
+诊断。此时保留原退出链与锁，先审查再版本化仅接纳从未启动身份的控制器，不重跑已完成
+或失败项；不得因观察到 PID 消失直接重启。
 
 ## 文件放在哪里
 
@@ -160,9 +169,10 @@ cd /data/chainpray/qc/control/gac_image_continuation_20261020/release-0bc033b312
 
 新 60 运行科学计划位于数据盘 `control/posthoc_matched_map_study_20261020/plan.json`，
 它保留注册时的 `runtime_armed=False`；当前独立运行状态以
-`control/posthoc_matched_map_runtime_20261020/remote-started.json`、`watch-process.json`、
-`watch-status.json` 和 `remote-progress.json` 为准。前两个记录绑定远端 owner 和本机
-只读收集进程，仍需读取相应 `/proc/<pid>/cmdline` 才能认证存活，不能只看锁或旧状态。
+`control/posthoc_matched_map_runtime_20261020/watch-process.json`、`watch-status.json` 和
+`remote-progress.json`，以及并发修订目录的 `owner-adoption.json` 为准。原 `remote-started.json`
+保留首次 arm 的历史身份；当前远端 owner 以远端 `continuation/started.json` 的替换链为准。
+远端 owner 和本机只读收集进程仍需核对 `/proc/<pid>/cmdline`，不能只看锁或旧状态。
 
 远端纯观察入口为：
 
@@ -173,7 +183,8 @@ cd /workspace/releases/posthoc-matched-map-controller-9cd028fa0bf4/payload
 
 通过已绑定当前 job 的 SSH 执行，不复制私钥或认证到远端。
 `waiting_for_existing_actor_q_queue` 表示等待既有 40 运行的完整技术终态和实际 supervisor
-退出；随后等待四卡空闲，先六个 4090 工程、再 60 个科学 case。没有成绩方向门槛。
+退出；首次串行控制器随后等待四卡空闲。现行并发操作适配器改为共享槽位接纳，
+仍先六个 4090 工程、再 60 个科学 case，没有成绩方向门槛。
 `arm` 已执行一次，勿因连接超时重发或删除 intent；先只读核对原 PID 和记录。等待阶段
 不初始化 CUDA。本地收集进程只在完整终态后下载绑定的汇总和退出回执，不下载权重。
 
