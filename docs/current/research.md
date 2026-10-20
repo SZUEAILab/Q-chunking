@@ -205,6 +205,21 @@ fresh seed 的确认。离线预训练与在线效率分别统计，见[实验](
 本项目当前检验的是固定解析动作映射下的 value-coordinate aliasing，以及它和实际任务收益
 是否相关。Canonical critic 保留原始潜坐标熵，不能据此声称已经消除动作冗余或提高状态熵。
 
+### 动作变换与梯度估计已有直接先例
+
+对 [CAPG（ICML 2018）](https://proceedings.mlr.press/v80/fujita18a.html)、
+[MPG/APG（ICLR 2019）](https://arxiv.org/abs/1806.05134) 和上述 MinRed 的方法页已作全文
+与公式核对。CAPG/MPG 改写执行分布的 likelihood-ratio score；MinRed 学习动作后验并
+引入冗余相关 bonus。当前 40 运行只干预学习到的 latent Q 的 pathwise 反向梯度，
+没有计算边缘 score、改变 latent 熵或引入 MinRed bonus。因此不能宣称首次处理
+归一化动作、首次去除动作冗余，或已经获得无偏/低方差 policy-gradient 修正。
+
+当前 `tanh` 后归一化也一般不是 APG 示例中的 raw-Gaussian 归一化分布。有效方向的
+密度需要对变换后分布沿半径积分，原 mapper 的数值下限及最终 clip 也必须处理；
+推导与适用条件见[机制参考](../reference/method.md#511-原版-posthoc-优势的可检验解释)。
+这些边界不否定 posthoc 已有的性能信号，但将候选贡献限定为特定实现的可复现机制、
+受控干预和独立性能证据。40 运行方案及既有接续顺序保持冻结，未因文献核对追加训练。
+
 机制检查预先固定两个面板：训练后策略自身的采样，以及与学习参数无关的共同 Gaussian
 经策略 squash 后的动作探针。相同验证状态下将原始方向正向缩放 0.5，核验执行动作相同后，
 比较 Q 差和 `u · ∇u Q`。梯度仅针对 ensemble-mean Q，排除熵和其他 actor loss 项。

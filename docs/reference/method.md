@@ -1197,6 +1197,44 @@ $\nabla_\theta L_{\rm cut}-\nabla_\theta L_{\rm full}=J^\top v$。
 接续已启用。40 运行计划仍未启动，等待既有队列结束、四卡空闲与 4090 工程验收，
 范围见[执行记录](../current/experiments.md#actor-q-径向梯度干预的实现准备2026-10-20)。
 
+**与边缘策略梯度的关系。** 动作变换与冗余不是本研究首次提出的问题。
+[CAPG（ICML 2018）](https://proceedings.mlr.press/v80/fujita18a.html) §3 使用裁剪分布的
+边界概率质量重写 likelihood-ratio score，在其条件下保留期望并降低方差；它不是
+简单地把裁剪区间外的梯度置零。
+[MPG/APG（ICLR 2019，作者 v3）](https://arxiv.org/abs/1806.05134) §3、Theorem 4.6、
+Corollary 4.8 已研究归一化 Gaussian 的方向分布及一般动作变换后的 score estimator。
+该保证涉及合适参考测度、可微概率族和执行等价的加权函数；§4.4 还明确限定了一般
+映射下直接使用条件期望/全方差分解的论证。不能把“移除一维”直接当作方差降低证明。
+
+当前干预处理的是 pathwise critic cotangent，而不是上述边缘 score。写
+$P_{\rm rad}$ 为后 squash 方向三维的径向投影，实际移除的是
+$J^\top P_{\rm rad}\nabla_z Q_\psi(s,z)$。它不计算执行分布的密度或 score，保留原 latent
+熵；学习到的 latent Q 还已检出同执行动作的值差，因此不能未经额外证明借用 CAPG/MPG
+的期望不变和方差降低保证。反过来，在可微且非近零的分支，如果 critic 精确满足
+$Q_\psi(s,z)=q(s,g(z))$，沿正径向缩放执行不变，链式法则直接给出
+$P_{\rm rad}\nabla_z Q_\psi=0$，此时 full/cut 的 actor 梯度本就相同。
+这是对当前代码的条件性推论，不是新颖性证明，也不决定实际近似 critic 上的效应符号。
+
+APG 的 angular-Gaussian 示例也不能直接替换当前 `tanh` 后方向的 log-prob。
+例如令 $U=\tanh Z_{1:3}$，$V=\{\|U\|>\epsilon\}$，$N=U/\|U\|$。
+在有密度的理想连续模型中，标准三维极坐标变换给出条件方向密度（球面测度下）
+
+\[
+p_{N\mid V,\theta}(n\mid s)=
+\frac{\int_{\epsilon}^{1/\max_i|n_i|}p_{U,\theta}(rn\mid s)\,r^2\,dr}
+     {\Pr_\theta(V\mid s)},\qquad n\in S^2.
+\]
+
+该式只描述有效方向分支，使用的是变换后的 $p_U$；不能换成原 Gaussian 密度并把
+积分上限设为无穷。近零执行分支、独立幅值及最终逐轴 clip 还需另行计入完整执行
+分布，不能只减去一个常规可逆变换 Jacobian 就得到五维动作密度。
+这里没有实现新的边缘 score，也没有据此改变冻结的 40 运行或熵目标。
+
+[MinRed SAC（UAI 2021）](https://proceedings.mlr.press/v161/baram21a.html) §4–5、Algorithm 1
+通过学习动作后验构造冗余相关 bonus；当前梯度干预没有该后验或 bonus，也未替换成
+转移熵目标。三者的全文范围、PDF/页面哈希及当前实现绑定在数据盘
+`control/posthoc_gradient_literature_audit_20261020/`。这次有限核对不能认证新颖性。
+
 **潜坐标熵。** D+1 策略增加一个方向模长自由度；在常规分支放缩 `u` 不改变执行动作，
 却可能改变 latent log-prob。H1 的默认熵目标也从 baseline 的 −2.5 变成 −3，H5 则为
 −12.5/−15。因而潜动作熵和实际行为探索不能等同，已有
