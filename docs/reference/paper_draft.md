@@ -59,6 +59,17 @@ The separate released-RLPD recipe comparison and UTD20 recipe-factor study are s
 sensitivity diagnostics. Frozen runs, failed attempts, and statistical protocols are retained;
 zero-baseline comparisons cannot substitute for the primary performance evidence.
 
+A separately versioned operational amendment prioritizes the frozen UTD1 actor-Q and
+matched-map cohorts using up to eight total process slots per RTX4090, including one
+reserved slot for the existing reference/cross-algorithm queues, with thirty seconds
+between admissions on the same device. The actor-Q cohort no longer waits for all
+UTD20/FQL/GAC results; it retains complete technical predecessors and its GPU engineering
+gate. The matched-map cohort still waits for actor-Q's observed technical terminal.
+Training sources, case arguments, seeds, budgets, evaluation and statistical protocols
+remain frozen. Shared-hardware wall time is recorded separately and does not establish
+an isolated algorithm-runtime comparison. Admission or engineering alone is not a new
+performance result.
+
 The development learner is a project RLPD-style fork: actor/critic networks have four layers of width 512, target values aggregate ten Q heads by their mean, entropy is absent from the TD backup, UTD is one, and prior/online samples are mixed equally. It is distinct from the [released RLPD recipe](rlpd_baselines.md), including its network size, target aggregation and update schedule. No development-screen result below is labeled an official RLPD reproduction.
 
 ### 2.3 Collection and initialization controls

@@ -82,6 +82,18 @@ SSH 查询 launch 状态的退出码必须明确区分 0、1 和连接错误，�
 记录在数据盘 `control/action_adapter_validation_20261019/health-observation-isolation-20261020/`，
 没有对训练、既有 owner 或科学配置执行恢复/重跑。
 
+### 当前 UTD1 主线的共享槽位
+
+已启用[并发部署修订](experiments.md#utd1-主线的并发部署修订2026-10-21)：Q40/M60
+通过外置操作适配器使用每卡最多8个总槽（为C/F/GAC原队列保留1槽），同卡错峰30秒。
+原科学发布包与plan不改；不得重启原训练或直接重跑已有arm命令。原等待owner已经保留
+快照并被操作owner接替，当前 started.json 包含 operational_policy_sha256 与 supersedes。
+新的真实 owner/spec/policy 绑定在数据盘 `control/posthoc_concurrency_20261021/owner-adoption.json`。
+完整只读查询：`python3 /data/chainpray/qc/control/posthoc_concurrency_20261021/observe.py`。
+只检查旧控制器的 gate 会仍显示旧串行依赖；实际接纳门槛以已哈希的外置policy为准。
+共同映射仍等待Q40终态，但不再等待全部GPU空闲，而是在共享总槽内接纳；原4/6项工程与
+独立恢复必须通过。显式操作修订不等于改变科学身份，不允许删除原intent或重新提交已有case。
+
 ## 文件放在哪里
 
 | 内容 | 位置 |
