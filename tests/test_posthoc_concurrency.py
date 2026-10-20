@@ -50,8 +50,11 @@ def _lease_worker(policy, queue):
         queue.put(('start', time.time())); time.sleep(.12); queue.put(('end', time.time()))
 
 
-def test_cross_process_slot_limit_reserves_existing_work_and_staggers(tmp_path):
-    policy = dict(admission_root=str(tmp_path), gpu_tasks=3, reserved_external_slots=1, stagger_seconds=.025)
+@pytest.mark.parametrize('read_only', [False, True])
+def test_cross_process_slot_limit_reserves_existing_work_and_staggers(tmp_path, read_only):
+    policy = dict(admission_root=str(tmp_path), gpu_tasks=3, reserved_external_slots=1, stagger_seconds=.025, read_only_precreated_lockfiles=read_only)
+    if read_only:
+        for name in ['gpu-0.lock','gpu-0-slot-1.lock','gpu-0-slot-2.lock']:(tmp_path/name).touch()
     context = multiprocessing.get_context('fork'); queue = context.Queue()
     children = [context.Process(target=_lease_worker, args=(policy, queue)) for _ in range(5)]
     for child in children:
@@ -234,3 +237,42 @@ def test_actual_index_addressed_reference_process_tree_counts_once(tmp_path):
         p = tmp_path/str(pid); p.mkdir(); (p/'cmdline').write_bytes(b'\0'.join(a.encode() for a in argv))
         (p/'environ').write_bytes(b'CUDA_VISIBLE_DEVICES=0'); (p/'status').write_text(f'PPid:\t{parent}\n')
     assert r.foreign_counts(policy, tmp_path) == [2, 0, 0, 0]
+
+
+def test_metric_timeout_is_conservative_not_a_training_retry(monkeypatch):
+    def timeout(*args, **kwargs): raise r.subprocess.TimeoutExpired('nvidia-smi', 10)
+    monkeypatch.setattr(r.subprocess, 'check_output', timeout)
+    assert r.resource_probe({}, 0) is False
+
+
+@pytest.mark.parametrize('complete', [True, False])
+def test_verified_engineering_reconciliation_never_calls_driver(tmp_path, monkeypatch, complete):
+    from types import SimpleNamespace
+    row = dict(index=0, task='triple2', method='full', seed=9826, argv=['frozen','driver'])
+    root = tmp_path/'engineering'; r.write_once(root/'cases/case-000.json', row)
+    (root/'logs').mkdir()  # Existing completed drivers always have their original log directory.
+    paths = {label: root/'processes'/f'case-000-{label}-exit.json' for label in ['driver','validator']}
+    for path in paths.values(): r.write_once(path, dict(pid=12, returncode=0))
+    record = dict(row, status='complete' if complete else 'running', returncode=0, validation_returncode=0)
+    for label,path in paths.items(): record[label+'_exit_path']=str(path); record[label+'_exit_sha256']=r.digest(path)
+    r.write_once(root/'runs/case-000.json', record)
+    policy = dict(resume_verified_engineering=True, _sha='policy', map_fill_only_unused_slots_until_q_terminal=False)
+    module = SimpleNamespace(check=lambda _: None, command=lambda value, mode, *args:[mode,*map(str,args)], gate=lambda _: {},
+        environment=lambda value,gpu=None:dict(JAX_PLATFORMS='cpu', CUDA_VISIBLE_DEVICES=''),
+        execute_case=lambda *args,**kwargs:pytest.fail('completed engineering must never train again'), write_once=r.write_once)
+    spec = dict(_root=str(tmp_path), source='source')
+    calls=[]
+    class Child:
+        pid=998
+        def __init__(self, argv):
+            calls.append(argv); assert argv[0]=='validate'
+            r.write_once(Path(argv[argv.index('--output')+1]), {'read_only': True})
+        def wait(self): return 0
+    monkeypatch.setattr(r.subprocess,'Popen',lambda argv,**kwargs:Child(argv))
+    r.install(policy,'M',module,spec)
+    if complete:
+        assert module.execute_case(spec,row,root,0,engineering=True)==record
+        assert len(calls)==1 and r.read(root/'runs/case-000.json')==record
+    else:
+        with pytest.raises(ValueError,match='cannot be retried'):module.execute_case(spec,row,root,0,engineering=True)
+        assert not calls

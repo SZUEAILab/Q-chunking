@@ -32,7 +32,9 @@ def read(path):
 
 
 def write_once(path, value):
-    path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+    path = Path(path)
+    if not path.parent.is_dir():
+        path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('x') as stream:
         json.dump(value, stream, indent=2, allow_nan=False); stream.write('\n')
 
@@ -43,7 +45,10 @@ def atomic(path, value):
 
 
 def event(policy, name, **fields):
-    path = Path(policy['admission_root'])/'events.jsonl'; path.parent.mkdir(parents=True, exist_ok=True)
+    filename = f'events-{os.getpid()}.jsonl' if policy.get('single_writer_event_journal') else 'events.jsonl'
+    path = Path(policy['admission_root'])/filename
+    if not path.parent.is_dir():
+        path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a') as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
         stream.write(json.dumps(dict(time=time.time(), event=name, **fields), allow_nan=False)+'\n')
@@ -140,8 +145,11 @@ def slot_indices(policy, external, identity):
 
 
 def resource_probe(policy, gpu):
-    response = subprocess.check_output(['nvidia-smi', '--query-gpu=index,name,memory.free',
-        '--format=csv,noheader,nounits'], text=True)
+    try:
+        response = subprocess.check_output(['nvidia-smi', '--query-gpu=index,name,memory.free',
+            '--format=csv,noheader,nounits'], text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return False
     rows = [[part.strip() for part in line.split(',')] for line in response.splitlines()]
     if len(rows) != 4 or any('4090' not in row[1] for row in rows):
         raise ValueError('Expected existing four 4090 devices')
@@ -158,19 +166,24 @@ def resource_probe(policy, gpu):
 @contextmanager
 def admission(policy, gpu, identity, *, probe=resource_probe, foreign=foreign_counts, sleep=time.sleep, now=time.time):
     """Cross-process lock leases; cooldown and reservations share a GPU mutex."""
-    root = Path(policy['admission_root']); root.mkdir(parents=True, exist_ok=True)
+    root = Path(policy['admission_root'])
+    if not root.is_dir():
+        root.mkdir(parents=True, exist_ok=True)
+    # Append-open can wait on a remote filesystem's write ownership before
+    # flock is reached. Precreated, zero-byte files need no data writes.
+    lock_mode = 'rb' if policy.get('read_only_precreated_lockfiles') else 'a'
     lease = None
     while lease is None:
         if getattr(_context, 'stop', None) is not None and _context.stop.is_set():
             raise RuntimeError('Unlaunched admission cancelled after infrastructure incident')
-        with (root/f'gpu-{gpu}.lock').open('a') as mutex:
+        with (root/f'gpu-{gpu}.lock').open(lock_mode) as mutex:
             fcntl.flock(mutex, fcntl.LOCK_EX)
             state = root/f'gpu-{gpu}-last-start.json'
             last = read(state)['time'] if state.exists() else float('-inf')
             external = max(policy['reserved_external_slots'], foreign(policy)[gpu])
             if now()-last >= policy['stagger_seconds'] and probe(policy, gpu):
                 for index in slot_indices(policy, external, identity):
-                    candidate = (root/f'gpu-{gpu}-slot-{index}.lock').open('a')
+                    candidate = (root/f'gpu-{gpu}-slot-{index}.lock').open(lock_mode)
                     try:
                         fcntl.flock(candidate, fcntl.LOCK_EX|fcntl.LOCK_NB)
                     except BlockingIOError:
@@ -279,8 +292,15 @@ def supervise_map(module, spec):
     if evidence['stage'] != 'upstream_terminal' or not module.idle_gpus():
         raise RuntimeError('Technical/shared-admission prerequisite changed')
     control = Path(spec['control']); data = module.verify_data(spec)
-    eng = control/'engineering-gpu-r1'; eng.mkdir(exist_ok=False)
-    module.write_once(eng/'launch.json', dict(spec_sha256=spec['_spec_sha256'], gate=evidence, data=data))
+    eng = control/'engineering-gpu-r1'
+    if eng.exists():
+        if not spec.get('_resume_engineering') or read(eng/'launch.json')['spec_sha256'] != spec['_spec_sha256']:
+            raise FileExistsError('Existing engineering needs explicit bound read-only reconciliation')
+        module.write_once(eng/('operational-reconciliation-'+spec['_operational_sha'][:12]+'.json'),
+            dict(spec_sha256=spec['_spec_sha256'], gate=evidence, data=data, no_training_retries=True))
+    else:
+        eng.mkdir(exist_ok=False)
+        module.write_once(eng/'launch.json', dict(spec_sha256=spec['_spec_sha256'], gate=evidence, data=data))
     cases = module.engineering_cases(plan)
     with ThreadPoolExecutor(max_workers=6) as pool:
         engineering = list(pool.map(lambda row: module.execute_case(spec, row, eng, row['index'] % 4, engineering=True), cases))
@@ -332,6 +352,30 @@ def install(policy, kind, module, spec):
         return result
     def execute(value, row, root, gpu, *, engineering=False):
         identity = f'{kind}:{"engineering" if engineering else "science"}:{row["index"]}'
+        root = Path(root); tag = f'case-{row["index"]:03d}'
+        if kind == 'M' and engineering and policy.get('resume_verified_engineering') and (root/'runs'/(tag+'.json')).exists():
+            record = read(root/'runs'/(tag+'.json'))
+            if (record.get('status') != 'complete' or record.get('returncode') != 0
+                    or record.get('validation_returncode') != 0 or read(root/'cases'/(tag+'.json')) != row):
+                raise ValueError('Unknown/failed engineering attempt cannot be retried')
+            for label in ('driver', 'validator'):
+                path = Path(record[label+'_exit_path'])
+                if (digest(path) != record[label+'_exit_sha256']
+                        or type(read(path).get('returncode')) is not int or read(path)['returncode'] != 0):
+                    raise ValueError('Existing engineering actual exit differs')
+            output = root/'operational-cpu-rechecks'/(tag+'-'+policy['_sha'][:12]+'.json')
+            argv = original_command(value, 'validate', '--case', root/'cases'/(tag+'.json'),
+                '--initial', root/'initial'/(tag+'.json'), '--output', output)
+            started = time.time()
+            with (root/'logs'/(tag+'-recheck-'+policy['_sha'][:12]+'.log')).open('x') as log:
+                child = subprocess.Popen(argv, cwd=value['_root'], env=environment(value), stdout=log, stderr=subprocess.STDOUT)
+                write_once(root/'processes'/(tag+'-recheck-'+policy['_sha'][:12]+'-started.json'), dict(pid=child.pid, argv=argv, started=started))
+                code = child.wait()
+            write_once(root/'processes'/(tag+'-recheck-'+policy['_sha'][:12]+'-exit.json'),
+                dict(pid=child.pid, returncode=code, started=started, ended=time.time(), observed_by_pid=os.getpid()))
+            if code or not output.exists():
+                raise RuntimeError('Existing engineering read-only reconciliation failed')
+            return record
         with admission(policy, gpu, identity):
             result = original_execute(value, row, root, gpu, engineering=engineering)
             if kind == 'Q' and engineering and result['status'] == 'complete':
@@ -362,6 +406,7 @@ def install(policy, kind, module, spec):
     if kind == 'Q':
         module.gate = lambda _: primary_gate(policy)
     elif policy.get('map_fill_only_unused_slots_until_q_terminal'):
+        spec.update(_resume_engineering=bool(policy.get('resume_verified_engineering')), _operational_sha=policy['_sha'])
         module.gate = lambda value: map_gate(policy, value, original_gate)
         module.supervise = lambda value: supervise_map(module, value)
 
