@@ -1176,7 +1176,38 @@ H5 的方向和幅值都逐 chunk 产生，本轮 posthoc 没有独立的方向/
 工具为 [`research.posthoc_mechanism`](../../research/posthoc_mechanism.py)，9 项测试通过。
 输入绑定当前冻结 mapper、六月快照、两份 validation-prior SHA 和共同 probe 面板。
 报告为数据盘 `reports/action_adapter_validation_20261019/posthoc-mechanism-probes.json`。
-本次只运行 CPU 诊断，未修改或追加正在执行的 72 组训练。
+本次只运行 CPU 诊断，未修改冻结 72 组训练。
+
+### 5.1.2 共同六维策略下的投影对照
+
+首轮完整结果中简单投影的两个任务平均 AUC 都高于原版，下一批机制设计因而应包含
+容量、潜动作正则与 critic 接口匹配的投影。设共同 tanh 策略输出
+$z=(u,b,c)\in(-1,1)^3\times(-1,1)\times(-1,1)^2$。三个执行映射为
+
+\[
+g_{\mathrm{cart}}(z)=(u,c),\qquad
+g_{\mathrm{proj}}(z)=\left(\frac{u}{\max(1,\|u\|_2)},c\right),
+\]
+\[
+g_{\mathrm{legacy}}(z)=
+\left(\operatorname{clip}_{[-1,1]^3}
+\left(e^b\frac{u}{\max(\|u\|_2,\epsilon)}\right),c\right).
+\]
+
+前两组忽略执行坐标 $b$，但保留相同的六维 actor、全六维 log-prob、温度及目标熵
+−3；三组 critic 的 replay 输入均是原始五维环境动作，actor/target 查询才经过各自
+执行映射。旋转和夹爪均保留相同两个 scalar。原有 cube-uniform warmup 不经过这些
+策略映射，不能要求 warmup 动作满足 projection 的单位球约束；也不把原始先验投影。
+
+`cartesian_projection_aux` 已在 `311d7af` 实现，并限制 H1 ACRLPD、env critic、普通
+SAC、无 BC。零辅助坐标的 lift 不是球外环境动作的执行逆，不得用作 BC 标签。潜
+坐标熵也不是投影后环境动作的体积密度。双任务 CPU 64 步工程、独立恢复、实际评估
+计数、共同完整初始化和共同 warmup 已通过，见[实验准备](../current/experiments.md#将投影加入共同接口对照2026-10-20)。
+GPU 与长程实验尚未执行，科学矩阵尚未冻结。
+
+这个对照只能识别共同 env 接口下的完整执行映射效应，仍包含动作支持和分布的变化；
+不能由它单独证明独立幅值头必要，也不能替代原版 latent critic 内的作用估计。首轮
+canonical 的零 Q alias 未改善平均表现，要求将表示诊断与任务性能继续分开报告。
 
 ### 5.2 Distribution-integrated DS：actor 分布内部的语义变换
 

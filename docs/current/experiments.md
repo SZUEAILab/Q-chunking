@@ -100,9 +100,43 @@ Canonical 的 replay 与 sampled Q 查询统一用执行动作的 canonical 编�
 配对差逐 seed 展示，并区分原主比较与两类次分析。没有新增比较或推断区间。
 缺失运行保留身份与缺失标记，不画部分 seed 的组均值。输入、工具和 PNG/PDF 输出均
 绑定 SHA；完整及缺失两类合成布局已渲染并目视检查，合成图明确水印，不作科学结果。
-真实图表仍等待终态；绑定与存活证据分别在数据盘
-`control/action_adapter_validation_20261019/terminal-figures-binding.json` 和
-`figure-owner-live-verification.json`，不改变训练或后续实验门槛。
+真实终态图表现已全部生成并目视验收，见[完整结果](results.md#冻结筛选的完整结果2026-10-20)。
+输入与产物绑定保存在数据盘 `reports/action_adapter_validation_20261019/figures/figure-receipt.json`；
+最初接续绑定与启动证据仍保留，不改变后续实验门槛。
+
+### 将投影加入共同接口对照（2026-10-20）
+
+完整首轮结果中简单投影的两个任务均值均高于原版，因此共同六维 actor 的后续机制
+设计需要投影对照。源码 `311d7af` 增加
+`--ds_adapter_execution_map=cartesian_projection_aux`：去掉辅助第 4 坐标后，将前三维
+XYZ 投影到单位 L2 球，后两维 scalar 保留。它与 `cartesian_aux` 和原版 env-critic
+映射共用六维 Gaussian/tanh heads、全部六维潜坐标 log-prob、目标熵 −3、五维 env
+critic/replay、参数宽度和初始化；接口同样限定 ACRLPD、H1、普通 SAC、无 BC。
+
+Prior 和在线 replay 保留真实五维环境动作，不因为策略执行受球约束而投影先验。
+辅助零坐标 lift 仅服务维度接口；对于单位球外动作，它不是执行映射的逆，也不是 BC
+标签。熵仍是六维潜动作熵，不声称是投影后动作的体积密度。统一 warmup 仍执行原有
+Cartesian uniform cube 动作；投影约束只适用于 warmup 后的策略动作。
+
+这构成未来三组映射设计的实现基础：Cartesian auxiliary、projection auxiliary、原版
+posthoc env。它检验共同 env 接口下的完整执行映射效应，不能直接替代原版 latent
+critic 内的机制估计，也不能把投影与原版的差异缩写成独立幅值头或单个分布矩。
+五维 native/projection 和完整 latent 方法仍应作为独立配方参照。正式科学矩阵与统计
+规则尚未冻结，本变更没有向当前训练队列追加运行。
+
+60 项专项检查及 30 项相关回归（另 3 个 subtest）通过，覆盖共同完整初始化、采样与
+log-prob、辅助坐标的 Q 零导数与熵非零导数、raw replay 路由、真实 learner 更新、
+NumPy/JAX 映射及不支持接口拒绝。测试还复现并修复已有 L2 投影在零向量处的 JAX
+反向 NaN：将范数的下界放到 sqrt 前，零点 Jacobian 为单位映射，球外 Jacobian 与
+解析切向投影一致。只影响未来源码；既有 72 运行及当前 reference 发布包均保持冻结。
+本地双任务 CPU 真入口与独立 checkpoint 恢复现已通过：各 64 个环境步、33 次更新、
+TrainState=34，step 0/64 各观测到 2 个完整非视频 episode。逐任务完整 agent 初始化 SHA
+与早期 Cartesian auxiliary 一致，前 32 步 warmup 动作逐项相同，后 32 步策略动作均在
+单位球内；prior 原始五维动作仍包含球外样本。四份原始数据 SHA、141 个冻结 Python
+文件和 24 项工程产物已核对并绑定。记录为数据盘
+`control/posthoc_projection_control_20261020/readiness.json`；这只覆盖 CPU 工程，没有该新
+对照的 GPU 或长程性能结果。首次 EGL 导入失败及 warmup 范围误判的验收失败均保留；
+修订 validator 后重新读取同一 Triple checkpoint，再首次运行 Double，没有重跑训练。
 
 ### 执行映射因果对照的实现准备
 

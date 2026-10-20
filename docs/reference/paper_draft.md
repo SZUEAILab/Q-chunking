@@ -39,7 +39,7 @@ heads 下概率受到很强限制；同八个冻结 actor 的解析界和有限�
 | 外部 RLPD 配方 | 独立的 16 运行、UTD=1/20 | learner 数值核对通过；配置解析故障隔离修复、两种 UTD 工程验收后已首次启动 16 运行；完整性能尚缺 |
 | 同 RLPD 配方的原版 posthoc | 新增独立 16 运行，配对既有 16 个 native，UTD=1/20 | 十二类数值核对和真实 GPU 短测通过，批次已冻结接续；长程结果尚缺，不是 fresh-seed 确认 |
 | 跨算法与完整强基线 | FQL native/posthoc 16 运行；GAC 两 radius/两数据协议 32 运行 | 设计和工具已冻结，不能用尚未执行的正式比较主张跨算法优势或超过 GAC |
-| 执行映射因果对照 | 共同六维 actor、潜动作正则与五维 env critic，只改变执行映射 | 双任务 CPU、单任务 GPU 短测及实际评估计数已核验；尚无新长程因果效应 |
+| 执行映射因果对照 | 共同六维 actor、潜动作正则与五维 env critic，保留匹配投影 | Cartesian/posthoc 已有 CPU/GPU 工程；新增投影双任务 CPU 验收通过，GPU 和长程效应尚缺 |
 
 论文须先回答完整方法能否在统一协议下复现及迁移，再解释 critic、熵目标与动作支持的贡献。
 Canonical 只约束价值接口，保留潜动作熵；不得写成已经消除冗余探索或证明样本效率提高。
@@ -58,7 +58,7 @@ Direct 是完整 squash/support 配方改变，不能把排名解释为单独某
 56 checkpoint 诊断检出 latent 的 Q alias、env/canonical 的零 alias；这支持表示差异，
 却反驳“消除 alias 必然改善任务表现”的主张。三维方向 Q 梯度的平均绝对余弦不能当作
 完整 actor 参数梯度的浪费比例。四 seed、两个开发任务与 flags-only episode 计数限制
-均须在正文保留。未来受控映射实验还应纳入匹配的 projection，官方 learner 与
+均须在正文保留。匹配 projection 的共同六维入口现已通过双任务 CPU 工程，尚无 GPU 或长程效应。官方 learner 与
 fresh/held-out 结果完成前，不能把本筛选升级为投稿级通用性结论。
 
 ### 2026-10-20：可证明的结构性质与待确认的论文主张
