@@ -265,11 +265,29 @@ Triple checkpoint，再首次运行 Double，没有重跑训练。
 三组映射短测：direction-speed、Cartesian auxiliary、projection auxiliary 各 64 步。
 GPU 上 90 项相关检查及 3 个 subtest 通过；三个真实驱动、三个独立恢复验证和测试进程
 均观察到退出 0。每组 33 次更新、TrainState=34、step 0/64 各实际 2 个非视频 episode。
-三组可序列化参数/优化器/RNG 初始化与前 32 步 warmup 命令哈希一致；它们的映射配置、
-物理模拟器状态和初始执行分布不能据此称为相同。源文件 141 项未变，证据绑定 37 个
+三组按有效配置独立重建的参数/优化器/RNG 初始化哈希一致，实际前 32 步 warmup 命令
+哈希一致；前者尚不认证驱动实际创建的状态。它们的映射配置、物理模拟器状态和初始
+执行分布不能据此称为相同。源文件 141 项未变，证据绑定 37 个
 工程产物。本次只使用本机 GPU 0，不占用云端队列；记录在数据盘
 `control/posthoc_projection_gpu_local_20261020/readiness.json` 和 `evidence-binding.json`。
 新增六维投影对照尚无 4090 验收或长程性能结果，正式科学矩阵仍未冻结。
+
+新增独立的实际初始化捕获验收使用冻结训练源 `db861f3`（153 个 Python 文件），不是
+向上述旧报告回填证据。工程 seed 9824 在本机 GPU 0（RTX 6000 Ada）完成两任务各三映射
+的六个真实 64 步驱动，每组 33 次更新、TrainState=34、step 0/64 各实际 2 个非视频
+episode，并由独立 CPU 进程逐项恢复 150 个状态叶子。六个驱动和最终六个恢复进程
+都实际退出 0；每任务三组在首次评估前由构造器直接捕获的可序列化 agent 状态 SHA
+相同，warmup 32 步命令 SHA 相同。逐项核对有效配置，仅执行映射与描述性 pipeline
+字段不同；完整命令仅映射与 run_group 不同。捕获器返回原对象，不修改 RNG 或训练状态。
+
+新验收工具通过 39 项 CPU 检查，包括三种映射的真实 checkpoint 恢复。准备阶段的清单
+格式错误发生在驱动启动前；另有辅助映射恢复器误传六维样本的验证失败，现已修正为
+与该驱动一致的五维原始 replay 样本。原失败、旧工具及退出回执均保留，只读重验已有
+checkpoint，六个训练各执行一次。来源、全量配对核查与工程回执位于数据盘
+`control/posthoc_execution_map_capture_20261020/` 的 `readiness.json`、`pairing-audit.json`
+及 `evidence-binding.json`；工具见[验收实现](../../research/execution_map_validation.py)。
+这补齐本地实际初始化证据，不证明完整模拟器状态或初始执行分布匹配；尚无新六维
+投影的 4090 或百万步结果，也未冻结或追加其长程矩阵。已有 40 运行梯度干预计划 SHA 未变。
 
 ### 执行映射因果对照的实现准备
 
