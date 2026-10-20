@@ -144,6 +144,31 @@ cd /data/chainpray/qc/control/gac_image_continuation_20261020/release-0bc033b312
 不删除 intent、重发保存请求或重跑科学命令。环境、可用镜像及正式启动都有独立门槛，
 详见[接续范围](experiments.md#gac-镜像与正式启动的持续接续2026-10-20)。
 
+## 共同六维映射接续观察
+
+新 60 运行科学计划位于数据盘 `control/posthoc_matched_map_study_20261020/plan.json`，
+它保留注册时的 `runtime_armed=False`；当前独立运行状态以
+`control/posthoc_matched_map_runtime_20261020/remote-started.json`、`watch-process.json`、
+`watch-status.json` 和 `remote-progress.json` 为准。前两个记录绑定远端 owner 和本机
+只读收集进程，仍需读取相应 `/proc/<pid>/cmdline` 才能认证存活，不能只看锁或旧状态。
+
+远端纯观察入口为：
+
+```bash
+cd /workspace/releases/posthoc-matched-map-controller-9cd028fa0bf4/payload
+/workspace/venv/bin/python -m research.execution_map_runtime inspect --spec runtime-spec.json
+```
+
+通过已绑定当前 job 的 SSH 执行，不复制私钥或认证到远端。
+`waiting_for_existing_actor_q_queue` 表示等待既有 40 运行的完整技术终态和实际 supervisor
+退出；随后等待四卡空闲，先六个 4090 工程、再 60 个科学 case。没有成绩方向门槛。
+`arm` 已执行一次，勿因连接超时重发或删除 intent；先只读核对原 PID 和记录。等待阶段
+不初始化 CUDA。本地收集进程只在完整终态后下载绑定的汇总和退出回执，不下载权重。
+
+运行器、科学计划及冻结源码分别绑定，不覆盖旧发布目录。日志和失败原样保留；源或
+数据身份变化、未知退出、恢复失败时先诊断。只读观察可重试，不自动重跑科学 case。
+实时状态和日志会变化，归档哈希使用明确时间点的快照，不能用陈旧状态哈希认证当前状态。
+
 ## 最小维护检查
 
 ```bash
