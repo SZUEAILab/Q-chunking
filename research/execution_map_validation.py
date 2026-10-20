@@ -117,7 +117,7 @@ def validate_run(case, initial, source, binding, *, expected_device='4090'):
     if (int(state['step']) != updates+1 or int(state['opt_state']['0']['count']) != updates
             or not common._finite_tree(state)):
         raise ValueError('Checkpoint update counters or finite state differs')
-    leaves = common.restore_checkpoint(checkpoint, config, case['seed'], source)
+    leaves = restore_environment_checkpoint(checkpoint, config, case['seed'], source)
     return dict(status='complete', source_commit=common.SOURCE,
         task=case['task'], seed=case['seed'], execution_map=case['execution_map'],
         run_dir=str(directory), actual_environment_steps=budget,
@@ -129,6 +129,20 @@ def validate_run(case, initial, source, binding, *, expected_device='4090'):
         restored_state_leaves=leaves, expected_device=expected_device,
         config_sha256=common.digest(directory/'effective_agent_config.json'),
         checkpoint_sha256=common.digest(checkpoint), outcomes_inspected=False)
+
+
+def restore_environment_checkpoint(path, config, seed, source):
+    """Restore through the same five-dimensional replay interface as this driver."""
+    import flax.serialization
+    import agents.acrlpd as learner
+    if Path(learner.__file__).resolve() != Path(source).resolve()/'agents/acrlpd.py':
+        raise ValueError('Restorer imported a different learner release')
+    state = pickle.loads(Path(path).read_bytes())['agent']
+    obs_dim = state['network']['params']['modules_actor']['MLP_0']['Dense_0']['kernel'].shape[0]
+    template = learner.ACRLPDAgent.create(seed, np.zeros(obs_dim, np.float32),
+        np.zeros(5, np.float32), dict(config))
+    restored = flax.serialization.from_state_dict(template, state)
+    return common.assert_state_equal(state, flax.serialization.to_state_dict(restored))
 
 
 def validate_groups(records):

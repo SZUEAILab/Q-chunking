@@ -104,3 +104,21 @@ def test_capacity_regularizer_and_critic_recipe_changes_are_rejected(field, valu
     with pytest.raises(ValueError, match='recipe'):
         v.validate_identity(case, receipt, config,
             source_binding_sha='source-hash', expected_device='RTX 6000 Ada')
+
+
+@pytest.mark.parametrize('mapping', v.MAPS)
+def test_actual_restore_uses_five_dimensional_environment_replay(tmp_path, mapping):
+    import pickle
+    from pathlib import Path
+    import flax.serialization
+    import agents.acrlpd as learner
+    from tests.test_cartesian_auxiliary_control import make_agent
+    agent, _ = make_agent(mapping)
+    state = flax.serialization.to_state_dict(agent)
+    checkpoint = tmp_path/'params.pkl'
+    checkpoint.write_bytes(pickle.dumps({'agent': state}))
+    source = Path(learner.__file__).resolve().parents[1]
+    if mapping != 'direction_speed':
+        with pytest.raises(ValueError, match='five-dimensional replay'):
+            v.common.restore_checkpoint(checkpoint, agent.config, 7, source)
+    assert v.restore_environment_checkpoint(checkpoint, agent.config, 7, source) > 0
