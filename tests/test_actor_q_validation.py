@@ -125,7 +125,9 @@ def test_technical_validation_leaves_poisoned_success_and_reward_uninterpreted(t
         with (directory/name).open('w') as stream:
             writer=csv.DictWriter(stream,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
     save('eval.csv',[dict(step=s,evaluation_episodes_observed=2,success='SEALED',evaluation_successes_observed='SEALED') for s in [0,2]])
-    save('env.csv',[dict(step=s,action_0=.3,action_1=.4,action_2=0.,action_3=.1,action_4=.2,reward='SEALED') for s in [1,2]])
+    # The second, policy-generated action is legal after legacy per-axis clipping
+    # even though its XYZ L2 norm exceeds one. "sphere" is not a hard ball here.
+    save('env.csv',[dict(step=s,action_0=1.,action_1=1.,action_2=1.,action_3=.1,action_4=.2,reward='SEALED') for s in [1,2]])
     save('online_agent.csv',[dict(step=2,loss=.1)])
     with (directory/'params_2.pkl').open('wb') as f:pickle.dump(dict(agent=dict(network=dict(step=3,opt_state={'0':{'count':2}}))),f)
     initial=dict(source_commit=v.SOURCE,seed=29,method='full',case_index=0,network_step=1,backend='gpu',

@@ -156,8 +156,9 @@ def technical_validate(row, directory, initial, *, expected_device='4090', sourc
         for row_env in csv.DictReader(stream):
             count += 1
             action = np.array([float(row_env[f'action_{i}']) for i in range(5)], dtype=np.float32)
-            if (int(row_env['step']) != count or not np.isfinite(action).all() or np.max(np.abs(action)) > 1.00001
-                    or count > start and np.linalg.norm(action[:3]) > 1.00001):
+            # Legacy sphere is a radial reference, not a hard unit-ball support:
+            # tanh/log uses exp(speed), then clips each executed component.
+            if int(row_env['step']) != count or not np.isfinite(action).all() or np.max(np.abs(action)) > 1.00001:
                 raise ValueError('Executed-action stream differs')
             if count <= start:
                 warmup.append(action)
